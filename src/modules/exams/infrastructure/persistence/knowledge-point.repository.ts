@@ -1,3 +1,4 @@
+import type { EntityManager } from 'typeorm';
 import { NullableType } from '../../../../common/types/nullable.type';
 import { KnowledgePoint } from '../../domain/knowledge-point';
 import { KnowledgePointChangeResult } from '../../domain/knowledge-point-rules';
@@ -32,6 +33,6 @@ export abstract class KnowledgePointRepository {
     targetId: KnowledgePoint['id'],
   ): Promise<KnowledgePointChangeResult<MigrateQuestionsResult>>;
 
-  /** 原子增减已发布题目数 */
-  abstract adjustQuestionCounts(deltas: QuestionCountDelta[]): Promise<void>;
+  /** 原子增减已发布题目数；传入 manager 时在该事务内执行，调用方须已持有对应科目锁 */
+  abstract adjustQuestionCounts(deltas: QuestionCountDelta[], manager?: EntityManager): Promise<void>;
 }

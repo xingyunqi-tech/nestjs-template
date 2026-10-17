@@ -113,5 +113,21 @@
   "knowledgePointHasChildren": "Delete the child knowledge points first",
   "invalidKnowledgePointParent": "Invalid parent knowledge point",
   "knowledgePointNotLeaf": "Questions can only be migrated to a leaf knowledge point",
-  "invalidMigrationTarget": "The target must be another knowledge point of the same subject"
+  "invalidMigrationTarget": "The target must be another knowledge point of the same subject",
+  "questionNotFound": "Question not found",
+  "duplicateQuestion": "The question already exists",
+  "invalidQuestionOptions": "Options do not match the question type",
+  "invalidQuestionAnswer": "Answer does not match the question type",
+  "materialFieldsNotAllowed": "Only material questions can have material or audio",
+  "materialContentRequired": "Material text or audio is required",
+  "materialKnowledgePointsNotAllowed": "Tag knowledge points on sub-questions instead of the material",
+  "invalidQuestionParent": "Invalid material",
+  "materialTypeImmutable": "Material questions cannot be converted to or from other types",
+  "invalidKnowledgePoint": "Knowledge point not found in this subject",
+  "questionKnowledgePointNotLeaf": "Questions can only be tagged with leaf knowledge points",
+  "materialNotDraft": "Sub-questions can only be added to or removed from a draft material",
+  "questionUnderReview": "Questions under review cannot be edited; reject it first",
+  "subQuestionStatusLocked": "Sub-questions follow their material; change the material instead",
+  "materialHasNoSubQuestions": "The material has no sub-questions",
+  "questionInUse": "The question has been answered or used in a paper; take it offline instead"
 }

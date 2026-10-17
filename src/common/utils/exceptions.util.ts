@@ -112,6 +112,7 @@ export const UNIQUE_CONSTRAINT_RESPONSES: Partial<Record<string, UniqueViolation
   },
   REL_75e2be4ce11d447ef43be0e374: { status: HttpStatus.UNPROCESSABLE_ENTITY, errors: { photo: 'alreadyExists' } },
   UQ_favorite_user_target: { status: HttpStatus.CONFLICT, error: 'alreadyFavorited' },
+  UQ_question_subjectId_contentHash: { status: HttpStatus.CONFLICT, error: 'duplicateQuestion' },
   UQ_order_orderNo: { status: HttpStatus.INTERNAL_SERVER_ERROR },
   UQ_share_shareCode: { status: HttpStatus.INTERNAL_SERVER_ERROR },
 };

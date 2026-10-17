@@ -1,7 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Permission } from './permission.enum';
-import { PERMISSIONS_KEY } from './permissions.decorator';
+import { ANY_PERMISSIONS_KEY, PERMISSIONS_KEY } from './permissions.decorator';
 import { PermissionsService } from './permissions.service';
 import { RoleEnum } from '../../common/enums/roles/roles.enum';
 
@@ -39,10 +39,7 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermissions = this.reflector.getAllAndOverride<Permission[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const { permissions: requiredPermissions, anyOf } = this.resolveRequirement(context);
 
     if (!requiredPermissions || requiredPermissions.length === 0) {
       throw new ForbiddenException('No permission declared for this route');
@@ -63,6 +60,13 @@ export class PermissionsGuard implements CanActivate {
     // Get user permissions from database (with caching)
     const userPermissions = await this.permissionsService.getPermissionsForRole(roleId);
 
+    if (anyOf) {
+      if (!requiredPermissions.some((permission) => userPermissions.includes(permission))) {
+        throw new ForbiddenException(`Missing any of permissions: ${requiredPermissions.join(', ')}`);
+      }
+      return true;
+    }
+
     const hasAllPermissions = requiredPermissions.every((permission) => userPermissions.includes(permission));
 
     if (!hasAllPermissions) {
@@ -71,5 +75,19 @@ export class PermissionsGuard implements CanActivate {
     }
 
     return true;
+  }
+
+  private resolveRequirement(context: ExecutionContext): { permissions?: Permission[]; anyOf: boolean } {
+    for (const target of [context.getHandler(), context.getClass()]) {
+      const anyOf = this.reflector.get<Permission[] | undefined>(ANY_PERMISSIONS_KEY, target);
+      if (anyOf) {
+        return { permissions: anyOf, anyOf: true };
+      }
+      const allOf = this.reflector.get<Permission[] | undefined>(PERMISSIONS_KEY, target);
+      if (allOf) {
+        return { permissions: allOf, anyOf: false };
+      }
+    }
+    return { anyOf: false };
   }
 }

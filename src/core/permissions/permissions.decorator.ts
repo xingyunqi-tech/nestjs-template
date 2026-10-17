@@ -2,6 +2,7 @@ import { SetMetadata } from '@nestjs/common';
 import { Permission } from './permission.enum';
 
 export const PERMISSIONS_KEY = 'permissions';
+export const ANY_PERMISSIONS_KEY = 'anyPermissions';
 
 /**
  * Decorator to require specific permissions for a route.
@@ -31,3 +32,7 @@ export const PERMISSIONS_KEY = 'permissions';
  */
 export const RequirePermissions = (...permissions: Permission[]): MethodDecorator & ClassDecorator =>
   SetMetadata(PERMISSIONS_KEY, permissions);
+
+/** 持有其中任一权限即可访问；方法上的声明优先于类上的声明 */
+export const RequireAnyPermission = (...permissions: Permission[]): MethodDecorator & ClassDecorator =>
+  SetMetadata(ANY_PERMISSIONS_KEY, permissions);

@@ -1,0 +1,241 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { EntityManager, In, Not, Repository } from 'typeorm';
+import { QuestionEntity } from '../entities/question.entity';
+import { QuestionVersionEntity } from '../entities/question-version.entity';
+import { QuestionKnowledgePointEntity } from '../entities/question-knowledge-point.entity';
+import { QuestionMapper } from '../mappers/question.mapper';
+import { QuestionVersionMapper } from '../mappers/question-version.mapper';
+import {
+  CreateQuestionData,
+  CreateQuestionVersionData,
+  KnowledgePointCountDelta,
+  QuestionChanges,
+  QuestionRepository,
+  QuestionTransaction,
+  TaggableKnowledgePoint,
+} from '../../question.repository';
+import { Question } from '../../../../domain/question';
+import { QuestionVersion } from '../../../../domain/question-version';
+import { QuestionFilterOptions } from '../../../../dto/query-admin-question.dto';
+import { KnowledgePointQuestionCountService } from '../../../../../exams/knowledge-point-question-count.service';
+import { NullableType } from '../../../../../../common/types/nullable.type';
+import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+async function withKnowledgePoints(manager: EntityManager, entities: QuestionEntity[]): Promise<Question[]> {
+  if (entities.length === 0) {
+    return [];
+  }
+  const links = await manager.find(QuestionKnowledgePointEntity, {
+    where: { questionId: In(entities.map((entity) => entity.id)) },
+    order: { knowledgePointId: 'ASC' },
+  });
+  const byQuestion = new Map<string, string[]>();
+  for (const link of links) {
+    byQuestion.set(link.questionId, [...(byQuestion.get(link.questionId) ?? []), link.knowledgePointId]);
+  }
+  return entities.map((entity) => QuestionMapper.toDomain(entity, byQuestion.get(entity.id) ?? []));
+}
+
+class RelationalQuestionTransaction implements QuestionTransaction {
+  constructor(
+    private readonly manager: EntityManager,
+    private readonly knowledgePointQuestionCountService: KnowledgePointQuestionCountService,
+  ) {}
+
+  async findForUpdate(ids: Question['id'][]): Promise<Question[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const entities = await this.manager.find(QuestionEntity, {
+      where: { id: In(ids) },
+      order: { id: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    return withKnowledgePoints(this.manager, entities);
+  }
+
+  async findChildrenForUpdate(parentIds: Question['id'][]): Promise<Question[]> {
+    if (parentIds.length === 0) {
+      return [];
+    }
+    const entities = await this.manager.find(QuestionEntity, {
+      where: { parentId: In(parentIds) },
+      order: { parentId: 'ASC', sort: 'ASC', createdAt: 'ASC', id: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    return withKnowledgePoints(this.manager, entities);
+  }
+
+  async findKnowledgePointsForUpdate(ids: string[]): Promise<TaggableKnowledgePoint[]> {
+    const points = await this.knowledgePointQuestionCountService.lockKnowledgePoints(ids, this.manager);
+    return points.map(({ id, subjectId, isLeaf }) => ({ id, subjectId, isLeaf }));
+  }
+
+  async findIdByContentHash(
+    subjectId: Question['subjectId'],
+    contentHash: Question['contentHash'],
+    excludeIds: Question['id'][],
+  ): Promise<NullableType<Question['id']>> {
+    const entity = await this.manager.findOne(QuestionEntity, {
+      select: { id: true },
+      where: { subjectId, contentHash, ...(excludeIds.length > 0 && { id: Not(In(excludeIds)) }) },
+    });
+    return entity?.id ?? null;
+  }
+
+  async maxChildSort(parentId: Question['id']): Promise<NullableType<number>> {
+    const [{ max }]: { max: number | null }[] = await this.manager.query(
+      `SELECT MAX("sort")::int AS "max" FROM "question" WHERE "parentId" = $1`,
+      [parentId],
+    );
+    return max;
+  }
+
+  async insert(data: CreateQuestionData): Promise<Question> {
+    const entity = await this.manager.save(this.manager.create(QuestionEntity, QuestionMapper.toPersistence(data)));
+    return QuestionMapper.toDomain(entity, []);
+  }
+
+  async update(ids: Question['id'][], changes: QuestionChanges): Promise<void> {
+    if (ids.length === 0 || Object.keys(changes).length === 0) {
+      return;
+    }
+    await this.manager.update(QuestionEntity, { id: In(ids) }, changes);
+  }
+
+  async replaceKnowledgePoints(questionId: Question['id'], knowledgePointIds: string[]): Promise<void> {
+    await this.manager.delete(QuestionKnowledgePointEntity, { questionId });
+    if (knowledgePointIds.length > 0) {
+      await this.manager.insert(
+        QuestionKnowledgePointEntity,
+        knowledgePointIds.map((knowledgePointId) => ({ questionId, knowledgePointId })),
+      );
+    }
+  }
+
+  async insertVersion(data: CreateQuestionVersionData): Promise<void> {
+    await this.manager.save(this.manager.create(QuestionVersionEntity, QuestionVersionMapper.toPersistence(data)));
+  }
+
+  adjustQuestionCounts(deltas: KnowledgePointCountDelta[]): Promise<void> {
+    return this.knowledgePointQuestionCountService.adjust(deltas, this.manager);
+  }
+
+  async remove(ids: Question['id'][]): Promise<void> {
+    if (ids.length === 0) {
+      return;
+    }
+    await this.manager.delete(QuestionEntity, { parentId: In(ids) });
+    await this.manager.delete(QuestionEntity, { id: In(ids) });
+  }
+}
+
+@Injectable()
+export class QuestionRelationalRepository implements QuestionRepository {
+  constructor(
+    @InjectRepository(QuestionEntity)
+    private readonly questionRepository: Repository<QuestionEntity>,
+    @InjectRepository(QuestionVersionEntity)
+    private readonly questionVersionRepository: Repository<QuestionVersionEntity>,
+    private readonly knowledgePointQuestionCountService: KnowledgePointQuestionCountService,
+  ) {}
+
+  async findById(id: Question['id']): Promise<NullableType<Question>> {
+    const [question] = await this.findByIds([id]);
+    return question ?? null;
+  }
+
+  async findByIds(ids: Question['id'][]): Promise<Question[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const entities = await this.questionRepository.find({ where: { id: In(ids) }, order: { id: 'ASC' } });
+    return withKnowledgePoints(this.questionRepository.manager, entities);
+  }
+
+  async findChildren(parentId: Question['id']): Promise<Question[]> {
+    const entities = await this.questionRepository.find({
+      where: { parentId },
+      order: { sort: 'ASC', createdAt: 'ASC', id: 'ASC' },
+    });
+    return withKnowledgePoints(this.questionRepository.manager, entities);
+  }
+
+  async findManyWithPaginationAndCount({
+    filterOptions,
+    paginationOptions,
+  }: {
+    filterOptions?: QuestionFilterOptions | null;
+    paginationOptions: IPaginationOptions;
+  }): Promise<{ data: Question[]; total: number }> {
+    const query = this.questionRepository.createQueryBuilder('q');
+    if (filterOptions?.subjectId) {
+      query.andWhere('"q"."subjectId" = :subjectId', { subjectId: filterOptions.subjectId });
+    }
+    if (filterOptions?.type) {
+      query.andWhere('"q"."type" = :type', { type: filterOptions.type });
+    }
+    if (filterOptions?.status) {
+      query.andWhere('"q"."status" = :status', { status: filterOptions.status });
+    }
+    if (filterOptions?.source) {
+      query.andWhere('"q"."source" = :source', { source: filterOptions.source });
+    }
+    if (filterOptions?.parentId) {
+      query.andWhere('"q"."parentId" = :parentId', { parentId: filterOptions.parentId });
+    }
+    if (filterOptions?.topLevel !== undefined) {
+      query.andWhere(filterOptions.topLevel ? '"q"."parentId" IS NULL' : '"q"."parentId" IS NOT NULL');
+    }
+    if (filterOptions?.keyword) {
+      query.andWhere('(LOWER("q"."stem") LIKE LOWER(:keyword) OR LOWER("q"."material") LIKE LOWER(:keyword))', {
+        keyword: `%${escapeLike(filterOptions.keyword)}%`,
+      });
+    }
+    if (filterOptions?.knowledgePointId) {
+      query.andWhere(
+        `EXISTS (
+          SELECT 1 FROM "question_knowledge_point" AS links
+          INNER JOIN "knowledge_point" AS kp ON kp."id" = links."knowledgePointId"
+          WHERE links."questionId" = "q"."id"
+            AND kp."path" LIKE (SELECT "path" FROM "knowledge_point" WHERE "id" = :knowledgePointId) || '%'
+        )`,
+        { knowledgePointId: filterOptions.knowledgePointId },
+      );
+    }
+    if (filterOptions?.parentId) {
+      query.orderBy('q.sort', 'ASC').addOrderBy('q.createdAt', 'ASC');
+    } else {
+      query.orderBy('q.createdAt', 'DESC');
+    }
+    query
+      .addOrderBy('q.id', 'ASC')
+      .skip((paginationOptions.page - 1) * paginationOptions.limit)
+      .take(paginationOptions.limit);
+
+    const [entities, total] = await query.getManyAndCount();
+    return { data: await withKnowledgePoints(this.questionRepository.manager, entities), total };
+  }
+
+  async findVersions(questionId: Question['id']): Promise<QuestionVersion[]> {
+    const entities = await this.questionVersionRepository.find({
+      where: { questionId },
+      order: { version: 'DESC' },
+    });
+    return entities.map((entity) => QuestionVersionMapper.toDomain(entity));
+  }
+
+  transaction<T>(subjectIds: Question['subjectId'][], work: (tx: QuestionTransaction) => Promise<T>): Promise<T> {
+    return this.questionRepository.manager.transaction(async (manager) => {
+      for (const subjectId of [...new Set(subjectIds)].sort()) {
+        await this.knowledgePointQuestionCountService.lockSubject(subjectId, manager);
+      }
+      return work(new RelationalQuestionTransaction(manager, this.knowledgePointQuestionCountService));
+    });
+  }
+}

@@ -12,7 +12,7 @@ import { UserExamProfileRepository } from '../user-exam-profile.repository';
 import { ExamRelationalRepository } from './repositories/exam.repository';
 import { SubjectRelationalRepository } from './repositories/subject.repository';
 import { KnowledgePointRelationalRepository } from './repositories/knowledge-point.repository';
-import { EmptyKnowledgePointQuestionRepository } from './repositories/knowledge-point-question.repository';
+import { KnowledgePointQuestionRelationalRepository } from './repositories/knowledge-point-question.repository';
 import { UserExamProfileRelationalRepository } from './repositories/user-exam-profile.repository';
 
 @Module({
@@ -21,7 +21,7 @@ import { UserExamProfileRelationalRepository } from './repositories/user-exam-pr
     { provide: ExamRepository, useClass: ExamRelationalRepository },
     { provide: SubjectRepository, useClass: SubjectRelationalRepository },
     { provide: KnowledgePointRepository, useClass: KnowledgePointRelationalRepository },
-    { provide: KnowledgePointQuestionRepository, useClass: EmptyKnowledgePointQuestionRepository },
+    { provide: KnowledgePointQuestionRepository, useClass: KnowledgePointQuestionRelationalRepository },
     { provide: UserExamProfileRepository, useClass: UserExamProfileRelationalRepository },
   ],
   exports: [

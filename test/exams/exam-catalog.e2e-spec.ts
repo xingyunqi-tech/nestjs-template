@@ -111,6 +111,9 @@ describe('Exam catalog', () => {
     try {
       const dataSource = app.get(DataSource);
       if (subjectIds.length > 0) {
+        const owned = `SELECT "id" FROM "question" WHERE "subjectId" = ANY($1)`;
+        await dataSource.query(`DELETE FROM "question_version" WHERE "questionId" IN (${owned})`, [subjectIds]);
+        await dataSource.query(`DELETE FROM "question" WHERE "subjectId" = ANY($1)`, [subjectIds]);
         for (const level of [3, 2, 1]) {
           await dataSource.query(`DELETE FROM "knowledge_point" WHERE "subjectId" = ANY($1) AND "level" = $2`, [
             subjectIds,
@@ -286,6 +289,59 @@ describe('Exam catalog', () => {
         .post(`/admin/knowledge-points/${source}/migrate-questions`, { targetId: leaf })
         .expect(200);
       expect(body.data).toMatchObject({ migrated: 0, source: { id: source }, target: { id: leaf } });
+    });
+
+    async function createQuestion(knowledgePointIds: string[], stem: string): Promise<string> {
+      const { body } = await as(admin)
+        .post('/admin/questions', {
+          subjectId,
+          type: 'JUDGE',
+          stem: `${stem} ${Date.now()}`,
+          answer: { value: true },
+          knowledgePointIds,
+        })
+        .expect(200);
+      return body.data.id as string;
+    }
+
+    it('should reject children and deletion of nodes linked by draft questions', async () => {
+      const tagged = await createPoint(subjectId, null, 'Draft tagged');
+      const loose = await createPoint(subjectId, null, 'Draft loose');
+      await createQuestion([tagged], '草稿关联');
+
+      await as(admin).post('/admin/knowledge-points', { subjectId, parentId: tagged, name: 'X' }).expect(409);
+      await as(admin).post(`/admin/knowledge-points/${loose}/move`, { parentId: tagged }).expect(409);
+      await as(admin).delete(`/admin/knowledge-points/${tagged}`).expect(409);
+      expect(findNode(await adminTree(subjectId), tagged)).toMatchObject({ isLeaf: true, questionCount: 0 });
+    });
+
+    it('should migrate questions and their published counts', async () => {
+      const source = await createPoint(subjectId, null, 'Migrate source');
+      const target = await createPoint(subjectId, null, 'Migrate target');
+      const published = await createQuestion([source], '迁移已发布');
+      const draft = await createQuestion([source, target], '迁移草稿');
+      await as(admin).post(`/admin/questions/${published}/submit`).expect(200);
+      await as(admin).post(`/admin/questions/${published}/publish`).expect(200);
+      expect(findNode(await adminTree(subjectId), source)).toMatchObject({ questionCount: 1 });
+
+      const { body } = await as(admin)
+        .post(`/admin/knowledge-points/${source}/migrate-questions`, { targetId: target })
+        .expect(200);
+      expect(body.data).toMatchObject({
+        migrated: 2,
+        source: { id: source, questionCount: 0 },
+        target: { id: target, questionCount: 1 },
+      });
+      for (const id of [published, draft]) {
+        const question = await as(admin).get(`/admin/questions/${id}`).expect(200);
+        expect(question.body.data.knowledgePointIds).toEqual([target]);
+      }
+
+      const counter = app.get(KnowledgePointQuestionCountService);
+      await counter.adjust([{ knowledgePointId: target, delta: 4 }]);
+      await counter.recount(subjectId);
+      expect(findNode(await adminTree(subjectId), target)).toMatchObject({ questionCount: 1 });
+      await as(admin).delete(`/admin/knowledge-points/${source}`).expect(200);
     });
 
     it('should recount question counts from question links', async () => {

@@ -1,0 +1,9 @@
+export enum QuestionType {
+  SINGLE = 'SINGLE',
+  MULTIPLE = 'MULTIPLE',
+  JUDGE = 'JUDGE',
+  FILL = 'FILL',
+  SHORT_ANSWER = 'SHORT_ANSWER',
+  ESSAY = 'ESSAY',
+  MATERIAL = 'MATERIAL',
+}

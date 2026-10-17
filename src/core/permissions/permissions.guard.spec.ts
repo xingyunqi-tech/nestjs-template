@@ -3,7 +3,7 @@ import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PermissionsGuard } from './permissions.guard';
 import { PermissionsService } from './permissions.service';
-import { RequirePermissions } from './permissions.decorator';
+import { RequireAnyPermission, RequirePermissions } from './permissions.decorator';
 import { Permission } from './permission.enum';
 import { UsersController } from '../users/users.controller';
 import { WechatPayController } from '../../modules/payments/wechat-pay.controller';
@@ -43,6 +43,38 @@ describe('PermissionsGuard', () => {
 
   it('should reject a guarded route that declares no permission', async () => {
     await expect(guard.canActivate(context('open', 1))).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+@RequirePermissions(Permission.CONTENT_MANAGE)
+class AnyOfController {
+  @RequireAnyPermission(Permission.CONTENT_MANAGE, Permission.CONTENT_REVIEW)
+  read(): void {}
+
+  write(): void {}
+}
+
+describe('PermissionsGuard with any-of permissions', () => {
+  const permissionsService = { getPermissionsForRole: vi.fn() };
+  const guard = new PermissionsGuard(new Reflector(), permissionsService as unknown as PermissionsService);
+  const anyOfContext = (handler: 'read' | 'write'): ExecutionContext =>
+    ({
+      getClass: () => AnyOfController,
+      getHandler: () => AnyOfController.prototype[handler],
+      switchToHttp: () => ({ getRequest: () => ({ user: { id: 1, role: { id: 1 } } }) }),
+    }) as unknown as ExecutionContext;
+
+  it('should allow a role holding any one of the method permissions', async () => {
+    permissionsService.getPermissionsForRole.mockResolvedValue([Permission.CONTENT_REVIEW]);
+
+    await expect(guard.canActivate(anyOfContext('read'))).resolves.toBe(true);
+    await expect(guard.canActivate(anyOfContext('write'))).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('should reject a role holding none of the permissions', async () => {
+    permissionsService.getPermissionsForRole.mockResolvedValue([Permission.USER_LIST]);
+
+    await expect(guard.canActivate(anyOfContext('read'))).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
 

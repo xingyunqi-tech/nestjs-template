@@ -13,6 +13,12 @@ export abstract class KnowledgePointQuestionRepository {
     manager: EntityManager,
   ): Promise<number>;
 
-  /** 按题目关联重算已发布题目数，可限定科目，返回变更的知识点数 */
+  /** 按题目关联重算已发布题目数，可限定科目，逐个科目在科目锁内执行，返回变更的知识点数 */
   abstract recountQuestionCounts(subjectId?: KnowledgePoint['subjectId']): Promise<number>;
+
+  /** 取科目锁，直到事务结束 */
+  abstract lockSubject(subjectId: KnowledgePoint['subjectId'], manager: EntityManager): Promise<void>;
+
+  /** 按 id 顺序锁定知识点行，返回其中存在的知识点 */
+  abstract lockKnowledgePoints(ids: KnowledgePoint['id'][], manager: EntityManager): Promise<KnowledgePoint[]>;
 }

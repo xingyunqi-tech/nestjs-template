@@ -113,5 +113,21 @@
   "knowledgePointHasChildren": "请先删除子知识点",
   "invalidKnowledgePointParent": "上级知识点无效",
   "knowledgePointNotLeaf": "只能迁移到末级知识点",
-  "invalidMigrationTarget": "迁移目标须为同一科目下的其他知识点"
+  "invalidMigrationTarget": "迁移目标须为同一科目下的其他知识点",
+  "questionNotFound": "题目不存在",
+  "duplicateQuestion": "题目已存在",
+  "invalidQuestionOptions": "选项与题型不符",
+  "invalidQuestionAnswer": "答案格式与题型不符",
+  "materialFieldsNotAllowed": "只有材料题可以填写材料与音频",
+  "materialContentRequired": "请填写材料内容或上传音频",
+  "materialKnowledgePointsNotAllowed": "材料不能关联知识点，请在小题上关联",
+  "invalidQuestionParent": "所属材料无效",
+  "materialTypeImmutable": "材料题与其他题型不能互相转换",
+  "invalidKnowledgePoint": "知识点不存在或不属于该科目",
+  "questionKnowledgePointNotLeaf": "题目只能关联末级知识点",
+  "materialNotDraft": "只能在草稿材料下增删小题",
+  "questionUnderReview": "审核中的题目不能编辑，请先驳回",
+  "subQuestionStatusLocked": "小题跟随材料整体流转，请操作所属材料",
+  "materialHasNoSubQuestions": "材料下还没有小题",
+  "questionInUse": "题目已被作答或被试卷引用，只能下架"
 }

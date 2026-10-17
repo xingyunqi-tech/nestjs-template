@@ -24,6 +24,7 @@ import {
   knowledgePointPath,
 } from '../../../../domain/knowledge-point-rules';
 import { NullableType } from '../../../../../../common/types/nullable.type';
+import { lockSubjectTree } from './subject-tree-lock';
 
 const UPDATABLE_COLUMNS = ['name', 'sort'] as const;
 
@@ -58,7 +59,7 @@ export class KnowledgePointRelationalRepository implements KnowledgePointReposit
 
   async create(data: CreateKnowledgePointData): Promise<KnowledgePointChangeResult> {
     return this.knowledgePointRepository.manager.transaction(async (manager) => {
-      await this.lockSubjectTree(manager, data.subjectId);
+      await lockSubjectTree(manager, data.subjectId);
 
       let parent: KnowledgePointEntity | null = null;
       if (data.parentId) {
@@ -213,7 +214,7 @@ export class KnowledgePointRelationalRepository implements KnowledgePointReposit
     });
   }
 
-  async adjustQuestionCounts(deltas: QuestionCountDelta[]): Promise<void> {
+  async adjustQuestionCounts(deltas: QuestionCountDelta[], manager?: EntityManager): Promise<void> {
     const merged = new Map<string, number>();
     for (const { knowledgePointId, delta } of deltas) {
       merged.set(knowledgePointId, (merged.get(knowledgePointId) ?? 0) + delta);
@@ -222,24 +223,23 @@ export class KnowledgePointRelationalRepository implements KnowledgePointReposit
     if (entries.length === 0) {
       return;
     }
-    await this.knowledgePointRepository.manager.transaction(async (manager) => {
+    const apply = async (transaction: EntityManager): Promise<void> => {
       const ids = entries.map(([id]) => id);
-      await manager.query(`SELECT "id" FROM "knowledge_point" WHERE "id" = ANY($1) ORDER BY "id" FOR UPDATE`, [ids]);
-      await manager.query(
+      await transaction.query(`SELECT "id" FROM "knowledge_point" WHERE "id" = ANY($1) ORDER BY "id" FOR UPDATE`, [
+        ids,
+      ]);
+      await transaction.query(
         `UPDATE "knowledge_point" AS kp SET "questionCount" = kp."questionCount" + d."delta"
          FROM unnest($1::uuid[], $2::int[]) AS d("id", "delta")
          WHERE kp."id" = d."id"`,
         [ids, entries.map(([, delta]) => delta)],
       );
-    });
+    };
+    await (manager ? apply(manager) : this.knowledgePointRepository.manager.transaction(apply));
   }
 
   private countLinked(manager: EntityManager, id: string): Promise<number> {
     return this.knowledgePointQuestionRepository.countLinked([id], manager);
-  }
-
-  private async lockSubjectTree(manager: EntityManager, subjectId: string): Promise<void> {
-    await manager.query(`SELECT pg_advisory_xact_lock(hashtext('knowledge_point'), hashtext($1))`, [subjectId]);
   }
 
   private async lockNodeTree(manager: EntityManager, id: string): Promise<KnowledgePointEntity | null> {
@@ -247,7 +247,7 @@ export class KnowledgePointRelationalRepository implements KnowledgePointReposit
     if (!node) {
       return null;
     }
-    await this.lockSubjectTree(manager, node.subjectId);
+    await lockSubjectTree(manager, node.subjectId);
     return this.findForUpdate(manager, id);
   }
 

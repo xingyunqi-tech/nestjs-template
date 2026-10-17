@@ -38,6 +38,10 @@ export class SubjectsService {
     return subject;
   }
 
+  findAllPublished(): Promise<Subject[]> {
+    return this.subjectRepository.findAllPublished();
+  }
+
   findManyWithPaginationAndCount(options: {
     filterOptions?: SubjectFilterOptions | null;
     paginationOptions: IPaginationOptions;

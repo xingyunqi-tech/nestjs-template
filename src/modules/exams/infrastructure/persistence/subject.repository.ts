@@ -19,6 +19,9 @@ export abstract class SubjectRepository {
 
   abstract findManyByExamIdAndStatus(examId: Subject['examId'], status: ContentStatus): Promise<Subject[]>;
 
+  /** 科目与所属考试均已发布 */
+  abstract findAllPublished(): Promise<Subject[]>;
+
   abstract countByExamId(examId: Subject['examId']): Promise<number>;
 
   abstract update(id: Subject['id'], payload: UpdateSubjectData): Promise<NullableType<Subject>>;

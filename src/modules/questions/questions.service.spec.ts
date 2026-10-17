@@ -148,16 +148,20 @@ const materialDto = (material = '资料内容'): CreateQuestionDto => ({
 describe('QuestionsService', () => {
   let store: FakeStore;
   let usage: Mocked<QuestionUsageRepository>;
+  let findDrawCandidates: Mocked<QuestionRepository>['findDrawCandidates'];
   let subjectsService: Mocked<Pick<SubjectsService, 'findById'>>;
   let filesService: Mocked<Pick<FilesService, 'findByIds' | 'canAccess'>>;
   let service: QuestionsService;
 
   beforeEach(() => {
     store = new FakeStore();
+    findDrawCandidates = vi.fn();
     const repository: QuestionRepository = {
       findById: (id) => Promise.resolve(store.questions.has(id) ? store.snapshot(id) : null),
       findByIds: (ids) => store.findForUpdate(ids),
       findChildren: (parentId) => store.findChildrenForUpdate([parentId]),
+      findChildrenByParentIds: (parentIds) => store.findChildrenForUpdate(parentIds),
+      findDrawCandidates,
       findManyWithPaginationAndCount: vi.fn(),
       findVersions: vi.fn(),
       transaction: (_subjectIds, work) => work(store),
@@ -550,6 +554,66 @@ describe('QuestionsService', () => {
 
       await expect(service.remove(id)).rejects.toMatchObject({ response: { error: 'questionInUse' } });
       expect(usage.isUsed).toHaveBeenCalledWith([id]);
+    });
+  });
+
+  describe('question units', () => {
+    const createMaterial = async (): Promise<{ materialId: string; childIds: string[] }> => {
+      const material = await create(materialDto());
+      const first = await create(singleDto({ parentId: material.id, stem: '第一小题', sort: 0 }));
+      const second = await create(singleDto({ parentId: material.id, stem: '第二小题', sort: 1 }));
+      await publish(material.id);
+      return { materialId: material.id, childIds: [first.id, second.id] };
+    };
+
+    it('should build units in the given order and skip sub-questions', async () => {
+      const single = await create(singleDto());
+      const { materialId, childIds } = await createMaterial();
+
+      const units = await service.findUnits([materialId, childIds[0], single.id, 'missing']);
+
+      expect(units.map((unit) => [unit.root.id, unit.questions.map((question) => question.id)])).toEqual([
+        [materialId, childIds],
+        [single.id, [single.id]],
+      ]);
+    });
+
+    it('should rebuild units from answerable question ids', async () => {
+      const single = await create(singleDto());
+      const { materialId, childIds } = await createMaterial();
+
+      const units = await service.findUnitsByQuestionIds([single.id, ...childIds]);
+
+      expect(units.map((unit) => unit.root.id)).toEqual([single.id, materialId]);
+      expect(units[1].questions.map((question) => question.id)).toEqual(childIds);
+    });
+
+    it('should draw units packed to the target size', async () => {
+      const single = await create(singleDto());
+      const { materialId } = await createMaterial();
+      findDrawCandidates.mockResolvedValue([
+        { id: materialId, size: 2 },
+        { id: single.id, size: 1 },
+      ]);
+
+      const units = await service.drawUnits({ subjectId: SUBJECT }, 2);
+
+      expect(units.map((unit) => unit.root.id)).toEqual([materialId]);
+      expect(findDrawCandidates).toHaveBeenCalledWith({ subjectId: SUBJECT }, 20);
+      await expect(service.drawUnits({ subjectId: SUBJECT }, 0)).resolves.toEqual([]);
+    });
+
+    it('should expose units without answers or analysis', async () => {
+      const { materialId } = await createMaterial();
+      const units = await service.findUnits([materialId]);
+
+      const [dto] = await service.toPublicUnits(units, null);
+
+      expect(dto.id).toBe(materialId);
+      expect(dto.children?.map((child) => child.stem)).toEqual(['第一小题', '第二小题']);
+      expect(dto.children?.[0]).not.toHaveProperty('answer');
+      expect(dto).not.toHaveProperty('analysis');
+      expect(units[0].questions[0].answer).toEqual({ keys: ['B'] });
     });
   });
 });

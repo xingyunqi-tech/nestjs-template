@@ -67,6 +67,10 @@ export class KnowledgePointsService {
     return buildKnowledgePointTree(points, (point) => Object.assign(new KnowledgePointTreeNodeDto(), point));
   }
 
+  findByIds(ids: KnowledgePoint['id'][]): Promise<KnowledgePoint[]> {
+    return this.knowledgePointRepository.findByIds([...new Set(ids)]);
+  }
+
   async findById(id: KnowledgePoint['id']): Promise<KnowledgePoint> {
     const point = await this.knowledgePointRepository.findById(id);
     if (!point) {

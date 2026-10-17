@@ -17,6 +17,9 @@ import {
 } from '../../question.repository';
 import { Question } from '../../../../domain/question';
 import { QuestionVersion } from '../../../../domain/question-version';
+import { QuestionType } from '../../../../domain/question-type';
+import { QuestionStatus } from '../../../../domain/question-status';
+import { QuestionDrawCandidate, QuestionDrawCriteria } from '../../../../domain/question-unit';
 import { QuestionFilterOptions } from '../../../../dto/query-admin-question.dto';
 import { KnowledgePointQuestionCountService } from '../../../../../exams/knowledge-point-question-count.service';
 import { NullableType } from '../../../../../../common/types/nullable.type';
@@ -164,6 +167,67 @@ export class QuestionRelationalRepository implements QuestionRepository {
       order: { sort: 'ASC', createdAt: 'ASC', id: 'ASC' },
     });
     return withKnowledgePoints(this.questionRepository.manager, entities);
+  }
+
+  async findChildrenByParentIds(parentIds: Question['id'][]): Promise<Question[]> {
+    if (parentIds.length === 0) {
+      return [];
+    }
+    const entities = await this.questionRepository.find({
+      where: { parentId: In(parentIds) },
+      order: { parentId: 'ASC', sort: 'ASC', createdAt: 'ASC', id: 'ASC' },
+    });
+    return withKnowledgePoints(this.questionRepository.manager, entities);
+  }
+
+  async findDrawCandidates(criteria: QuestionDrawCriteria, limit: number): Promise<QuestionDrawCandidate[]> {
+    const query = this.questionRepository
+      .createQueryBuilder('q')
+      .select('q.id', 'id')
+      .addSelect(
+        `CASE WHEN "q"."type" = :material THEN (
+          SELECT COUNT(*) FROM "question" AS c WHERE c."parentId" = "q"."id" AND c."status" = :published
+        ) ELSE 1 END`,
+        'size',
+      )
+      .where('"q"."subjectId" = :subjectId', { subjectId: criteria.subjectId })
+      .andWhere('"q"."parentId" IS NULL')
+      .andWhere('"q"."status" = :published')
+      .setParameters({ material: QuestionType.MATERIAL, published: QuestionStatus.PUBLISHED });
+    if (criteria.type) {
+      query.andWhere('"q"."type" = :type', { type: criteria.type });
+    }
+    if (criteria.excludeRootIds?.length) {
+      query.andWhere('"q"."id" <> ALL(:excludeRootIds)', { excludeRootIds: criteria.excludeRootIds });
+    }
+
+    const answerable: string[] = [];
+    if (criteria.difficultyRange) {
+      answerable.push('a."difficulty" BETWEEN :minDifficulty AND :maxDifficulty');
+      query.setParameters({ minDifficulty: criteria.difficultyRange[0], maxDifficulty: criteria.difficultyRange[1] });
+    }
+    if (criteria.knowledgePointIds?.length) {
+      answerable.push(`EXISTS (
+        SELECT 1 FROM "question_knowledge_point" AS links
+        INNER JOIN "knowledge_point" AS kp ON kp."id" = links."knowledgePointId"
+        INNER JOIN "knowledge_point" AS scope ON scope."id" = ANY(:knowledgePointIds)
+        WHERE links."questionId" = a."id" AND kp."path" LIKE scope."path" || '%'
+      )`);
+      query.setParameters({ knowledgePointIds: criteria.knowledgePointIds });
+    }
+    if (answerable.length > 0) {
+      query.andWhere(
+        `EXISTS (
+          SELECT 1 FROM "question" AS a
+          WHERE a."status" = :published
+            AND ((a."id" = "q"."id" AND "q"."type" <> :material) OR a."parentId" = "q"."id")
+            AND ${answerable.join(' AND ')}
+        )`,
+      );
+    }
+
+    const rows: { id: string; size: string | number }[] = await query.orderBy('RANDOM()').limit(limit).getRawMany();
+    return rows.map((row) => ({ id: row.id, size: Number(row.size) })).filter((row) => row.size > 0);
   }
 
   async findManyWithPaginationAndCount({

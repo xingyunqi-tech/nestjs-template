@@ -20,6 +20,8 @@ import { UpdateQuestionDto } from './dto/update-question.dto';
 import { QuestionFilterOptions } from './dto/query-admin-question.dto';
 import { AdminQuestionDto } from './dto/admin-question.dto';
 import { BatchPublishQuestionsDto, BatchPublishQuestionsResultDto } from './dto/batch-publish-questions.dto';
+import { PublicQuestionUnitDto, toPublicQuestion } from './dto/public-question.dto';
+import { QuestionDrawCriteria, QuestionUnit, groupIntoUnits, packUnits } from './domain/question-unit';
 import { SubjectsService } from '../exams/subjects.service';
 import { FilesService } from '../files/files.service';
 import { FileUrlResolver, extractFileIds } from '../files/file-url.resolver';
@@ -27,6 +29,9 @@ import { BusinessException } from '../../common/exceptions/business.exception';
 import { IPaginationOptions } from '../../common/types/pagination-options';
 
 type UserId = number | string;
+
+const DRAW_CANDIDATE_FACTOR = 3;
+const MIN_DRAW_CANDIDATES = 20;
 type FileReferencingContent = Pick<Question, 'stem' | 'analysis' | 'material' | 'options'>;
 type FileReferenceSource = Partial<Pick<Question, 'stem' | 'options' | 'analysis' | 'material' | 'audioFileId'>>;
 
@@ -126,6 +131,66 @@ export class QuestionsService {
       throw notFound();
     }
     return question;
+  }
+
+  /** 按传入顺序返回，不存在的忽略 */
+  async findByIds(ids: Question['id'][]): Promise<Question[]> {
+    const found = new Map((await this.questionRepository.findByIds([...new Set(ids)])).map((q) => [q.id, q]));
+    return ids.flatMap((id) => found.get(id) ?? []);
+  }
+
+  /** 独立题或材料组成的出题单位，按传入顺序；小题与不存在的 id 忽略 */
+  async findUnits(rootIds: Question['id'][]): Promise<QuestionUnit[]> {
+    const roots = (await this.findByIds(rootIds)).filter((question) => question.parentId === null);
+    const materialIds = roots.filter((root) => root.type === QuestionType.MATERIAL).map((root) => root.id);
+    const children = await this.questionRepository.findChildrenByParentIds(materialIds);
+    return roots.map((root) => ({
+      root,
+      questions: root.type === QuestionType.MATERIAL ? children.filter((child) => child.parentId === root.id) : [root],
+    }));
+  }
+
+  async findUnitsByQuestionIds(questionIds: Question['id'][]): Promise<QuestionUnit[]> {
+    const questions = await this.findByIds(questionIds);
+    const materialIds = [...new Set(questions.flatMap((question) => question.parentId ?? []))];
+    const materials = new Map((await this.findByIds(materialIds)).map((material) => [material.id, material]));
+    return groupIntoUnits(questions, materials);
+  }
+
+  /** 随机抽取已发布题目，以材料为单位，可作答题数尽量凑满 target */
+  async drawUnits(criteria: QuestionDrawCriteria, target: number): Promise<QuestionUnit[]> {
+    if (target <= 0) {
+      return [];
+    }
+    const candidates = await this.questionRepository.findDrawCandidates(
+      criteria,
+      Math.max(target * DRAW_CANDIDATE_FACTOR, MIN_DRAW_CANDIDATES),
+    );
+    return this.findUnits(packUnits(candidates, target).map((candidate) => candidate.id));
+  }
+
+  /** 解析文本中的 file:{id} 引用 */
+  resolveFileTexts(texts: string[], viewerUserId: UserId): Promise<string[]> {
+    return this.fileUrlResolver.resolveMany(texts, viewerUserId);
+  }
+
+  /** 当前版本题面，不含答案与解析 */
+  async toPublicUnits(units: QuestionUnit[], viewerUserId: UserId | null): Promise<PublicQuestionUnitDto[]> {
+    const copies = units.map((unit) => ({
+      root: { ...unit.root },
+      questions: unit.root.type === QuestionType.MATERIAL ? unit.questions.map((question) => ({ ...question })) : [],
+    }));
+    await this.resolveFileReferences(
+      copies.flatMap((unit) => [unit.root, ...unit.questions]),
+      viewerUserId,
+    );
+    return copies.map((unit) => {
+      const dto = Object.assign(new PublicQuestionUnitDto(), toPublicQuestion(unit.root));
+      if (unit.root.type === QuestionType.MATERIAL) {
+        dto.children = unit.questions.map((question) => toPublicQuestion(question));
+      }
+      return dto;
+    });
   }
 
   async create(dto: CreateQuestionDto, userId: UserId): Promise<AdminQuestionDto> {
@@ -437,7 +502,7 @@ export class QuestionsService {
 
   private async resolveFileReferences<T extends FileReferencingContent>(
     items: T[],
-    viewerUserId: UserId,
+    viewerUserId: UserId | null,
   ): Promise<T[]> {
     const resolved = await this.fileUrlResolver.resolveMany(items.flatMap(contentTexts), viewerUserId);
     let index = 0;

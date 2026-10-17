@@ -24,6 +24,7 @@ describe('SubjectsService', () => {
       findById: vi.fn(),
       findManyWithPaginationAndCount: vi.fn(),
       findManyByExamIdAndStatus: vi.fn(),
+      findAllPublished: vi.fn(),
       countByExamId: vi.fn(),
       update: vi.fn(),
       transitionStatus: vi.fn(),

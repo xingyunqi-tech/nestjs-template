@@ -12,6 +12,8 @@ export type QuestionCountDelta = { knowledgePointId: KnowledgePoint['id']; delta
 export abstract class KnowledgePointRepository {
   abstract findById(id: KnowledgePoint['id']): Promise<NullableType<KnowledgePoint>>;
 
+  abstract findByIds(ids: KnowledgePoint['id'][]): Promise<KnowledgePoint[]>;
+
   abstract findManyBySubjectId(subjectId: KnowledgePoint['subjectId']): Promise<KnowledgePoint[]>;
 
   abstract countBySubjectId(subjectId: KnowledgePoint['subjectId']): Promise<number>;

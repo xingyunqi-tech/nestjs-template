@@ -6,7 +6,7 @@ import { QuestionKnowledgePointEntity } from './entities/question-knowledge-poin
 import { QuestionRepository } from '../question.repository';
 import { QuestionUsageRepository } from '../question-usage.repository';
 import { QuestionRelationalRepository } from './repositories/question.repository';
-import { UnusedQuestionUsageRepository } from './repositories/question-usage.repository';
+import { QuestionUsageRelationalRepository } from './repositories/question-usage.repository';
 import { ExamsModule } from '../../../../exams/exams.module';
 
 @Module({
@@ -16,7 +16,7 @@ import { ExamsModule } from '../../../../exams/exams.module';
   ],
   providers: [
     { provide: QuestionRepository, useClass: QuestionRelationalRepository },
-    { provide: QuestionUsageRepository, useClass: UnusedQuestionUsageRepository },
+    { provide: QuestionUsageRepository, useClass: QuestionUsageRelationalRepository },
   ],
   exports: [QuestionRepository, QuestionUsageRepository],
 })

@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { KnowledgePointEntity } from '../entities/knowledge-point.entity';
 import { KnowledgePointMapper } from '../mappers/knowledge-point.mapper';
@@ -43,6 +43,14 @@ export class KnowledgePointRelationalRepository implements KnowledgePointReposit
   async findById(id: KnowledgePoint['id']): Promise<NullableType<KnowledgePoint>> {
     const entity = await this.knowledgePointRepository.findOne({ where: { id } });
     return entity ? KnowledgePointMapper.toDomain(entity) : null;
+  }
+
+  async findByIds(ids: KnowledgePoint['id'][]): Promise<KnowledgePoint[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const entities = await this.knowledgePointRepository.find({ where: { id: In(ids) } });
+    return entities.map((entity) => KnowledgePointMapper.toDomain(entity));
   }
 
   async findManyBySubjectId(subjectId: KnowledgePoint['subjectId']): Promise<KnowledgePoint[]> {

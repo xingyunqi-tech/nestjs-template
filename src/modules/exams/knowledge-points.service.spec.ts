@@ -31,6 +31,7 @@ describe('KnowledgePointsService', () => {
   beforeEach(() => {
     repository = {
       findById: vi.fn(),
+      findByIds: vi.fn(),
       findManyBySubjectId: vi.fn(),
       countBySubjectId: vi.fn(),
       create: vi.fn(),

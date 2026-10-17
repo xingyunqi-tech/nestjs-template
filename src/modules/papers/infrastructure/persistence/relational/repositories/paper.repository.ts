@@ -1,0 +1,206 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { EntityManager, In, Repository, SelectQueryBuilder } from 'typeorm';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
+import { PaperEntity } from '../entities/paper.entity';
+import { PaperQuestionEntity } from '../entities/paper-question.entity';
+import { PaperMapper } from '../mappers/paper.mapper';
+import { PaperQuestionMapper } from '../mappers/paper-question.mapper';
+import {
+  CreatePaperData,
+  PaperCatalogOptions,
+  PaperChanges,
+  PaperContent,
+  PaperQuestionData,
+  PaperRepository,
+} from '../../paper.repository';
+import { Paper } from '../../../../domain/paper';
+import { PaperQuestion } from '../../../../domain/paper-question';
+import { PaperType } from '../../../../domain/paper-type';
+import { PaperFilterOptions } from '../../../../dto/query-admin-paper.dto';
+import { ContentStatus } from '../../../../../exams/domain/content-status';
+import { NullableType } from '../../../../../../common/types/nullable.type';
+import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+const UPDATABLE_COLUMNS = ['title', 'type', 'year', 'durationMin', 'multiScoringRule', 'isFree'] as const;
+
+@Injectable()
+export class PaperRelationalRepository implements PaperRepository {
+  constructor(
+    @InjectRepository(PaperEntity)
+    private readonly paperRepository: Repository<PaperEntity>,
+    @InjectRepository(PaperQuestionEntity)
+    private readonly paperQuestionRepository: Repository<PaperQuestionEntity>,
+  ) {}
+
+  async create(data: CreatePaperData): Promise<Paper> {
+    const entity = await this.paperRepository.save(this.paperRepository.create(PaperMapper.toPersistence(data)));
+    return PaperMapper.toDomain(entity, 0);
+  }
+
+  async findById(id: Paper['id']): Promise<NullableType<Paper>> {
+    const entity = await this.paperRepository.findOne({ where: { id } });
+    if (!entity) {
+      return null;
+    }
+    const [paper] = await this.withQuestionCounts(this.paperRepository.manager, [entity]);
+    return paper;
+  }
+
+  findManyWithPaginationAndCount({
+    filterOptions,
+    paginationOptions,
+  }: {
+    filterOptions?: PaperFilterOptions | null;
+    paginationOptions: IPaginationOptions;
+  }): Promise<{ data: Paper[]; total: number }> {
+    const query = this.paperRepository.createQueryBuilder('p');
+    if (filterOptions?.subjectId) {
+      query.andWhere('"p"."subjectId" = :subjectId', { subjectId: filterOptions.subjectId });
+    }
+    if (filterOptions?.type) {
+      query.andWhere('"p"."type" = :type', { type: filterOptions.type });
+    }
+    if (filterOptions?.status) {
+      query.andWhere('"p"."status" = :status', { status: filterOptions.status });
+    }
+    if (filterOptions?.keyword) {
+      query.andWhere('LOWER("p"."title") LIKE LOWER(:keyword)', {
+        keyword: `%${escapeLike(filterOptions.keyword)}%`,
+      });
+    }
+    query.orderBy('p.createdAt', 'DESC');
+    return this.paginate(query, paginationOptions);
+  }
+
+  findCatalog(
+    { subjectId, type, viewerUserId }: PaperCatalogOptions,
+    paginationOptions: IPaginationOptions,
+  ): Promise<{ data: Paper[]; total: number }> {
+    const query = this.paperRepository
+      .createQueryBuilder('p')
+      .where('"p"."subjectId" = :subjectId', { subjectId })
+      .andWhere('"p"."status" = :published', { published: ContentStatus.PUBLISHED })
+      .andWhere('("p"."type" <> :generated OR "p"."ownerUserId" = :viewerUserId)', {
+        generated: PaperType.GENERATED,
+        viewerUserId,
+      });
+    if (type) {
+      query.andWhere('"p"."type" = :type', { type });
+    }
+    query.orderBy('p.year', 'DESC', 'NULLS LAST').addOrderBy('p.createdAt', 'DESC');
+    return this.paginate(query, paginationOptions);
+  }
+
+  async update(id: Paper['id'], changes: PaperChanges): Promise<NullableType<Paper>> {
+    const values: QueryDeepPartialEntity<PaperEntity> = Object.fromEntries(
+      UPDATABLE_COLUMNS.filter((key) => changes[key] !== undefined).map((key) => [key, changes[key]]),
+    );
+    if (Object.keys(values).length > 0) {
+      await this.paperRepository.update({ id }, values);
+    }
+    return this.findById(id);
+  }
+
+  async transitionStatus(id: Paper['id'], from: ContentStatus[], to: ContentStatus): Promise<boolean> {
+    const result = await this.paperRepository.update({ id, status: In(from) }, { status: to });
+    return (result.affected ?? 0) > 0;
+  }
+
+  async findQuestions(paperId: Paper['id']): Promise<PaperQuestion[]> {
+    const entities = await this.paperQuestionRepository.find({ where: { paperId }, order: { sort: 'ASC' } });
+    return entities.map((entity) => PaperQuestionMapper.toDomain(entity));
+  }
+
+  replaceQuestions(paperId: Paper['id'], content: PaperContent, questions: PaperQuestionData[]): Promise<boolean> {
+    return this.paperRepository.manager.transaction(async (manager) => {
+      const paper = await manager.findOne(PaperEntity, {
+        where: { id: paperId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (paper?.status !== ContentStatus.DRAFT) {
+        return false;
+      }
+      await manager.delete(PaperQuestionEntity, { paperId });
+      await this.insertQuestions(
+        manager,
+        questions.map((question) => ({ ...question, paperId })),
+      );
+      await manager.update(
+        PaperEntity,
+        { id: paperId },
+        {
+          sections: content.sections,
+          totalScore: content.totalScore.toFixed(2),
+          objectiveScore: content.objectiveScore.toFixed(2),
+        },
+      );
+      return true;
+    });
+  }
+
+  copy(sourceId: Paper['id'], derive: (source: Paper) => CreatePaperData): Promise<NullableType<Paper>> {
+    return this.paperRepository.manager.transaction(async (manager) => {
+      const source = await manager.findOne(PaperEntity, {
+        where: { id: sourceId },
+        lock: { mode: 'pessimistic_read' },
+      });
+      if (!source) {
+        return null;
+      }
+      const questions = await manager.find(PaperQuestionEntity, { where: { paperId: sourceId } });
+      const data = derive(PaperMapper.toDomain(source, questions.length));
+      const entity = await manager.save(manager.create(PaperEntity, PaperMapper.toPersistence(data)));
+      await this.insertQuestions(
+        manager,
+        questions.map((question) => ({ ...PaperQuestionMapper.toDomain(question), paperId: entity.id })),
+      );
+      return PaperMapper.toDomain(entity, questions.length);
+    });
+  }
+
+  async removeDraft(id: Paper['id']): Promise<boolean> {
+    const result = await this.paperRepository.delete({ id, status: ContentStatus.DRAFT });
+    return (result.affected ?? 0) > 0;
+  }
+
+  private async insertQuestions(manager: EntityManager, questions: PaperQuestion[]): Promise<void> {
+    if (questions.length > 0) {
+      await manager.insert(
+        PaperQuestionEntity,
+        questions.map((question) => PaperQuestionMapper.toPersistence(question)),
+      );
+    }
+  }
+
+  private async paginate(
+    query: SelectQueryBuilder<PaperEntity>,
+    paginationOptions: IPaginationOptions,
+  ): Promise<{ data: Paper[]; total: number }> {
+    const [entities, total] = await query
+      .addOrderBy('p.id', 'ASC')
+      .skip((paginationOptions.page - 1) * paginationOptions.limit)
+      .take(paginationOptions.limit)
+      .getManyAndCount();
+    return { data: await this.withQuestionCounts(this.paperRepository.manager, entities), total };
+  }
+
+  private async withQuestionCounts(manager: EntityManager, entities: PaperEntity[]): Promise<Paper[]> {
+    if (entities.length === 0) {
+      return [];
+    }
+    const rows: { paperId: string; count: number }[] = await manager
+      .createQueryBuilder(PaperQuestionEntity, 'pq')
+      .select('pq.paperId', 'paperId')
+      .addSelect('COUNT(*)::int', 'count')
+      .where('pq.paperId IN (:...ids)', { ids: entities.map((entity) => entity.id) })
+      .groupBy('pq.paperId')
+      .getRawMany();
+    const counts = new Map(rows.map((row) => [row.paperId, row.count]));
+    return entities.map((entity) => PaperMapper.toDomain(entity, counts.get(entity.id) ?? 0));
+  }
+}

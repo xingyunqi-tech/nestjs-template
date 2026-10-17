@@ -2,6 +2,7 @@ import { NullableType } from '../../../../common/types/nullable.type';
 import { IPaginationOptions } from '../../../../common/types/pagination-options';
 import { Question } from '../../domain/question';
 import { QuestionVersion } from '../../domain/question-version';
+import { QuestionDrawCandidate, QuestionDrawCriteria } from '../../domain/question-unit';
 import { QuestionFilterOptions } from '../../dto/query-admin-question.dto';
 
 export type CreateQuestionData = Omit<
@@ -75,6 +76,12 @@ export abstract class QuestionRepository {
   abstract findByIds(ids: Question['id'][]): Promise<Question[]>;
 
   abstract findChildren(parentId: Question['id']): Promise<Question[]>;
+
+  /** 按材料、sort 排序 */
+  abstract findChildrenByParentIds(parentIds: Question['id'][]): Promise<Question[]>;
+
+  /** 随机取已发布的独立题与材料，size 为已发布小题数（独立题为 1） */
+  abstract findDrawCandidates(criteria: QuestionDrawCriteria, limit: number): Promise<QuestionDrawCandidate[]>;
 
   abstract findManyWithPaginationAndCount(options: {
     filterOptions?: QuestionFilterOptions | null;

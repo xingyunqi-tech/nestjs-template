@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Question } from '../domain/question';
 import { QuestionVersion } from '../domain/question-version';
 import { QuestionType } from '../domain/question-type';
@@ -44,6 +44,11 @@ export class PublicQuestionDto {
 
   @ApiProperty({ type: Number })
   sort: number;
+}
+
+export class PublicQuestionUnitDto extends PublicQuestionDto {
+  @ApiPropertyOptional({ type: () => [PublicQuestionDto], description: '材料题的小题，按顺序' })
+  children?: PublicQuestionDto[];
 }
 
 /** 传入版本时题面取自该版本快照，知识点始终取当前关联 */

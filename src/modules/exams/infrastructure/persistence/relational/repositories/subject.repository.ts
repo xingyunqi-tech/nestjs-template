@@ -66,6 +66,17 @@ export class SubjectRelationalRepository implements SubjectRepository {
     return entities.map((entity) => SubjectMapper.toDomain(entity));
   }
 
+  async findAllPublished(): Promise<Subject[]> {
+    const entities = await this.subjectRepository
+      .createQueryBuilder('s')
+      .innerJoin('s.exam', 'e')
+      .where('s.status = :published AND e.status = :published', { published: ContentStatus.PUBLISHED })
+      .orderBy('s.createdAt', 'ASC')
+      .addOrderBy('s.id', 'ASC')
+      .getMany();
+    return entities.map((entity) => SubjectMapper.toDomain(entity));
+  }
+
   countByExamId(examId: Subject['examId']): Promise<number> {
     return this.subjectRepository.count({ where: { examId } });
   }

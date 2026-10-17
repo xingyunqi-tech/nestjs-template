@@ -71,6 +71,32 @@ export class KnowledgePointsService {
     return this.knowledgePointRepository.findByIds([...new Set(ids)]);
   }
 
+  findBySubjectId(subjectId: Subject['id']): Promise<KnowledgePoint[]> {
+    return this.knowledgePointRepository.findManyBySubjectId(subjectId);
+  }
+
+  /** 按名称逐级查找，缺少的层级依次创建在同级末尾，返回最末级 */
+  async ensurePath(subjectId: Subject['id'], names: string[]): Promise<{ point: KnowledgePoint; created: boolean }> {
+    const points = await this.knowledgePointRepository.findManyBySubjectId(subjectId);
+    let parentId: string | null = null;
+    let current: KnowledgePoint | undefined;
+    let created = false;
+    for (const name of names) {
+      const siblings: KnowledgePoint[] = points.filter((point) => point.parentId === parentId);
+      current = siblings.find((point) => point.name === name);
+      if (!current) {
+        current = await this.create({ subjectId, parentId, name, sort: siblings.length });
+        points.push(current);
+        created = true;
+      }
+      parentId = current.id;
+    }
+    if (!current) {
+      throw new UnprocessableEntityException({ errors: { name: 'knowledgePointNotFound' } });
+    }
+    return { point: current, created };
+  }
+
   async findById(id: KnowledgePoint['id']): Promise<KnowledgePoint> {
     const point = await this.knowledgePointRepository.findById(id);
     if (!point) {

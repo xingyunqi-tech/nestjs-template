@@ -42,6 +42,19 @@ export class FileRelationalRepository implements FileRepository {
     return entities.map((entity) => FileMapper.toDomain(entity));
   }
 
+  async findReusable(
+    sha256: string,
+    visibility: NonNullable<FileType['visibility']>,
+    mimeType: string,
+  ): Promise<NullableType<FileType>> {
+    const entity = await this.fileRepository.findOne({ where: { sha256, visibility, mimeType }, order: { id: 'ASC' } });
+    return entity ? FileMapper.toDomain(entity) : null;
+  }
+
+  async remove(id: FileType['id']): Promise<void> {
+    await this.fileRepository.delete({ id });
+  }
+
   async findByPath(path: FileType['path']): Promise<NullableType<FileType>> {
     const entity = await this.fileRepository.findOne({ where: { path } });
     return entity ? FileMapper.toDomain(entity) : null;

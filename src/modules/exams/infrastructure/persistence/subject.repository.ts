@@ -17,6 +17,9 @@ export abstract class SubjectRepository {
     paginationOptions: IPaginationOptions;
   }): Promise<{ data: Subject[]; total: number }>;
 
+  /** 按考试名称与科目名称精确匹配，可能有多个 */
+  abstract findManyByExamNameAndName(examName: string, name: Subject['name']): Promise<Subject[]>;
+
   abstract findManyByExamIdAndStatus(examId: Subject['examId'], status: ContentStatus): Promise<Subject[]>;
 
   /** 科目与所属考试均已发布 */

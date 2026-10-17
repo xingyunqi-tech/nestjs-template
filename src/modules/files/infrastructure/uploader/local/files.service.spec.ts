@@ -40,6 +40,8 @@ describe('FilesLocalService', () => {
       findById: vi.fn(),
       findByIds: vi.fn(),
       findByPath: vi.fn(),
+      findReusable: vi.fn(),
+      remove: vi.fn(),
     };
     service = new FilesLocalService(config, repository);
   });

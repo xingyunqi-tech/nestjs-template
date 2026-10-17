@@ -52,6 +52,8 @@ import { MonitorModule } from './modules/monitor/monitor.module';
 import { ExamsModule } from './modules/exams/exams.module';
 import { QuestionsModule } from './modules/questions/questions.module';
 import { PapersModule } from './modules/papers/papers.module';
+import { ImportsModule } from './modules/imports/imports.module';
+import { ImportQueueModule } from './infrastructure/queue/import-queue/import-queue.module';
 
 const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
   useClass: TypeOrmConfigService,
@@ -194,6 +196,8 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     ExamsModule,
     QuestionsModule,
     PapersModule,
+    ImportsModule,
+    ConditionalModule.registerWhen(ImportQueueModule, isRedisEnabled),
   ],
 })
 export class AppModule {}

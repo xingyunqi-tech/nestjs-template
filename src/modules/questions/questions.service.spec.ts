@@ -17,6 +17,7 @@ import { QuestionAction, QuestionStatus } from './domain/question-status';
 import { QuestionSource } from './domain/question-source';
 import { QuestionChangeType } from './domain/question-version';
 import { CreateQuestionDto } from './dto/create-question.dto';
+import { QuestionImportItem, QuestionImportItemError } from './question-import';
 import { SubjectsService } from '../exams/subjects.service';
 import { FilesService } from '../files/files.service';
 import { FileUrlResolver } from '../files/file-url.resolver';
@@ -47,6 +48,20 @@ class FakeStore implements QuestionTransaction {
   deltas: KnowledgePointCountDelta[] = [];
   removed: string[] = [];
   private sequence = 0;
+
+  async atomically<T>(work: () => Promise<T>): Promise<T> {
+    const backup = {
+      questions: structuredClone(this.questions),
+      versions: structuredClone(this.versions),
+      deltas: structuredClone(this.deltas),
+    };
+    try {
+      return await work();
+    } catch (error) {
+      Object.assign(this, backup);
+      throw error;
+    }
+  }
 
   snapshot(id: string): Question {
     return Object.assign(new Question(), structuredClone(this.questions.get(id)));
@@ -164,7 +179,7 @@ describe('QuestionsService', () => {
       findDrawCandidates,
       findManyWithPaginationAndCount: vi.fn(),
       findVersions: vi.fn(),
-      transaction: (_subjectIds, work) => work(store),
+      transaction: (_subjectIds, work) => store.atomically(() => work(store)),
     };
     usage = { isUsed: vi.fn().mockResolvedValue(false) };
     subjectsService = { findById: vi.fn().mockResolvedValue({ id: SUBJECT }) };
@@ -614,6 +629,124 @@ describe('QuestionsService', () => {
       expect(dto.children?.[0]).not.toHaveProperty('answer');
       expect(dto).not.toHaveProperty('analysis');
       expect(units[0].questions[0].answer).toEqual({ keys: ['B'] });
+    });
+  });
+
+  describe('importUnit', () => {
+    const item = (
+      ref: string,
+      fields: Partial<CreateQuestionDto> = {},
+      id: string | null = null,
+    ): QuestionImportItem => {
+      const { subjectId: _subjectId, parentId: _parentId, ...rest } = singleDto(fields);
+      return { ref, id, fields: rest };
+    };
+    const materialItem = (ref: string, material = '导入资料'): QuestionImportItem => {
+      const { subjectId: _subjectId, ...rest } = materialDto(material);
+      return { ref, id: null, fields: rest };
+    };
+
+    it('should create a material with its sub-questions in order as drafts', async () => {
+      const result = await service.importUnit({
+        subjectId: SUBJECT,
+        root: materialItem('m'),
+        children: [item('c1', { stem: '小题一', sort: 1 }), item('c2', { stem: '小题二', sort: 2 })],
+        publish: false,
+      });
+
+      const children = await store.findChildrenForUpdate([result.rootId]);
+      expect(children.map((child) => [child.id, child.stem, child.status])).toEqual([
+        [result.ids.c1, '小题一', QuestionStatus.DRAFT],
+        [result.ids.c2, '小题二', QuestionStatus.DRAFT],
+      ]);
+      expect(result.ids.m).toBe(result.rootId);
+    });
+
+    it('should write nothing when any sub-question fails and report its ref', async () => {
+      const error = await service
+        .importUnit({
+          subjectId: SUBJECT,
+          root: materialItem('m'),
+          children: [item('c1', { stem: '小题一' }), item('c2', { stem: '小题二', knowledgePointIds: ['branch'] })],
+          publish: false,
+        })
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(QuestionImportItemError);
+      expect((error as QuestionImportItemError).ref).toBe('c2');
+      expect((error as QuestionImportItemError).cause).toBeInstanceOf(UnprocessableEntityException);
+      expect(store.questions.size).toBe(0);
+    });
+
+    it('should validate content before opening the transaction', async () => {
+      const error = await service
+        .importUnit({ subjectId: SUBJECT, root: item('q', { answer: { keys: ['Z'] } }), children: [], publish: false })
+        .catch((caught: unknown) => caught);
+
+      expect((error as QuestionImportItemError).ref).toBe('q');
+      expect(store.questions.size).toBe(0);
+    });
+
+    it('should publish a new unit with first versions when requested', async () => {
+      const result = await service.importUnit({
+        subjectId: SUBJECT,
+        root: materialItem('m'),
+        children: [item('c1')],
+        publish: true,
+      });
+
+      expect(store.snapshot(result.rootId)).toMatchObject({ status: QuestionStatus.PUBLISHED, currentVersion: 1 });
+      expect(store.snapshot(result.ids.c1)).toMatchObject({ status: QuestionStatus.PUBLISHED, currentVersion: 1 });
+      expect(store.deltas).toEqual([{ knowledgePointId: 'leaf1', delta: 1 }]);
+    });
+
+    it('should update a published question with an EDIT version', async () => {
+      const { id } = await create(singleDto());
+      await publish(id);
+
+      await service.importUnit({
+        subjectId: SUBJECT,
+        root: item('q', { analysis: '新解析' }, id),
+        children: [],
+        publish: true,
+      });
+
+      expect(store.snapshot(id)).toMatchObject({ analysis: '新解析', currentVersion: 2 });
+      expect(store.versions.at(-1)).toMatchObject({ version: 2, changeType: QuestionChangeType.EDIT });
+    });
+
+    it('should reject an answer change of a published question', async () => {
+      const { id } = await create(singleDto());
+      await publish(id);
+
+      const error = await service
+        .importUnit({
+          subjectId: SUBJECT,
+          root: item('q', { answer: { keys: ['A'] } }, id),
+          children: [],
+          publish: false,
+        })
+        .catch((caught: unknown) => caught);
+
+      expect((error as QuestionImportItemError).cause).toMatchObject({ errorKey: 'answerChangeNotAllowed' });
+      expect(store.snapshot(id).answer).toEqual({ keys: ['B'] });
+    });
+
+    it('should reject an id from another subject or with a different parent', async () => {
+      const { id } = await create(singleDto());
+      store.questions.get(id)!.subjectId = 'other';
+
+      const otherSubject = await service
+        .importUnit({ subjectId: SUBJECT, root: item('q', {}, id), children: [], publish: false })
+        .catch((caught: unknown) => caught);
+      expect((otherSubject as QuestionImportItemError).cause).toBeInstanceOf(UnprocessableEntityException);
+
+      store.questions.get(id)!.subjectId = SUBJECT;
+      const asChild = await service
+        .importUnit({ subjectId: SUBJECT, root: materialItem('m'), children: [item('c', {}, id)], publish: false })
+        .catch((caught: unknown) => caught);
+      expect((asChild as QuestionImportItemError).ref).toBe('c');
+      expect(store.questions.size).toBe(1);
     });
   });
 });

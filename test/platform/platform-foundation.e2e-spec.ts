@@ -310,7 +310,11 @@ describe('Platform foundation', () => {
         .set('Authorization', `Bearer ${admin.token}`)
         .expect(200);
       expect(body.data.enabled).toBe(true);
-      expect(body.data.queues.map((queue: { name: string }) => queue.name)).toEqual(['mail', 'notification']);
+      expect(body.data.queues.map((queue: { name: string }) => queue.name)).toEqual([
+        'mail',
+        'notification',
+        'content-import',
+      ]);
 
       await api(app).get('/api/v1/admin/monitor/queues').set('Authorization', `Bearer ${user.token}`).expect(403);
     });

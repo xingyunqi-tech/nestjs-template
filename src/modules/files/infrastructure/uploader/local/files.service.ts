@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { unlink } from 'fs/promises';
+import { basename } from 'path';
 
 import { FileRepository } from '../../persistence/file.repository';
 import { AllConfigType } from '../../../../../config/config.type';
@@ -9,6 +10,7 @@ import { FilePurpose } from '../../../domain/file-purpose';
 import { FileVisibility } from '../../../domain/file-visibility';
 import { FILE_PURPOSE_RULES, fileTooLargeError, mimeTypeFor } from '../../../file-purposes';
 import { NullableType } from '../../../../../common/types/nullable.type';
+import { localFileUrlPath } from '../../../local-file-path';
 
 @Injectable()
 export class FilesLocalService {
@@ -54,6 +56,6 @@ export class FilesLocalService {
   }
 
   private publicPath(diskPath: string): string {
-    return `/${this.configService.get('app.apiPrefix', { infer: true })}/v1/${diskPath}`;
+    return localFileUrlPath(this.configService.get('app.apiPrefix', { infer: true }), basename(diskPath));
   }
 }

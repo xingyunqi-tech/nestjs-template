@@ -1,10 +1,11 @@
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { PaperQuestionData, PaperRepository } from './infrastructure/persistence/paper.repository';
+import { PaperContent, PaperQuestionData, PaperRepository } from './infrastructure/persistence/paper.repository';
 import { Paper } from './domain/paper';
 import { PaperType } from './domain/paper-type';
 import { MultiScoringRule } from './domain/multi-scoring-rule';
 import { sumPaperScores } from './domain/paper-score';
 import { CreatePaperDto, PAPER_LIMITS } from './dto/create-paper.dto';
+import { PaperImportInput } from './paper-import';
 import { UpdatePaperDto } from './dto/update-paper.dto';
 import { PAPER_QUESTION_LIMITS, SetPaperQuestionsDto } from './dto/set-paper-questions.dto';
 import { PaperFilterOptions } from './dto/query-admin-paper.dto';
@@ -146,62 +147,51 @@ export class PapersService {
     if (paper.status !== ContentStatus.DRAFT) {
       throw new ConflictException({ error: 'paperFrozen' });
     }
-
-    const rootIds = dto.questions.map((item) => item.questionId);
-    if (new Set(rootIds).size !== rootIds.length) {
-      throw unprocessable('questions', 'duplicatePaperQuestion');
-    }
-    dto.questions.forEach((item, index) => {
-      if (item.sectionIndex >= dto.sections.length) {
-        throw unprocessable('questions', 'invalidPaperSection');
-      }
-      if (index > 0 && item.sectionIndex < dto.questions[index - 1].sectionIndex) {
-        throw unprocessable('questions', 'invalidPaperSection');
-      }
-    });
-
-    const units = new Map((await this.questionsService.findUnits(rootIds)).map((unit) => [unit.root.id, unit]));
-    const rows: (PaperQuestionData & { type: QuestionType })[] = [];
-    for (const item of dto.questions) {
-      const unit = units.get(item.questionId);
-      if (unit?.root.subjectId !== paper.subjectId) {
-        throw unprocessable('questions', 'paperQuestionNotFound');
-      }
-      if (unit.questions.some((question) => question.status !== QuestionStatus.PUBLISHED)) {
-        throw unprocessable('questions', 'paperQuestionNotPublished');
-      }
-      if (item.childScores && item.childScores.length !== unit.questions.length) {
-        throw unprocessable('questions', 'invalidChildScores');
-      }
-      unit.questions.forEach((question, index) => {
-        rows.push({
-          sectionIndex: item.sectionIndex,
-          questionId: question.id,
-          questionVersion: question.currentVersion,
-          sort: rows.length,
-          score: item.childScores?.[index] ?? item.score,
-          type: question.type,
-        });
-      });
-    }
-
-    const { totalScore, objectiveScore } = sumPaperScores(rows);
-    if (totalScore > PAPER_QUESTION_LIMITS.maxTotalScore) {
-      throw unprocessable('questions', 'paperScoreTooHigh');
-    }
-    const replaced = await this.paperRepository.replaceQuestions(
-      id,
-      {
-        sections: dto.sections.map(({ title, questionType }) => ({ title, questionType })),
-        totalScore,
-        objectiveScore,
-      },
-      rows.map(({ type: _type, ...row }) => row),
-    );
-    if (!replaced) {
+    const { content, rows } = await this.buildQuestionRows(paper.subjectId, dto);
+    if (!(await this.paperRepository.replaceQuestions(id, content, rows))) {
       throw new ConflictException({ error: 'paperFrozen' });
     }
     return this.getAdminDetail(id, viewerUserId);
+  }
+
+  /** 新建或更新草稿试卷并整体设置题目，可选直接发布，在一个事务内完成 */
+  async importPaper(input: PaperImportInput): Promise<Paper['id']> {
+    await this.assertSubject(input.subjectId);
+    if (input.id) {
+      const existing = await this.paperRepository.findById(input.id);
+      if (existing?.subjectId !== input.subjectId) {
+        throw unprocessable('id', 'paperNotFound');
+      }
+      if (existing.status !== ContentStatus.DRAFT) {
+        throw new ConflictException({ error: 'paperFrozen' });
+      }
+    }
+    const { content, rows } = await this.buildQuestionRows(input.subjectId, input.questions);
+    if (input.publish && rows.length === 0) {
+      throw new ConflictException({ error: 'paperHasNoQuestions' });
+    }
+    const id = await this.paperRepository.saveWithQuestions(
+      input.id,
+      {
+        subjectId: input.subjectId,
+        title: input.fields.title,
+        type: input.fields.type,
+        year: input.fields.year ?? null,
+        ownerUserId: null,
+        durationMin: input.fields.durationMin,
+        sections: content.sections,
+        totalScore: content.totalScore,
+        objectiveScore: content.objectiveScore,
+        multiScoringRule: input.fields.multiScoringRule ?? MultiScoringRule.ALL_OR_NOTHING,
+        status: input.publish ? ContentStatus.PUBLISHED : ContentStatus.DRAFT,
+        isFree: input.fields.isFree ?? true,
+      },
+      rows,
+    );
+    if (!id) {
+      throw new ConflictException({ error: 'paperFrozen' });
+    }
+    return id;
   }
 
   async publish(id: Paper['id'], viewerUserId: UserId): Promise<AdminPaperDto> {
@@ -302,6 +292,62 @@ export class PapersService {
       throw new ConflictException({ error: 'invalidStatusTransition' });
     }
     return this.getAdminDetail(id, viewerUserId);
+  }
+
+  private async buildQuestionRows(
+    subjectId: Paper['subjectId'],
+    dto: SetPaperQuestionsDto,
+  ): Promise<{ content: PaperContent; rows: PaperQuestionData[] }> {
+    const rootIds = dto.questions.map((item) => item.questionId);
+    if (new Set(rootIds).size !== rootIds.length) {
+      throw unprocessable('questions', 'duplicatePaperQuestion');
+    }
+    dto.questions.forEach((item, index) => {
+      if (item.sectionIndex >= dto.sections.length) {
+        throw unprocessable('questions', 'invalidPaperSection');
+      }
+      if (index > 0 && item.sectionIndex < dto.questions[index - 1].sectionIndex) {
+        throw unprocessable('questions', 'invalidPaperSection');
+      }
+    });
+
+    const units = new Map((await this.questionsService.findUnits(rootIds)).map((unit) => [unit.root.id, unit]));
+    const rows: (PaperQuestionData & { type: QuestionType })[] = [];
+    for (const item of dto.questions) {
+      const unit = units.get(item.questionId);
+      if (unit?.root.subjectId !== subjectId) {
+        throw unprocessable('questions', 'paperQuestionNotFound');
+      }
+      if (unit.questions.some((question) => question.status !== QuestionStatus.PUBLISHED)) {
+        throw unprocessable('questions', 'paperQuestionNotPublished');
+      }
+      if (item.childScores && item.childScores.length !== unit.questions.length) {
+        throw unprocessable('questions', 'invalidChildScores');
+      }
+      unit.questions.forEach((question, index) => {
+        rows.push({
+          sectionIndex: item.sectionIndex,
+          questionId: question.id,
+          questionVersion: question.currentVersion,
+          sort: rows.length,
+          score: item.childScores?.[index] ?? item.score,
+          type: question.type,
+        });
+      });
+    }
+
+    const { totalScore, objectiveScore } = sumPaperScores(rows);
+    if (totalScore > PAPER_QUESTION_LIMITS.maxTotalScore) {
+      throw unprocessable('questions', 'paperScoreTooHigh');
+    }
+    return {
+      content: {
+        sections: dto.sections.map(({ title, questionType }) => ({ title, questionType })),
+        totalScore,
+        objectiveScore,
+      },
+      rows: rows.map(({ type: _type, ...row }) => row),
+    };
   }
 
   private async assertSubject(subjectId: string): Promise<void> {

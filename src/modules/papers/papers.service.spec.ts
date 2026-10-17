@@ -7,6 +7,7 @@ import { PaperType } from './domain/paper-type';
 import { MultiScoringRule } from './domain/multi-scoring-rule';
 import { PaperQuestion } from './domain/paper-question';
 import { SetPaperQuestionsDto } from './dto/set-paper-questions.dto';
+import { PaperImportInput } from './paper-import';
 import { ContentStatus } from '../exams/domain/content-status';
 import { SubjectsService } from '../exams/subjects.service';
 import { QuestionsService } from '../questions/questions.service';
@@ -83,6 +84,7 @@ describe('PapersService', () => {
       transitionStatus: vi.fn().mockResolvedValue(true),
       findQuestions: vi.fn().mockResolvedValue([]),
       replaceQuestions: vi.fn().mockResolvedValue(true),
+      saveWithQuestions: vi.fn().mockResolvedValue('p9'),
       copy: vi.fn(),
       removeDraft: vi.fn().mockResolvedValue(true),
     };
@@ -380,6 +382,87 @@ describe('PapersService', () => {
       await expect(
         service.create({ subjectId: 'x', title: 't', type: PaperType.REAL, durationMin: 60 }, 1),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+  });
+
+  describe('importPaper', () => {
+    const input = (overrides: Partial<PaperImportInput> = {}): PaperImportInput => ({
+      id: null,
+      subjectId: SUBJECT,
+      fields: { title: '导入卷', type: PaperType.REAL, year: 2024, durationMin: 120 },
+      questions: {
+        sections,
+        questions: [
+          { questionId: 'q1', sectionIndex: 0, score: 1 },
+          { questionId: 'm1', sectionIndex: 1, score: 2 },
+        ],
+      },
+      publish: false,
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      subjectsService.findById.mockResolvedValue({ id: SUBJECT } as never);
+    });
+
+    it('should create a draft paper with expanded questions in one repository call', async () => {
+      await expect(service.importPaper(input())).resolves.toBe('p9');
+
+      expect(repository.saveWithQuestions).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({ title: '导入卷', year: 2024, status: ContentStatus.DRAFT, totalScore: 5 }),
+        [
+          { sectionIndex: 0, questionId: 'q1', questionVersion: 3, sort: 0, score: 1 },
+          { sectionIndex: 1, questionId: 'c1', questionVersion: 2, sort: 1, score: 2 },
+          { sectionIndex: 1, questionId: 'c2', questionVersion: 1, sort: 2, score: 2 },
+        ],
+      );
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('should save the paper as published when publishing', async () => {
+      await service.importPaper(input({ publish: true }));
+
+      expect(repository.saveWithQuestions).toHaveBeenCalledWith(
+        null,
+        expect.objectContaining({ status: ContentStatus.PUBLISHED }),
+        expect.any(Array),
+      );
+    });
+
+    it('should reject updating a paper that is no longer a draft', async () => {
+      repository.findById.mockResolvedValue(paper({ status: ContentStatus.PUBLISHED }));
+
+      await expect(service.importPaper(input({ id: 'p1' }))).rejects.toBeInstanceOf(ConflictException);
+      expect(repository.saveWithQuestions).not.toHaveBeenCalled();
+    });
+
+    it('should reject a paper id from another subject', async () => {
+      repository.findById.mockResolvedValue(paper({ subjectId: 'other' }));
+
+      await expect(service.importPaper(input({ id: 'p1' }))).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('should fail without saving when a referenced question is not published', async () => {
+      questionsService.findUnits.mockResolvedValue([
+        {
+          root: question('q1', { status: QuestionStatus.DRAFT }),
+          questions: [question('q1', { status: QuestionStatus.DRAFT })],
+        },
+      ]);
+
+      await expect(
+        service.importPaper(
+          input({ questions: { sections, questions: [{ questionId: 'q1', sectionIndex: 0, score: 1 }] } }),
+        ),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(repository.saveWithQuestions).not.toHaveBeenCalled();
+    });
+
+    it('should report a paper that turned non-draft while saving', async () => {
+      repository.saveWithQuestions.mockResolvedValue(null);
+
+      await expect(service.importPaper(input({ id: 'p1' }))).rejects.toBeInstanceOf(ConflictException);
     });
   });
 });

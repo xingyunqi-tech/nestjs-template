@@ -57,6 +57,17 @@ export class SubjectsService {
     return subject;
   }
 
+  async findByExamAndName(examName: string, name: Subject['name']): Promise<Subject> {
+    const subjects = await this.subjectRepository.findManyByExamNameAndName(examName, name);
+    if (subjects.length === 0) {
+      throw new NotFoundException({ error: 'subjectNotFound' });
+    }
+    if (subjects.length > 1) {
+      throw new ConflictException({ error: 'subjectAmbiguous' });
+    }
+    return subjects[0];
+  }
+
   async create(dto: CreateSubjectDto): Promise<Subject> {
     if (!(await this.examRepository.findById(dto.examId))) {
       throw new UnprocessableEntityException({ errors: { examId: 'examNotFound' } });

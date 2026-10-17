@@ -31,6 +31,17 @@ export class SubjectRelationalRepository implements SubjectRepository {
     return entity ? SubjectMapper.toDomain(entity) : null;
   }
 
+  async findManyByExamNameAndName(examName: string, name: Subject['name']): Promise<Subject[]> {
+    const entities = await this.subjectRepository
+      .createQueryBuilder('s')
+      .innerJoin('exam', 'e', '"e"."id" = "s"."examId"')
+      .where('"e"."name" = :examName', { examName })
+      .andWhere('"s"."name" = :name', { name })
+      .orderBy('s.id', 'ASC')
+      .getMany();
+    return entities.map((entity) => SubjectMapper.toDomain(entity));
+  }
+
   async findManyWithPaginationAndCount({
     filterOptions,
     paginationOptions,

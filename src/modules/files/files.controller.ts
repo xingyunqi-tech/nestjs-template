@@ -5,6 +5,7 @@ import { ApiExcludeEndpoint, ApiTags } from '@nestjs/swagger';
 import type { Response as ExpressResponse } from 'express';
 import { basename } from 'path';
 import { FilesService } from './files.service';
+import { LOCAL_FILES_ROOT } from './local-file-path';
 import { buildFileUrl } from './file-url';
 import { FileDriver } from './config/file-config.type';
 import { AllConfigType } from '../../config/config.type';
@@ -32,7 +33,7 @@ export class FilesController {
   ): Promise<void> {
     const file = await this.filesService.findAccessible(id, request.user.id);
     if (this.configService.get('file.driver', { infer: true }) === FileDriver.LOCAL) {
-      response.sendFile(basename(file.path), { root: './files' });
+      response.sendFile(basename(file.path), { root: LOCAL_FILES_ROOT });
       return;
     }
     response.redirect(await buildFileUrl(file));

@@ -23,4 +23,8 @@ export class FileEntity extends EntityRelationalHelper {
 
   @Column({ type: 'int', nullable: true })
   size: number | null;
+
+  @Index('IDX_file_sha256')
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  sha256: string | null;
 }

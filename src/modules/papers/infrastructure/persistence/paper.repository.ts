@@ -52,6 +52,13 @@ export abstract class PaperRepository {
     questions: PaperQuestionData[],
   ): Promise<boolean>;
 
+  /** 新建试卷，或锁定并更新仍为草稿的 id 对应试卷，同时整体替换题目；试卷已非草稿时返回 null */
+  abstract saveWithQuestions(
+    id: Paper['id'] | null,
+    data: CreatePaperData,
+    questions: PaperQuestionData[],
+  ): Promise<NullableType<Paper['id']>>;
+
   abstract copy(sourceId: Paper['id'], derive: (source: Paper) => CreatePaperData): Promise<NullableType<Paper>>;
 
   /** 仅删除草稿，返回是否删除 */

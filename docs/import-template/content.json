@@ -1,0 +1,177 @@
+{
+  "knowledge_points": [
+    {
+      "exam": "国考",
+      "subject": "行测",
+      "path": "常识判断/科技常识"
+    },
+    {
+      "exam": "国考",
+      "subject": "行测",
+      "path": "言语理解与表达/片段阅读"
+    },
+    {
+      "exam": "国考",
+      "subject": "行测",
+      "path": "数量关系/数学运算"
+    },
+    {
+      "exam": "国考",
+      "subject": "行测",
+      "path": "资料分析/图形资料"
+    }
+  ],
+  "materials": [
+    {
+      "materialKey": "m1",
+      "exam": "国考",
+      "subject": "行测",
+      "stem": "根据以下资料，回答第 1-2 题。",
+      "material": "某市 2020—2023 年快递业务量（单位：亿件）如下图所示：\n\n![](assets/chart1.png)\n\n2023 年该市快递业务量为 12 亿件，比上年增长 20%。",
+      "analysis": "本组材料考查增长量与增长率的计算。",
+      "source": "ORIGINAL",
+      "sourceNote": "行测导入样例",
+      "isFree": "是"
+    }
+  ],
+  "questions": [
+    {
+      "questionKey": "q1",
+      "exam": "国考",
+      "subject": "行测",
+      "type": "SINGLE",
+      "stem": "下列关于光的说法，正确的是：",
+      "optionA": "光在真空中的传播速度约为 3×10^5 千米/秒",
+      "optionB": "彩虹的形成与光的反射无关",
+      "optionC": "光年是时间单位",
+      "optionD": "白光不能被分解",
+      "answer": "A",
+      "analysis": "光在真空中的速度约为 $3\\times10^5$ km/s；光年是长度单位。",
+      "difficulty": 2,
+      "knowledgePath": "常识判断/科技常识",
+      "source": "ORIGINAL",
+      "isFree": "是"
+    },
+    {
+      "questionKey": "q2",
+      "exam": "国考",
+      "subject": "行测",
+      "type": "MULTIPLE",
+      "stem": "下列属于可再生能源的有：",
+      "optionA": "太阳能",
+      "optionB": "风能",
+      "optionC": "煤炭",
+      "optionD": "潮汐能",
+      "answer": "ABD",
+      "analysis": "煤炭属于化石能源，不可再生。",
+      "difficulty": 2,
+      "knowledgePath": "常识判断/科技常识"
+    },
+    {
+      "questionKey": "q3",
+      "exam": "国考",
+      "subject": "行测",
+      "type": "FILL",
+      "stem": "中华人民共和国的首都是____，成立于____年。",
+      "answer": "北京|北京市||1949",
+      "analysis": "同一空的多个候选答案用 | 分隔。",
+      "difficulty": 1,
+      "knowledgePath": "常识判断/科技常识"
+    },
+    {
+      "questionKey": "q4",
+      "exam": "国考",
+      "subject": "行测",
+      "type": "JUDGE",
+      "stem": "一个数的各位数字之和能被 3 整除，则这个数能被 3 整除。",
+      "answer": "对",
+      "analysis": "被 3 整除的判定法则。",
+      "difficulty": 1,
+      "knowledgePath": "数量关系/数学运算"
+    },
+    {
+      "questionKey": "m1-1",
+      "materialKey": "m1",
+      "order": 1,
+      "type": "SINGLE",
+      "stem": "2022 年该市快递业务量约为多少亿件？",
+      "optionA": "9",
+      "optionB": "10",
+      "optionC": "11",
+      "optionD": "14.4",
+      "answer": "B",
+      "analysis": "12 ÷ (1 + 20%) = 10。",
+      "difficulty": 3,
+      "knowledgePath": "资料分析/图形资料"
+    },
+    {
+      "questionKey": "m1-2",
+      "materialKey": "m1",
+      "order": 2,
+      "type": "SINGLE",
+      "stem": "2023 年该市快递业务量比上年增加了多少亿件？",
+      "optionA": "1",
+      "optionB": "2",
+      "optionC": "2.4",
+      "optionD": "3",
+      "answer": "B",
+      "analysis": "12 - 10 = 2。",
+      "difficulty": 3,
+      "knowledgePath": "资料分析/图形资料"
+    }
+  ],
+  "papers": [
+    {
+      "paperKey": "p1",
+      "exam": "国考",
+      "subject": "行测",
+      "title": "行测导入样例卷",
+      "type": "MOCK",
+      "durationMin": 30,
+      "multiScoringRule": "ALL_OR_NOTHING",
+      "isFree": "是"
+    }
+  ],
+  "paper_questions": [
+    {
+      "paperKey": "p1",
+      "sectionTitle": "常识判断",
+      "sectionType": "SINGLE",
+      "sort": 1,
+      "questionKey": "q1",
+      "score": 1
+    },
+    {
+      "paperKey": "p1",
+      "sectionTitle": "判断",
+      "sectionType": "JUDGE",
+      "sort": 2,
+      "questionKey": "q4",
+      "score": 1
+    },
+    {
+      "paperKey": "p1",
+      "sectionTitle": "多项选择",
+      "sectionType": "MULTIPLE",
+      "sort": 3,
+      "questionKey": "q2",
+      "score": 2
+    },
+    {
+      "paperKey": "p1",
+      "sectionTitle": "填空",
+      "sectionType": "FILL",
+      "sort": 4,
+      "questionKey": "q3",
+      "score": 2
+    },
+    {
+      "paperKey": "p1",
+      "sectionTitle": "资料分析",
+      "sectionType": "MATERIAL",
+      "sort": 5,
+      "materialKey": "m1",
+      "score": 2
+    }
+  ]
+}

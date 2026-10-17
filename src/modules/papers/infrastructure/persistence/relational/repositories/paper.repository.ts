@@ -143,6 +143,33 @@ export class PaperRelationalRepository implements PaperRepository {
     });
   }
 
+  saveWithQuestions(
+    id: Paper['id'] | null,
+    data: CreatePaperData,
+    questions: PaperQuestionData[],
+  ): Promise<NullableType<Paper['id']>> {
+    return this.paperRepository.manager.transaction(async (manager) => {
+      const values = PaperMapper.toPersistence(data);
+      let paperId: string;
+      if (id) {
+        const paper = await manager.findOne(PaperEntity, { where: { id }, lock: { mode: 'pessimistic_write' } });
+        if (paper?.status !== ContentStatus.DRAFT) {
+          return null;
+        }
+        await manager.update(PaperEntity, { id }, values);
+        await manager.delete(PaperQuestionEntity, { paperId: id });
+        paperId = id;
+      } else {
+        paperId = (await manager.save(manager.create(PaperEntity, values))).id;
+      }
+      await this.insertQuestions(
+        manager,
+        questions.map((question) => ({ ...question, paperId })),
+      );
+      return paperId;
+    });
+  }
+
   copy(sourceId: Paper['id'], derive: (source: Paper) => CreatePaperData): Promise<NullableType<Paper>> {
     return this.paperRepository.manager.transaction(async (manager) => {
       const source = await manager.findOne(PaperEntity, {

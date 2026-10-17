@@ -9,4 +9,12 @@ export abstract class FileRepository {
   abstract findByIds(ids: FileType['id'][]): Promise<FileType[]>;
 
   abstract findByPath(path: FileType['path']): Promise<NullableType<FileType>>;
+
+  abstract findReusable(
+    sha256: string,
+    visibility: NonNullable<FileType['visibility']>,
+    mimeType: string,
+  ): Promise<NullableType<FileType>>;
+
+  abstract remove(id: FileType['id']): Promise<void>;
 }

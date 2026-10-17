@@ -23,6 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { FilesLocalService } from './files.service';
+import { LOCAL_FILES_ROOT } from '../../../local-file-path';
 import { FileResponseDto } from './dto/file-response.dto';
 import { FileUploadPurposeGuard } from '../../../file-upload-purpose.guard';
 import { FileTooLargeInterceptor } from '../../../file-too-large.interceptor';
@@ -72,6 +73,6 @@ export class FilesLocalController {
     if (!file) {
       throw new NotFoundException({ error: 'fileNotFound' });
     }
-    response.sendFile(path, { root: './files' });
+    response.sendFile(path, { root: LOCAL_FILES_ROOT });
   }
 }

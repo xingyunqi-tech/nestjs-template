@@ -1,5 +1,5 @@
 import type { Mocked } from 'vitest';
-import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { SubjectsService } from './subjects.service';
 import { SubjectRepository } from './infrastructure/persistence/subject.repository';
 import { ExamRepository } from './infrastructure/persistence/exam.repository';
@@ -23,6 +23,7 @@ describe('SubjectsService', () => {
       create: vi.fn(),
       findById: vi.fn(),
       findManyWithPaginationAndCount: vi.fn(),
+      findManyByExamNameAndName: vi.fn(),
       findManyByExamIdAndStatus: vi.fn(),
       findAllPublished: vi.fn(),
       countByExamId: vi.fn(),
@@ -37,6 +38,27 @@ describe('SubjectsService', () => {
       examRepository as unknown as ExamRepository,
       knowledgePointRepository as unknown as KnowledgePointRepository,
     );
+  });
+
+  describe('findByExamAndName', () => {
+    it('should return the only subject matching the exam and subject names', async () => {
+      subjectRepository.findManyByExamNameAndName.mockResolvedValue([subject()]);
+
+      await expect(service.findByExamAndName('国考', '行测')).resolves.toMatchObject({ id: 's1' });
+      expect(subjectRepository.findManyByExamNameAndName).toHaveBeenCalledWith('国考', '行测');
+    });
+
+    it('should throw 404 when nothing matches', async () => {
+      subjectRepository.findManyByExamNameAndName.mockResolvedValue([]);
+
+      await expect(service.findByExamAndName('国考', '行测')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should throw 409 when the names match several subjects', async () => {
+      subjectRepository.findManyByExamNameAndName.mockResolvedValue([subject(), subject({ id: 's2' })]);
+
+      await expect(service.findByExamAndName('国考', '行测')).rejects.toBeInstanceOf(ConflictException);
+    });
   });
 
   describe('findPublishedByExamId', () => {

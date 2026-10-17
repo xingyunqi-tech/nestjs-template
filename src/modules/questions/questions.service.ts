@@ -22,6 +22,13 @@ import { AdminQuestionDto } from './dto/admin-question.dto';
 import { BatchPublishQuestionsDto, BatchPublishQuestionsResultDto } from './dto/batch-publish-questions.dto';
 import { PublicQuestionUnitDto, toPublicQuestion } from './dto/public-question.dto';
 import { QuestionDrawCriteria, QuestionUnit, groupIntoUnits, packUnits } from './domain/question-unit';
+import {
+  QuestionImportFields,
+  QuestionImportItem,
+  QuestionImportItemError,
+  QuestionImportResult,
+  QuestionImportUnit,
+} from './question-import';
 import { SubjectsService } from '../exams/subjects.service';
 import { FilesService } from '../files/files.service';
 import { FileUrlResolver, extractFileIds } from '../files/file-url.resolver';
@@ -68,6 +75,27 @@ function snapshotOf(
     audioFileId: content.audioFileId,
     knowledgePointIds: [...content.knowledgePointIds],
   };
+}
+
+function contentOf(fields: QuestionImportFields): QuestionContent {
+  return {
+    type: fields.type,
+    stem: fields.stem,
+    options: plainOptions(fields.options) ?? null,
+    answer: normalizeAnswer(fields.type, fields.answer ?? null),
+    analysis: fields.analysis ?? null,
+    material: fields.material ?? null,
+    audioFileId: fields.audioFileId ?? null,
+    knowledgePointIds: fields.knowledgePointIds ?? [],
+  };
+}
+
+async function withItemRef<T>(ref: string, work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    throw error instanceof QuestionImportItemError ? error : new QuestionImportItemError(ref, error);
+  }
 }
 
 function fileReferences(source: FileReferenceSource): [string, string[]][] {
@@ -194,45 +222,14 @@ export class QuestionsService {
   }
 
   async create(dto: CreateQuestionDto, userId: UserId): Promise<AdminQuestionDto> {
-    const content: QuestionContent = {
-      type: dto.type,
-      stem: dto.stem,
-      options: plainOptions(dto.options) ?? null,
-      answer: normalizeAnswer(dto.type, dto.answer ?? null),
-      analysis: dto.analysis ?? null,
-      material: dto.material ?? null,
-      audioFileId: dto.audioFileId ?? null,
-      knowledgePointIds: dto.knowledgePointIds ?? [],
-    };
+    const content = contentOf(dto);
     this.assertContent(content, !!dto.parentId);
     await this.subjectsService.findById(dto.subjectId).catch((error: unknown) => {
       throw error instanceof NotFoundException ? unprocessable('subjectId', 'subjectNotFound') : error;
     });
     await this.assertFileReferences(content);
 
-    const id = await this.questionRepository.transaction([dto.subjectId], async (tx) => {
-      const parent = dto.parentId ? await this.lockDraftMaterial(tx, dto.parentId, dto.subjectId) : null;
-      await this.assertTaggable(tx, dto.subjectId, content.knowledgePointIds);
-      const contentHash = computeContentHash(content, parent?.contentHash ?? null);
-      await this.assertUniqueHash(tx, dto.subjectId, contentHash, []);
-      const sort = dto.sort ?? (parent ? ((await tx.maxChildSort(parent.id)) ?? -1) + 1 : 0);
-
-      const { knowledgePointIds, ...fields } = content;
-      const question = await tx.insert({
-        ...fields,
-        subjectId: dto.subjectId,
-        parentId: parent?.id ?? null,
-        difficulty: dto.difficulty ?? DEFAULT_DIFFICULTY,
-        source: dto.source ?? QuestionSource.ORIGINAL,
-        sourceNote: dto.sourceNote ?? null,
-        status: QuestionStatus.DRAFT,
-        isFree: parent ? parent.isFree : (dto.isFree ?? true),
-        sort,
-        contentHash,
-      });
-      await tx.replaceKnowledgePoints(question.id, knowledgePointIds);
-      return question.id;
-    });
+    const id = await this.questionRepository.transaction([dto.subjectId], (tx) => this.insertInTx(tx, dto, content));
     return this.getAdminDetail(id, userId);
   }
 
@@ -240,82 +237,166 @@ export class QuestionsService {
     const existing = await this.findById(id);
     await this.assertFileReferences(dto);
 
-    await this.questionRepository.transaction([existing.subjectId], async (tx) => {
-      const [current] = await tx.findForUpdate([id]);
-      if (!current) {
-        throw notFound();
-      }
-      if (current.status === QuestionStatus.REVIEWING) {
-        throw conflict('questionUnderReview');
-      }
-
-      const type = dto.type ?? current.type;
-      const next: QuestionContent = {
-        type,
-        stem: dto.stem ?? current.stem,
-        options: dto.options !== undefined ? (plainOptions(dto.options) ?? null) : current.options,
-        answer: normalizeAnswer(type, dto.answer !== undefined ? dto.answer : current.answer),
-        analysis: dto.analysis !== undefined ? dto.analysis : current.analysis,
-        material: dto.material !== undefined ? dto.material : current.material,
-        audioFileId: dto.audioFileId !== undefined ? dto.audioFileId : current.audioFileId,
-        knowledgePointIds: dto.knowledgePointIds ?? current.knowledgePointIds,
-      };
-      if ((current.type === QuestionType.MATERIAL) !== (type === QuestionType.MATERIAL)) {
-        throw unprocessable('type', 'materialTypeImmutable');
-      }
-      this.assertContent(next, current.parentId !== null);
-
-      const versioned = current.currentVersion > 0;
-      if (versioned && isAnswerChange(current, next)) {
-        throw new BusinessException('answerChangeNotAllowed');
-      }
-      const tagsChanged = !sameKnowledgePoints(current.knowledgePointIds, next.knowledgePointIds);
-      if (tagsChanged) {
-        await this.assertTaggable(tx, current.subjectId, next.knowledgePointIds);
-      }
-
-      const [parent] = current.parentId ? await tx.findForUpdate([current.parentId]) : [];
-      const contentHash = computeContentHash(next, parent?.contentHash ?? null);
-      if (contentHash !== current.contentHash) {
-        await this.assertUniqueHash(tx, current.subjectId, contentHash, [id]);
-      }
-
-      const isFree = current.parentId ? current.isFree : (dto.isFree ?? current.isFree);
-      const snapshotChanged = versioned && isSnapshotChanged(current, next);
-      const currentVersion = snapshotChanged ? current.currentVersion + 1 : current.currentVersion;
-      const { knowledgePointIds, ...fields } = next;
-      await tx.update([id], {
-        ...fields,
-        difficulty: dto.difficulty ?? current.difficulty,
-        source: dto.source ?? current.source,
-        sourceNote: dto.sourceNote !== undefined ? dto.sourceNote : current.sourceNote,
-        isFree,
-        sort: dto.sort ?? current.sort,
-        contentHash,
-        currentVersion,
-      });
-      if (current.type === QuestionType.MATERIAL) {
-        await this.syncSubQuestions(tx, current, contentHash, isFree);
-      }
-      if (tagsChanged) {
-        await tx.replaceKnowledgePoints(id, knowledgePointIds);
-        if (current.status === QuestionStatus.PUBLISHED) {
-          await tx.adjustQuestionCounts([
-            ...current.knowledgePointIds.map((knowledgePointId) => ({ knowledgePointId, delta: -1 })),
-            ...knowledgePointIds.map((knowledgePointId) => ({ knowledgePointId, delta: 1 })),
-          ]);
-        }
-      }
-      if (snapshotChanged) {
-        await tx.insertVersion({
-          ...snapshotOf(next, parent ? parent.currentVersion : null),
-          questionId: id,
-          version: currentVersion,
-          changeType: QuestionChangeType.EDIT,
-        });
-      }
-    });
+    await this.questionRepository.transaction([existing.subjectId], (tx) => this.updateInTx(tx, id, dto));
     return this.getAdminDetail(id, userId);
+  }
+
+  /** 材料与全部小题（或独立题）在一个事务内新建或更新，可选直接发布；任一项失败整体回滚 */
+  async importUnit(unit: QuestionImportUnit): Promise<QuestionImportResult> {
+    const items = [unit.root, ...unit.children];
+    for (const item of items) {
+      await withItemRef(item.ref, async () => {
+        if (item.id === null) {
+          this.assertContent(contentOf(item.fields), item !== unit.root);
+        }
+        await this.assertFileReferences(item.fields);
+      });
+    }
+
+    return this.questionRepository.transaction([unit.subjectId], async (tx) => {
+      const ids: Record<string, Question['id']> = {};
+      const save = (item: QuestionImportItem, parentId: string | null): Promise<Question['id']> =>
+        withItemRef(item.ref, async () => {
+          if (item.id !== null) {
+            await this.updateInTx(tx, item.id, item.fields, { subjectId: unit.subjectId, parentId });
+            return item.id;
+          }
+          const dto: CreateQuestionDto = { ...item.fields, subjectId: unit.subjectId, parentId: parentId ?? undefined };
+          return this.insertInTx(tx, dto, contentOf(dto));
+        });
+
+      const rootId = await save(unit.root, null);
+      ids[unit.root.ref] = rootId;
+      for (const child of unit.children) {
+        ids[child.ref] = await save(child, rootId);
+      }
+      if (unit.publish) {
+        await withItemRef(unit.root.ref, () => this.publishInTx(tx, rootId));
+      }
+      return { rootId, ids };
+    });
+  }
+
+  private async insertInTx(tx: QuestionTransaction, dto: CreateQuestionDto, content: QuestionContent): Promise<string> {
+    const parent = dto.parentId ? await this.lockDraftMaterial(tx, dto.parentId, dto.subjectId) : null;
+    await this.assertTaggable(tx, dto.subjectId, content.knowledgePointIds);
+    const contentHash = computeContentHash(content, parent?.contentHash ?? null);
+    await this.assertUniqueHash(tx, dto.subjectId, contentHash, []);
+    const sort = dto.sort ?? (parent ? ((await tx.maxChildSort(parent.id)) ?? -1) + 1 : 0);
+
+    const { knowledgePointIds, ...fields } = content;
+    const question = await tx.insert({
+      ...fields,
+      subjectId: dto.subjectId,
+      parentId: parent?.id ?? null,
+      difficulty: dto.difficulty ?? DEFAULT_DIFFICULTY,
+      source: dto.source ?? QuestionSource.ORIGINAL,
+      sourceNote: dto.sourceNote ?? null,
+      status: QuestionStatus.DRAFT,
+      isFree: parent ? parent.isFree : (dto.isFree ?? true),
+      sort,
+      contentHash,
+    });
+    await tx.replaceKnowledgePoints(question.id, knowledgePointIds);
+    return question.id;
+  }
+
+  private async updateInTx(
+    tx: QuestionTransaction,
+    id: Question['id'],
+    dto: UpdateQuestionDto,
+    expected?: Pick<Question, 'subjectId' | 'parentId'>,
+  ): Promise<void> {
+    const [current] = await tx.findForUpdate([id]);
+    if (expected && current?.subjectId !== expected.subjectId) {
+      throw unprocessable('id', 'questionNotFound');
+    }
+    if (!current) {
+      throw notFound();
+    }
+    if (expected && current.parentId !== expected.parentId) {
+      throw unprocessable('id', 'invalidQuestionParent');
+    }
+    if (current.status === QuestionStatus.REVIEWING) {
+      throw conflict('questionUnderReview');
+    }
+
+    const type = dto.type ?? current.type;
+    const next: QuestionContent = {
+      type,
+      stem: dto.stem ?? current.stem,
+      options: dto.options !== undefined ? (plainOptions(dto.options) ?? null) : current.options,
+      answer: normalizeAnswer(type, dto.answer !== undefined ? dto.answer : current.answer),
+      analysis: dto.analysis !== undefined ? dto.analysis : current.analysis,
+      material: dto.material !== undefined ? dto.material : current.material,
+      audioFileId: dto.audioFileId !== undefined ? dto.audioFileId : current.audioFileId,
+      knowledgePointIds: dto.knowledgePointIds ?? current.knowledgePointIds,
+    };
+    if ((current.type === QuestionType.MATERIAL) !== (type === QuestionType.MATERIAL)) {
+      throw unprocessable('type', 'materialTypeImmutable');
+    }
+    this.assertContent(next, current.parentId !== null);
+
+    const versioned = current.currentVersion > 0;
+    if (versioned && isAnswerChange(current, next)) {
+      throw new BusinessException('answerChangeNotAllowed');
+    }
+    const tagsChanged = !sameKnowledgePoints(current.knowledgePointIds, next.knowledgePointIds);
+    if (tagsChanged) {
+      await this.assertTaggable(tx, current.subjectId, next.knowledgePointIds);
+    }
+
+    const [parent] = current.parentId ? await tx.findForUpdate([current.parentId]) : [];
+    const contentHash = computeContentHash(next, parent?.contentHash ?? null);
+    if (contentHash !== current.contentHash) {
+      await this.assertUniqueHash(tx, current.subjectId, contentHash, [id]);
+    }
+
+    const isFree = current.parentId ? current.isFree : (dto.isFree ?? current.isFree);
+    const snapshotChanged = versioned && isSnapshotChanged(current, next);
+    const currentVersion = snapshotChanged ? current.currentVersion + 1 : current.currentVersion;
+    const { knowledgePointIds, ...fields } = next;
+    await tx.update([id], {
+      ...fields,
+      difficulty: dto.difficulty ?? current.difficulty,
+      source: dto.source ?? current.source,
+      sourceNote: dto.sourceNote !== undefined ? dto.sourceNote : current.sourceNote,
+      isFree,
+      sort: dto.sort ?? current.sort,
+      contentHash,
+      currentVersion,
+    });
+    if (current.type === QuestionType.MATERIAL) {
+      await this.syncSubQuestions(tx, current, contentHash, isFree);
+    }
+    if (tagsChanged) {
+      await tx.replaceKnowledgePoints(id, knowledgePointIds);
+      if (current.status === QuestionStatus.PUBLISHED) {
+        await tx.adjustQuestionCounts([
+          ...current.knowledgePointIds.map((knowledgePointId) => ({ knowledgePointId, delta: -1 })),
+          ...knowledgePointIds.map((knowledgePointId) => ({ knowledgePointId, delta: 1 })),
+        ]);
+      }
+    }
+    if (snapshotChanged) {
+      await tx.insertVersion({
+        ...snapshotOf(next, parent ? parent.currentVersion : null),
+        questionId: id,
+        version: currentVersion,
+        changeType: QuestionChangeType.EDIT,
+      });
+    }
+  }
+
+  private async publishInTx(tx: QuestionTransaction, rootId: Question['id']): Promise<void> {
+    const [draft] = await tx.findForUpdate([rootId]);
+    if (draft?.status === QuestionStatus.DRAFT) {
+      await this.transition(tx, [draft], QuestionAction.SUBMIT);
+    }
+    const [root] = await tx.findForUpdate([rootId]);
+    if (root?.status === QuestionStatus.REVIEWING) {
+      await this.transition(tx, [root], QuestionAction.PUBLISH);
+    }
   }
 
   async changeStatus(id: Question['id'], action: QuestionAction, userId: UserId): Promise<AdminQuestionDto> {

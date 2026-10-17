@@ -11,6 +11,7 @@ export class FileMapper {
     domainEntity.visibility = raw.visibility ?? FileVisibility.PUBLIC;
     domainEntity.mimeType = raw.mimeType ?? null;
     domainEntity.size = raw.size ?? null;
+    domainEntity.sha256 = raw.sha256 ?? null;
     return domainEntity;
   }
 
@@ -22,6 +23,7 @@ export class FileMapper {
     persistenceEntity.visibility = domainEntity.visibility ?? FileVisibility.PUBLIC;
     persistenceEntity.mimeType = domainEntity.mimeType ?? null;
     persistenceEntity.size = domainEntity.size ?? null;
+    persistenceEntity.sha256 = domainEntity.sha256 ?? null;
     return persistenceEntity;
   }
 }

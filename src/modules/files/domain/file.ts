@@ -37,4 +37,7 @@ export class FileType {
 
   @ApiPropertyOptional({ type: Number, nullable: true, description: '字节数' })
   size?: number | null;
+
+  @Exclude({ toPlainOnly: true })
+  sha256?: string | null;
 }

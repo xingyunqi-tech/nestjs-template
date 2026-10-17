@@ -6,6 +6,7 @@ import { diskStorage } from 'multer';
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 
 import { FilesLocalService } from './files.service';
+import { LOCAL_FILES_ROOT } from '../../../local-file-path';
 import { purposeFileFilter } from '../../../file-purposes';
 
 import { RelationalFilePersistenceModule } from '../../persistence/relational/relational-persistence.module';
@@ -21,7 +22,7 @@ import { AllConfigType } from '../../../../../config/config.type';
         return {
           fileFilter: purposeFileFilter,
           storage: diskStorage({
-            destination: './files',
+            destination: LOCAL_FILES_ROOT,
             filename: (_request, file, callback) => {
               callback(null, `${randomStringGenerator()}.${file.originalname.split('.').pop()?.toLowerCase()}`);
             },

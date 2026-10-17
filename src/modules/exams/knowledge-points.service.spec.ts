@@ -109,6 +109,35 @@ describe('KnowledgePointsService', () => {
     });
   });
 
+  describe('ensurePath', () => {
+    beforeEach(() => {
+      subjectRepository.findById.mockResolvedValue(Object.assign(new Subject(), { id: 's1' }));
+    });
+
+    it('should reuse existing levels and create missing ones under the matched parent', async () => {
+      repository.findManyBySubjectId.mockResolvedValue([
+        point({ id: 'k1', name: '言语' }),
+        point({ id: 'k2', parentId: 'k1', name: '片段阅读', level: 2 }),
+      ]);
+      repository.create.mockImplementation((data) =>
+        Promise.resolve({ ok: true, value: point({ id: 'k3', parentId: data.parentId, name: data.name, level: 3 }) }),
+      );
+
+      const leaf = await service.ensurePath('s1', ['言语', '片段阅读', '中心理解']);
+
+      expect(leaf).toMatchObject({ point: { id: 'k3', parentId: 'k2' }, created: true });
+      expect(repository.create).toHaveBeenCalledTimes(1);
+      expect(repository.create).toHaveBeenCalledWith({ subjectId: 's1', parentId: 'k2', name: '中心理解', sort: 0 });
+    });
+
+    it('should return the existing node without creating anything', async () => {
+      repository.findManyBySubjectId.mockResolvedValue([point({ id: 'k1', name: '言语' })]);
+
+      await expect(service.ensurePath('s1', ['言语'])).resolves.toMatchObject({ point: { id: 'k1' }, created: false });
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('move', () => {
     it('should throw 404 for a missing node', async () => {
       repository.move.mockResolvedValue({ ok: false, violation: KnowledgePointViolation.NOT_FOUND });

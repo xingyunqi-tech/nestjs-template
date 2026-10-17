@@ -5,6 +5,7 @@ import { ThrottlerException } from '@nestjs/throttler';
 import { ApiErrorResponse } from '../dto/api-response.dto';
 import { DEFAULT_EXCEPTION_MESSAGES } from './exception-messages.constant';
 import { isUniqueViolation, uniqueViolationResponse } from '../utils/exceptions.util';
+import { BusinessException } from '../exceptions/business.exception';
 
 /**
  * Map HTTP status codes to i18n keys
@@ -89,7 +90,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         error = rawError ?? exception.name;
 
         // Translate error codes in errors object
-        if (errors && i18n) {
+        if (errors && i18n && !(exception instanceof BusinessException)) {
           errors = this.translateErrors(errors, i18n);
         }
       } else {

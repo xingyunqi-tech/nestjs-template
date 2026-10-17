@@ -67,4 +67,25 @@ describe('PermissionsService', () => {
     expect(permissions).not.toContain(Permission.USER_READ);
     expect(permissions).not.toContain(Permission.USER_UPDATE);
   });
+
+  it('should grant exam prep learning permissions to regular users by default', async () => {
+    const permissions = await service.getPermissionsForRole(RoleEnum.user);
+    expect(permissions).toEqual(
+      expect.arrayContaining([Permission.PRACTICE_WRITE, Permission.AI_CHAT, Permission.AI_GRADING]),
+    );
+  });
+
+  it('should keep exam prep management permissions to admins', async () => {
+    const userPermissions = await service.getPermissionsForRole(RoleEnum.user);
+    const adminPermissions = await service.getPermissionsForRole(RoleEnum.admin);
+    const managementPermissions = [
+      Permission.CONTENT_MANAGE,
+      Permission.CONTENT_REVIEW,
+      Permission.AI_GENERATE,
+      Permission.AI_ADMIN,
+    ];
+
+    managementPermissions.forEach((permission) => expect(userPermissions).not.toContain(permission));
+    expect(adminPermissions).toEqual(expect.arrayContaining(managementPermissions));
+  });
 });

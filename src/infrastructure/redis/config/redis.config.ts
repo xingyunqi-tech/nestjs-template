@@ -36,8 +36,15 @@ class EnvironmentVariablesValidator {
 /** 是否启用 Redis，供配置加载前就需要判断的模块注册使用 */
 export const isRedisEnabled = (env: NodeJS.ProcessEnv): boolean => env.REDIS_ENABLED === 'true';
 
+export function assertRedisEnabledInProduction(env: NodeJS.ProcessEnv): void {
+  if (env.NODE_ENV === 'production' && !isRedisEnabled(env)) {
+    throw new Error('REDIS_ENABLED=true is required when NODE_ENV=production');
+  }
+}
+
 export default registerAs<RedisConfig>('redis', () => {
   validateConfig(process.env, EnvironmentVariablesValidator);
+  assertRedisEnabledInProduction(process.env);
 
   return {
     enabled: isRedisEnabled(process.env),

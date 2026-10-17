@@ -41,4 +41,9 @@ export class FileRelationalRepository implements FileRepository {
 
     return entities.map((entity) => FileMapper.toDomain(entity));
   }
+
+  async findByPath(path: FileType['path']): Promise<NullableType<FileType>> {
+    const entity = await this.fileRepository.findOne({ where: { path } });
+    return entity ? FileMapper.toDomain(entity) : null;
+  }
 }

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { NullableType } from '../../common/types/nullable.type';
 import { FilterUserDto, SortUserDto } from './dto/query-user.dto';
@@ -74,10 +74,14 @@ export class UsersService {
   /**
    * 验证照片文件是否有效
    * @param photoDto - 照片数据传输对象
+   * @param ownerUserId - 设置头像的用户，新建用户时为 null
    * @returns 验证后的文件对象，如果无效则返回 null 或 undefined
-   * @throws 当照片文件不存在时抛出验证错误
+   * @throws 当照片文件不存在时抛出验证错误，引用他人私有文件时抛出 403
    */
-  private async validatePhoto(photoDto: { id: string } | null | undefined): Promise<FileType | null | undefined> {
+  private async validatePhoto(
+    photoDto: { id: string } | null | undefined,
+    ownerUserId: User['id'] | null,
+  ): Promise<FileType | null | undefined> {
     if (photoDto === null) {
       return null;
     }
@@ -86,12 +90,15 @@ export class UsersService {
       return undefined;
     }
 
-    const fileObject = await this.filesService.findById(photoDto.id);
-    if (!fileObject) {
-      throwValidationError('photo', 'imageNotExists');
+    try {
+      const [fileObject] = await this.filesService.assertReferenceable([photoDto.id], ownerUserId);
+      return fileObject;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throwValidationError('photo', 'imageNotExists');
+      }
+      throw error;
     }
-
-    return fileObject;
   }
 
   /**
@@ -129,7 +136,7 @@ export class UsersService {
       phone = createUserDto.phone;
     }
 
-    const photo = await this.validatePhoto(createUserDto.photo);
+    const photo = await this.validatePhoto(createUserDto.photo, null);
     const role = this.validateRole(createUserDto.role);
     const status = this.validateStatus(createUserDto.status);
 
@@ -267,7 +274,7 @@ export class UsersService {
       phone = null;
     }
 
-    const photo = await this.validatePhoto(updateUserDto.photo);
+    const photo = await this.validatePhoto(updateUserDto.photo, id);
     const role = this.validateRole(updateUserDto.role);
     const status = this.validateStatus(updateUserDto.status);
 

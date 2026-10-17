@@ -54,11 +54,42 @@ const queueJobsTotal = makeCounterProvider({
   labelNames: ['queue_name', 'status'],
 });
 
+const adminAlertsTotal = makeCounterProvider({
+  name: 'admin_alerts_total',
+  help: 'Total number of admin alerts raised',
+  labelNames: ['type', 'level'],
+});
+
+const adminAlertsDeduplicatedTotal = makeCounterProvider({
+  name: 'admin_alerts_deduplicated_total',
+  help: 'Total number of admin alerts suppressed by an open alert with the same dedup key',
+  labelNames: ['type'],
+});
+
+const throttlerStorageFallbackTotal = makeCounterProvider({
+  name: 'throttler_storage_fallback_total',
+  help: 'Total number of rate limit checks served by the in-memory storage because Redis was unavailable',
+});
+
+const metricProviders = [
+  httpRequestsTotal,
+  httpRequestDuration,
+  activeConnections,
+  databaseQueryDuration,
+  cacheHitsTotal,
+  cacheMissesTotal,
+  queueJobsTotal,
+  adminAlertsTotal,
+  adminAlertsDeduplicatedTotal,
+  throttlerStorageFallbackTotal,
+];
+
 @Module({})
 export class MetricsModule {
   static forRoot(): DynamicModule {
     return {
       module: MetricsModule,
+      global: true,
       imports: [
         PrometheusModule.registerAsync({
           controller: MetricsController,
@@ -79,26 +110,8 @@ export class MetricsModule {
           },
         }),
       ],
-      providers: [
-        httpRequestsTotal,
-        httpRequestDuration,
-        activeConnections,
-        databaseQueryDuration,
-        cacheHitsTotal,
-        cacheMissesTotal,
-        queueJobsTotal,
-        MetricsMiddleware,
-      ],
-      exports: [
-        httpRequestsTotal,
-        httpRequestDuration,
-        activeConnections,
-        databaseQueryDuration,
-        cacheHitsTotal,
-        cacheMissesTotal,
-        queueJobsTotal,
-        MetricsMiddleware,
-      ],
+      providers: [...metricProviders, MetricsMiddleware],
+      exports: [...metricProviders, MetricsMiddleware],
     };
   }
 }

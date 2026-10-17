@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, PayloadTooLargeException, UnprocessableEntityException } from '@nestjs/common';
+import { HttpStatus, Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { FileRepository } from '../../persistence/file.repository';
 
 import { FileUploadDto } from './dto/file.dto';
@@ -8,6 +8,8 @@ import { createS3Client } from '../../../config/s3-client.factory';
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 import { ConfigService } from '@nestjs/config';
 import { FileType } from '../../../domain/file';
+import { FilePurpose } from '../../../domain/file-purpose';
+import { FILE_PURPOSE_RULES, fileTooLargeError, fileTypeNotAllowedError, mimeTypeFor } from '../../../file-purposes';
 import { AllConfigType } from '../../../../../config/config.type';
 
 @Injectable()
@@ -21,7 +23,11 @@ export class FilesS3PresignedService {
     this.s3 = createS3Client(configService.getOrThrow('file', { infer: true }));
   }
 
-  async create(file: FileUploadDto): Promise<{ file: FileType; uploadSignedUrl: string }> {
+  async create(
+    file: FileUploadDto,
+    ownerUserId: number,
+    purpose: FilePurpose = FilePurpose.IMAGE,
+  ): Promise<{ file: FileType; uploadSignedUrl: string }> {
     if (!file) {
       throw new UnprocessableEntityException({
         status: HttpStatus.UNPROCESSABLE_ENTITY,
@@ -31,26 +37,13 @@ export class FilesS3PresignedService {
       });
     }
 
-    if (!file.fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
-      throw new UnprocessableEntityException({
-        status: HttpStatus.UNPROCESSABLE_ENTITY,
-        errors: {
-          file: `cantUploadFileType`,
-        },
-      });
+    const mimeType = mimeTypeFor(purpose, file.fileName);
+    if (!mimeType) {
+      throw fileTypeNotAllowedError();
     }
 
-    if (
-      file.fileSize >
-      (this.configService.get('file.maxFileSize', {
-        infer: true,
-      }) ?? 0)
-    ) {
-      throw new PayloadTooLargeException({
-        statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
-        error: 'Payload Too Large',
-        message: 'File too large',
-      });
+    if (file.fileSize > this.configService.getOrThrow('file.maxSizes', { infer: true })[purpose]) {
+      throw fileTooLargeError();
     }
 
     const key = `${randomStringGenerator()}.${file.fileName.split('.').pop()?.toLowerCase()}`;
@@ -65,6 +58,10 @@ export class FilesS3PresignedService {
     const signedUrl = await getSignedUrl(this.s3, command, { expiresIn: 3600 });
     const data = await this.fileRepository.create({
       path: key,
+      ownerUserId,
+      visibility: FILE_PURPOSE_RULES[purpose].visibility,
+      mimeType,
+      size: file.fileSize,
     });
 
     return {

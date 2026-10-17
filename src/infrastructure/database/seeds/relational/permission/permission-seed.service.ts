@@ -6,13 +6,7 @@ import { RolePermissionEntity } from '../../../../../core/permissions/infrastruc
 import { Permission } from '../../../../../core/permissions/permission.enum';
 import { RolePermissions } from '../../../../../core/permissions/role-permissions';
 
-interface PermissionData {
-  id: string;
-  name: string;
-  description: string;
-  resource: string;
-  action: string;
-}
+import { EXAM_PREP_PERMISSIONS, PermissionData } from './exam-prep-permissions';
 
 const PERMISSIONS_DATA: PermissionData[] = [
   // User Management
@@ -177,6 +171,9 @@ const PERMISSIONS_DATA: PermissionData[] = [
     resource: 'audit',
     action: 'list',
   },
+
+  // Exam Prep
+  ...EXAM_PREP_PERMISSIONS,
 ];
 
 @Injectable()

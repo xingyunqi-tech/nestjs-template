@@ -9,6 +9,7 @@ import { HttpAdapterHost } from '@nestjs/core';
 import { I18nContext } from 'nestjs-i18n';
 import { QueryFailedError } from 'typeorm';
 import { AllExceptionsFilter } from './all-exceptions.filter';
+import { BusinessException } from '../exceptions/business.exception';
 
 const TRANSLATIONS: Record<string, string> = {
   'common.favoriteNotFound': '收藏不存在',
@@ -18,6 +19,7 @@ const TRANSLATIONS: Record<string, string> = {
   'common.emailAlreadyExists': '邮箱已被注册',
   'common.alreadyFavorited': '已收藏',
   'common.internalServerError': '服务器内部错误',
+  'common.sessionTakenOver': '考试已在其他设备继续',
 };
 
 function run(exception: unknown): { body: { code: number; message: unknown; data: unknown }; status: number } {
@@ -95,5 +97,18 @@ describe('AllExceptionsFilter', () => {
 
   it('should keep a custom message of a built-in exception', () => {
     expect(run(new NotFoundException('Share not found')).body.message).toBe('Share not found');
+  });
+
+  it('should return the business error key untranslated in data with a translated message', () => {
+    const { body, status } = run(new BusinessException('sessionTakenOver'));
+    expect(status).toBe(409);
+    expect(body.message).toBe('考试已在其他设备继续');
+    expect(body.data).toEqual({ errorKey: 'sessionTakenOver' });
+  });
+
+  it('should keep business error details untranslated', () => {
+    const { body, status } = run(new BusinessException('aiQuotaExceeded', { remaining: 0, reason: 'conflict' }));
+    expect(status).toBe(429);
+    expect(body.data).toEqual({ remaining: 0, reason: 'conflict', errorKey: 'aiQuotaExceeded' });
   });
 });

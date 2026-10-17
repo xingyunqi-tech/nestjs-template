@@ -5,6 +5,7 @@ import { StatusSeedService } from './status/status-seed.service';
 import { UserSeedService } from './user/user-seed.service';
 import { PermissionSeedService } from './permission/permission-seed.service';
 import { RegionSeedService } from './region/region-seed.service';
+import { ConfigSeedService } from './config/config-seed.service';
 
 const runSeed = async (): Promise<void> => {
   const app = await NestFactory.create(SeedModule);
@@ -15,6 +16,7 @@ const runSeed = async (): Promise<void> => {
   await app.get(PermissionSeedService).run();
   await app.get(RegionSeedService).run();
   await app.get(UserSeedService).run();
+  await app.get(ConfigSeedService).run();
 
   await app.close();
 };

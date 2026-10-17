@@ -45,4 +45,13 @@ export enum Permission {
   // Audit Log (Admin only)
   AUDIT_READ = 'audit:read',
   AUDIT_LIST = 'audit:list',
+
+  // Exam Prep
+  PRACTICE_WRITE = 'practice:write',
+  AI_CHAT = 'ai:chat',
+  AI_GRADING = 'ai:grading',
+  CONTENT_MANAGE = 'content:manage',
+  CONTENT_REVIEW = 'content:review',
+  AI_GENERATE = 'ai:generate',
+  AI_ADMIN = 'ai:admin',
 }

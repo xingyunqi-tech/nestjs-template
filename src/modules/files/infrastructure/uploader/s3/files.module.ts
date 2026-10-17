@@ -1,4 +1,4 @@
-import { HttpStatus, Module, UnprocessableEntityException } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { FilesS3Controller } from './files.controller';
 import { MulterModule } from '@nestjs/platform-express';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -7,6 +7,7 @@ import { createS3Client } from '../../../config/s3-client.factory';
 import multerS3 from 'multer-s3';
 
 import { FilesS3Service } from './files.service';
+import { purposeFileFilter } from '../../../file-purposes';
 
 import { RelationalFilePersistenceModule } from '../../persistence/relational/relational-persistence.module';
 import { AllConfigType } from '../../../../../config/config.type';
@@ -21,21 +22,7 @@ import { AllConfigType } from '../../../../../config/config.type';
         const s3 = createS3Client(configService.getOrThrow('file', { infer: true }));
 
         return {
-          fileFilter: (_request, file, callback) => {
-            if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/i)) {
-              return callback(
-                new UnprocessableEntityException({
-                  status: HttpStatus.UNPROCESSABLE_ENTITY,
-                  errors: {
-                    file: `cantUploadFileType`,
-                  },
-                }),
-                false,
-              );
-            }
-
-            callback(null, true);
-          },
+          fileFilter: purposeFileFilter,
           storage: multerS3({
             s3: s3,
             bucket: configService.getOrThrow('file.awsDefaultS3Bucket', {

@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { AppConfigService } from './config.service';
 import { AppConfigRepository } from './infrastructure/persistence/config.repository';
 import { Config } from './domain/config';
+import type { Cache } from 'cache-manager';
 
 function buildConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -19,9 +20,17 @@ describe('AppConfigService', () => {
   let repository: Mocked<AppConfigRepository>;
   let service: AppConfigService;
 
+  let cache: Map<string, unknown>;
+
   beforeEach(() => {
     repository = { findByKey: vi.fn(), upsert: vi.fn() };
-    service = new AppConfigService(repository);
+    cache = new Map();
+    const cacheManager = {
+      get: async (key: string) => (cache.has(key) ? JSON.parse(cache.get(key) as string) : undefined),
+      set: async (key: string, value: unknown) => cache.set(key, JSON.stringify(value)),
+      del: async (key: string) => cache.delete(key),
+    } as unknown as Cache;
+    service = new AppConfigService(repository, cacheManager);
   });
 
   describe('findPublicByKey', () => {
@@ -45,6 +54,128 @@ describe('AppConfigService', () => {
     it('should return a private config', async () => {
       repository.findByKey.mockResolvedValue(buildConfig({ isPublic: false }));
       await expect(service.findByKey('app.theme')).resolves.toMatchObject({ isPublic: false });
+    });
+  });
+
+  describe('registered keys', () => {
+    it('should return the registered default of a public key absent from the database', async () => {
+      repository.findByKey.mockResolvedValue(null);
+      await expect(service.findPublicByKey('ai.enabled')).resolves.toEqual({
+        key: 'ai.enabled',
+        value: { value: true },
+        isPublic: true,
+        createdAt: null,
+        updatedAt: null,
+      });
+    });
+
+    it('should hide a private registered key from the public endpoint', async () => {
+      repository.findByKey.mockResolvedValue(null);
+      await expect(service.findPublicByKey('ai.ratePerMinute')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should return 404 for a registered key without default absent from the database', async () => {
+      repository.findByKey.mockResolvedValue(null);
+      await expect(service.findByKey('ai.model')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should take isPublic from the registry over the stored flag', async () => {
+      repository.findByKey.mockResolvedValue(
+        buildConfig({ key: 'ai.enabled', value: { value: false }, isPublic: false }),
+      );
+      await expect(service.findPublicByKey('ai.enabled')).resolves.toMatchObject({ value: { value: false } });
+
+      repository.findByKey.mockResolvedValue(buildConfig({ key: 'ai.ratePerMinute', isPublic: true }));
+      await expect(service.findPublicByKey('ai.ratePerMinute')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should store the registry isPublic on write', async () => {
+      repository.upsert.mockResolvedValue(buildConfig({ key: 'ai.ratePerMinute', isPublic: false }));
+      await service.upsert('ai.ratePerMinute', { value: 20 }, true);
+      expect(repository.upsert).toHaveBeenCalledWith('ai.ratePerMinute', { value: 20 }, false);
+
+      repository.upsert.mockResolvedValue(buildConfig());
+      await service.upsert('app.theme', { primaryColor: '#000' }, true);
+      expect(repository.upsert).toHaveBeenLastCalledWith('app.theme', { primaryColor: '#000' }, true);
+    });
+  });
+
+  describe('cache', () => {
+    it('should serve repeated reads from the cache', async () => {
+      repository.findByKey.mockResolvedValue(buildConfig());
+      await service.findByKey('app.theme');
+      const config = await service.findByKey('app.theme');
+
+      expect(repository.findByKey).toHaveBeenCalledTimes(1);
+      expect(config.createdAt).toBeInstanceOf(Date);
+    });
+
+    it('should cache a missing registered key', async () => {
+      repository.findByKey.mockResolvedValue(null);
+      await service.findPublicByKey('ai.enabled');
+      await service.findPublicByKey('ai.enabled');
+
+      expect(repository.findByKey).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not cache a missing unregistered key', async () => {
+      repository.findByKey.mockResolvedValue(null);
+      await expect(service.findByKey('unknown.key')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findByKey('unknown.key')).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(repository.findByKey).toHaveBeenCalledTimes(2);
+      expect(cache.size).toBe(0);
+    });
+
+    it('should return the new value after an update', async () => {
+      repository.findByKey.mockResolvedValue(buildConfig({ key: 'ai.enabled', value: { value: true } }));
+      await expect(service.getValue('ai.enabled')).resolves.toBe(true);
+
+      const updated = buildConfig({ key: 'ai.enabled', value: { value: false } });
+      repository.upsert.mockResolvedValue(updated);
+      repository.findByKey.mockResolvedValue(updated);
+      await service.upsert('ai.enabled', { value: false });
+
+      await expect(service.getValue('ai.enabled')).resolves.toBe(false);
+    });
+
+    it('should not serve a stale value cached by a read that raced with an update', async () => {
+      const stale = buildConfig({ key: 'ai.enabled', value: { value: true } });
+      const updated = buildConfig({ key: 'ai.enabled', value: { value: false } });
+      let releaseRead!: () => void;
+      repository.findByKey.mockImplementationOnce(() => new Promise((resolve) => (releaseRead = () => resolve(stale))));
+
+      const racingRead = service.getValue('ai.enabled');
+      await new Promise((resolve) => setImmediate(resolve));
+      repository.upsert.mockResolvedValue(updated);
+      await service.upsert('ai.enabled', { value: false });
+      releaseRead();
+      await racingRead;
+
+      repository.findByKey.mockResolvedValue(updated);
+      await expect(service.getValue('ai.enabled')).resolves.toBe(false);
+    });
+  });
+
+  describe('getValue', () => {
+    it('should return the registered default when the config is absent', async () => {
+      repository.findByKey.mockResolvedValue(null);
+      await expect(service.getValue('wrongBook.masterThreshold')).resolves.toBe(3);
+    });
+
+    it('should return undefined for a registered key without default', async () => {
+      repository.findByKey.mockResolvedValue(null);
+      await expect(service.getValue('ai.dailyBudget')).resolves.toBeUndefined();
+    });
+
+    it('should return the stored value over the default', async () => {
+      repository.findByKey.mockResolvedValue(buildConfig({ key: 'ai.quota.chat', value: { value: 50 } }));
+      await expect(service.getValue('ai.quota.chat')).resolves.toBe(50);
+    });
+
+    it('should fall back to the default when the stored value has no value field', async () => {
+      repository.findByKey.mockResolvedValue(buildConfig({ key: 'ai.quota.chat', value: {} }));
+      await expect(service.getValue('ai.quota.chat')).resolves.toBe(20);
     });
   });
 });

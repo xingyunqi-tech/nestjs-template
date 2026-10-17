@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 
 import { FileRepository } from './infrastructure/persistence/file.repository';
 import { FileType } from './domain/file';
+import { FileVisibility } from './domain/file-visibility';
 import { NullableType } from '../../common/types/nullable.type';
 
 /**
@@ -26,6 +27,40 @@ export class FilesService {
    * @returns 文件对象列表
    */
   findByIds(ids: FileType['id'][]): Promise<FileType[]> {
+    if (ids.length === 0) {
+      return Promise.resolve([]);
+    }
     return this.fileRepository.findByIds(ids);
+  }
+
+  canAccess(file: FileType, userId?: number | string | null): boolean {
+    if (file.visibility !== FileVisibility.PRIVATE) {
+      return true;
+    }
+    return userId !== undefined && userId !== null && file.ownerUserId === Number(userId);
+  }
+
+  /** 不存在时 404，无权访问时 403 */
+  async findAccessible(id: FileType['id'], userId?: number | string | null): Promise<FileType> {
+    const file = await this.fileRepository.findById(id);
+    if (!file) {
+      throw new NotFoundException({ error: 'fileNotFound' });
+    }
+    if (!this.canAccess(file, userId)) {
+      throw new ForbiddenException({ error: 'fileNotAccessible' });
+    }
+    return file;
+  }
+
+  async assertReferenceable(ids: FileType['id'][], userId: number | string | null): Promise<FileType[]> {
+    const uniqueIds = [...new Set(ids)];
+    const files = await this.findByIds(uniqueIds);
+    if (files.length !== uniqueIds.length) {
+      throw new NotFoundException({ error: 'fileNotFound' });
+    }
+    if (files.some((file) => !this.canAccess(file, userId))) {
+      throw new ForbiddenException({ error: 'fileNotAccessible' });
+    }
+    return files;
   }
 }

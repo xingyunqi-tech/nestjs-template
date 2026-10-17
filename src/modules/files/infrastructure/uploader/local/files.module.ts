@@ -1,4 +1,4 @@
-import { HttpStatus, Module, UnprocessableEntityException } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { FilesLocalController } from './files.controller';
 import { MulterModule } from '@nestjs/platform-express';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -6,6 +6,7 @@ import { diskStorage } from 'multer';
 import { randomStringGenerator } from '@nestjs/common/utils/random-string-generator.util';
 
 import { FilesLocalService } from './files.service';
+import { purposeFileFilter } from '../../../file-purposes';
 
 import { RelationalFilePersistenceModule } from '../../persistence/relational/relational-persistence.module';
 import { AllConfigType } from '../../../../../config/config.type';
@@ -18,21 +19,7 @@ import { AllConfigType } from '../../../../../config/config.type';
       inject: [ConfigService],
       useFactory: (configService: ConfigService<AllConfigType>) => {
         return {
-          fileFilter: (_request, file, callback) => {
-            if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/i)) {
-              return callback(
-                new UnprocessableEntityException({
-                  status: HttpStatus.UNPROCESSABLE_ENTITY,
-                  errors: {
-                    file: `cantUploadFileType`,
-                  },
-                }),
-                false,
-              );
-            }
-
-            callback(null, true);
-          },
+          fileFilter: purposeFileFilter,
           storage: diskStorage({
             destination: './files',
             filename: (_request, file, callback) => {

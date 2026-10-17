@@ -3,6 +3,9 @@ import { UsersService } from './users.service';
 import { UserRepository } from './infrastructure/persistence/user.repository';
 import { FilesService } from '../../modules/files/files.service';
 import { SessionService } from '../session/session.service';
+import { FileType } from '../../modules/files/domain/file';
+import { FileVisibility } from '../../modules/files/domain/file-visibility';
+import { ForbiddenException, UnprocessableEntityException } from '@nestjs/common';
 
 describe('UsersService', () => {
   describe('updateByAdmin', () => {
@@ -33,6 +36,52 @@ describe('UsersService', () => {
       await service.updateByAdmin(1, { firstName: 'A' });
 
       expect(sessionService.deleteByUserId).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('photo', () => {
+    let repository: Mocked<Pick<UserRepository, 'findById' | 'update'>>;
+    let fileRepository: { findByIds: ReturnType<typeof vi.fn> };
+    let service: UsersService;
+
+    const file = (visibility: FileVisibility, ownerUserId: number | null): FileType =>
+      Object.assign(new FileType(), { id: 'f1', path: 'a.png', visibility, ownerUserId });
+
+    beforeEach(() => {
+      repository = { findById: vi.fn(), update: vi.fn().mockResolvedValue({ id: 1 }) };
+      fileRepository = { findByIds: vi.fn() };
+      service = new UsersService(
+        repository as unknown as UserRepository,
+        new FilesService(fileRepository as unknown as ConstructorParameters<typeof FilesService>[0]),
+        {} as SessionService,
+      );
+    });
+
+    it('should accept the user own private photo', async () => {
+      fileRepository.findByIds.mockResolvedValue([file(FileVisibility.PRIVATE, 1)]);
+      await service.update(1, { photo: { id: 'f1', path: '' } });
+      expect(repository.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ photo: expect.objectContaining({ id: 'f1' }) }),
+      );
+    });
+
+    it('should accept a public photo', async () => {
+      fileRepository.findByIds.mockResolvedValue([file(FileVisibility.PUBLIC, 2)]);
+      await expect(service.update(1, { photo: { id: 'f1', path: '' } })).resolves.toEqual({ id: 1 });
+    });
+
+    it("should reject another user's private photo with 403", async () => {
+      fileRepository.findByIds.mockResolvedValue([file(FileVisibility.PRIVATE, 2)]);
+      await expect(service.update(1, { photo: { id: 'f1', path: '' } })).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('should reject a missing photo with 422', async () => {
+      fileRepository.findByIds.mockResolvedValue([]);
+      await expect(service.update(1, { photo: { id: 'f1', path: '' } })).rejects.toBeInstanceOf(
+        UnprocessableEntityException,
+      );
     });
   });
 });

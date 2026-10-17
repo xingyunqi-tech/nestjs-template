@@ -10,9 +10,9 @@ export class Config {
   @ApiProperty({ type: Boolean, example: true, description: '公开配置可被所有登录用户读取' })
   isPublic: boolean;
 
-  @ApiProperty()
-  createdAt: Date;
+  @ApiProperty({ type: Date, nullable: true, description: '未写入过的登记项返回默认值，时间为 null' })
+  createdAt: Date | null;
 
-  @ApiProperty()
-  updatedAt: Date;
+  @ApiProperty({ type: Date, nullable: true })
+  updatedAt: Date | null;
 }

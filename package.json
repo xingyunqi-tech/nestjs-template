@@ -23,6 +23,8 @@
     "postadd:property:to-relational": "eslint src --fix && prettier src --write --log-level warn",
     "seed:run:relational": "ts-node -P tsconfig.app.json ./src/infrastructure/database/seeds/relational/run-seed.ts",
     "seed:run:prod": "node ./dist/infrastructure/database/seeds/relational/run-seed.js",
+    "permissions:clear-cache": "ts-node -P tsconfig.app.json ./src/core/permissions/clear-permission-cache.ts",
+    "permissions:clear-cache:prod": "node ./dist/core/permissions/clear-permission-cache.js",
     "build": "nest build",
     "format": "prettier . --write",
     "format:check": "prettier . --check",

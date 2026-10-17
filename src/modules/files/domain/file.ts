@@ -1,21 +1,8 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Allow } from 'class-validator';
-import { Transform } from 'class-transformer';
-import fileConfig from '../config/file.config';
-import { FileConfig, FileDriver } from '../config/file-config.type';
-
-import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { createS3Client } from '../config/s3-client.factory';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { AppConfig } from '../../../config/app-config.type';
-import appConfig from '../../../config/app.config';
-
-let signingClient: S3Client | undefined;
-
-function getSigningClient(config: FileConfig): S3Client {
-  signingClient ??= createS3Client(config);
-  return signingClient;
-}
+import { Exclude, Transform } from 'class-transformer';
+import { FileVisibility } from './file-visibility';
+import { buildFileUrl } from '../file-url';
 
 export class FileType {
   @ApiProperty({
@@ -30,25 +17,24 @@ export class FileType {
     example: 'https://example.com/path/to/file.jpg',
   })
   @Transform(
-    ({ value }) => {
-      if ((fileConfig() as FileConfig).driver === FileDriver.LOCAL) {
-        return (appConfig() as AppConfig).backendDomain + value;
-      } else if ([FileDriver.S3_PRESIGNED, FileDriver.S3].includes((fileConfig() as FileConfig).driver)) {
-        const s3 = getSigningClient(fileConfig() as FileConfig);
-
-        const command = new GetObjectCommand({
-          Bucket: (fileConfig() as FileConfig).awsDefaultS3Bucket ?? '',
-          Key: value,
-        });
-
-        return getSignedUrl(s3, command, { expiresIn: 3600 });
-      }
-
-      return value;
-    },
+    ({ value, obj }: { value: string; obj: FileType }) =>
+      buildFileUrl({ id: obj.id, path: value, visibility: obj.visibility }),
     {
       toPlainOnly: true,
     },
   )
   path: string;
+
+  /** 上传者，系统生成的文件为 null */
+  @Exclude({ toPlainOnly: true })
+  ownerUserId?: number | null;
+
+  @ApiPropertyOptional({ enum: FileVisibility, example: FileVisibility.PUBLIC })
+  visibility?: FileVisibility;
+
+  @ApiPropertyOptional({ type: String, nullable: true, example: 'image/png' })
+  mimeType?: string | null;
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: '字节数' })
+  size?: number | null;
 }

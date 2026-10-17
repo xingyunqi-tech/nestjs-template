@@ -30,6 +30,10 @@ export const RolePermissions: Record<RoleEnum, Permission[]> = {
 
     // User can read their own sessions
     Permission.SESSION_READ,
+    // Exam prep learning features
+    Permission.PRACTICE_WRITE,
+    Permission.AI_CHAT,
+    Permission.AI_GRADING,
   ],
 };
 

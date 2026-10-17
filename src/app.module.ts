@@ -48,6 +48,7 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { SchedulerModule } from './infrastructure/scheduler/scheduler.module';
 import { AppConfigModule } from './modules/config/config.module';
+import { MonitorModule } from './modules/monitor/monitor.module';
 
 const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
   useClass: TypeOrmConfigService,
@@ -186,6 +187,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     ConditionalModule.registerWhen(NotificationQueueModule, isRedisEnabled),
     SharesModule,
     AppConfigModule,
+    MonitorModule,
   ],
 })
 export class AppModule {}

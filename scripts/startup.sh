@@ -48,6 +48,14 @@ else
   pnpm migration:run
 fi
 
+# Clear cached role permissions so permission migrations take effect immediately
+echo "Clearing permission cache..."
+if [ "$ENV_MODE" = "prod" ]; then
+  npm run permissions:clear-cache:prod
+else
+  pnpm permissions:clear-cache
+fi
+
 # Run seed data
 # In production: only run if RUN_SEEDS=true (for initial deployment)
 # In other environments: always run

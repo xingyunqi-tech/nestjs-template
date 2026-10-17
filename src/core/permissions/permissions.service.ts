@@ -6,7 +6,7 @@ import { Permission } from './permission.enum';
 import { RoleEnum } from '../../common/enums/roles/roles.enum';
 import { RolePermissions as DefaultRolePermissions } from './role-permissions';
 
-const ROLE_PERMISSIONS_CACHE_KEY = 'permissions:v2:role-map';
+export const ROLE_PERMISSIONS_CACHE_KEY = 'permissions:v2:role-map';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 type RolePermissionMap = Record<number, string[]>;

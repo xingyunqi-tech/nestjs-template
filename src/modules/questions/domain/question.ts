@@ -20,7 +20,7 @@ export class Question {
   @ApiProperty({ type: Number, description: '当前生效版本号，未发布过为 0' })
   currentVersion: number;
 
-  @ApiProperty({ type: String, description: 'Markdown + LaTeX，管理端输出时图片引用已解析为地址' })
+  @ApiProperty({ type: String, description: 'Markdown + LaTeX，文件以 file:{id} 引用' })
   stem: string;
 
   @ApiProperty({ type: Object, isArray: true, nullable: true, example: [{ key: 'A', content: '选项内容' }] })
@@ -74,3 +74,5 @@ export class Question {
   @ApiProperty()
   updatedAt: Date;
 }
+
+export type QuestionSummary = Pick<Question, 'id' | 'parentId' | 'type' | 'stem'>;

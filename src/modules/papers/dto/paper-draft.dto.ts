@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { PaperSection } from '../domain/paper-section';
 import { QuestionType } from '../../questions/domain/question-type';
+import { FILE_URLS_PROPERTY } from '../../../common/swagger/file-urls.property';
 
 export class PaperDraftQuestionDto {
   @ApiProperty({ type: Number })
@@ -23,6 +24,9 @@ export class PaperDraftQuestionDto {
 
   @ApiProperty({ type: String })
   stem: string;
+
+  @ApiProperty(FILE_URLS_PROPERTY)
+  fileUrls: Record<string, string>;
 }
 
 export class PaperRuleShortageDto {

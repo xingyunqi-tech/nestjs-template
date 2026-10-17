@@ -17,19 +17,19 @@ import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
-  ApiBody,
   ApiConsumes,
+  ApiExtraModels,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
-  ApiProduces,
   ApiTags,
+  getSchemaPath,
 } from '@nestjs/swagger';
 import type { Response as ExpressResponse } from 'express';
 import { ImportsService } from './imports.service';
 import { ImportLauncher } from './import-launcher';
 import { ImportJob } from './domain/import-job';
-import { CreateImportDto } from './dto/create-import.dto';
+import { CreateImportDto, CreateImportFileIdBodyDto, CreateImportUploadBodyDto } from './dto/create-import.dto';
 import { QueryAdminImportDto } from './dto/query-admin-import.dto';
 import fileConfig from '../files/config/file.config';
 import { FileConfig } from '../files/config/file-config.type';
@@ -43,8 +43,10 @@ import { PaginationResponse, PaginationResponseDto } from '../../common/dto/pagi
 import { pagination } from '../../common/pagination';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import type { RequestWithUser } from '../../common/types/request-with-user.type';
+import { ApiRequestBodyContent } from '../../common/swagger/api-request-body-content';
 
 const IMPORT_MAX_SIZE = (fileConfig() as FileConfig).maxSizes[FilePurpose.IMPORT];
+const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 @ApiTags('Admin Imports')
 @ApiBearerAuth()
@@ -62,15 +64,10 @@ export class AdminImportsController {
     summary: '创建导入任务：传已上传导入包的 fileId，或直接上传 file（zip / xlsx / json）',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: { type: 'string', format: 'binary' },
-        fileId: { type: 'string', format: 'uuid' },
-        publishOnImport: { type: 'boolean' },
-      },
-    },
+  @ApiExtraModels(CreateImportUploadBodyDto, CreateImportFileIdBodyDto)
+  @ApiRequestBodyContent({
+    'multipart/form-data': { schema: { $ref: getSchemaPath(CreateImportUploadBodyDto) } },
+    'application/json': { schema: { $ref: getSchemaPath(CreateImportFileIdBodyDto) } },
   })
   @ApiOkResponse({ type: ImportJob })
   @Post()
@@ -122,7 +119,10 @@ export class AdminImportsController {
   }
 
   @ApiOperation({ operationId: 'adminDownloadImportErrors', summary: '下载错误行报告（xlsx）' })
-  @ApiProduces('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  @ApiOkResponse({
+    description: '错误行报告文件',
+    content: { [XLSX_MIME_TYPE]: { schema: { type: 'string', format: 'binary' } } },
+  })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @Get(':id/errors')
   async downloadErrors(@Param('id', ParseUuidPipe) id: string, @Response() response: ExpressResponse): Promise<void> {

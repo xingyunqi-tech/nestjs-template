@@ -32,7 +32,7 @@ const rule = (items: PaperRule['items']): PaperRule =>
 describe('PaperRulesService', () => {
   let repository: Mocked<PaperRuleRepository>;
   let knowledgePointsService: Mocked<Pick<KnowledgePointsService, 'findByIds'>>;
-  let questionsService: Mocked<Pick<QuestionsService, 'drawUnits' | 'resolveFileTexts'>>;
+  let questionsService: Mocked<Pick<QuestionsService, 'drawUnits' | 'resolveFileUrls'>>;
   let service: PaperRulesService;
 
   beforeEach(() => {
@@ -44,7 +44,7 @@ describe('PaperRulesService', () => {
       remove: vi.fn(),
     };
     knowledgePointsService = { findByIds: vi.fn().mockResolvedValue([]) };
-    questionsService = { drawUnits: vi.fn(), resolveFileTexts: vi.fn() };
+    questionsService = { drawUnits: vi.fn(), resolveFileUrls: vi.fn() };
     service = new PaperRulesService(
       repository,
       { findById: vi.fn().mockResolvedValue({ id: SUBJECT }) } as unknown as SubjectsService,
@@ -206,17 +206,17 @@ describe('PaperRulesService', () => {
     });
   });
 
-  it('should resolve file references in preview stems for the administrator', async () => {
+  it('should keep raw preview stems and attach file urls for the administrator', async () => {
     repository.findById.mockResolvedValue(
       rule([{ sectionTitle: '单选', questionType: QuestionType.SINGLE, count: 1, scorePerQuestion: 1 }]),
     );
     questionsService.drawUnits.mockResolvedValue([unit(question('q1'))]);
-    questionsService.resolveFileTexts.mockResolvedValue(['resolved']);
+    questionsService.resolveFileUrls.mockResolvedValue([{ f1: 'https://cdn.example.com/a.png' }]);
 
     const draft = await service.preview('r1', 5);
 
-    expect(questionsService.resolveFileTexts).toHaveBeenCalledWith(['q1'], 5);
-    expect(draft.questions[0].stem).toBe('resolved');
+    expect(questionsService.resolveFileUrls).toHaveBeenCalledWith([{ stem: 'q1' }], 5);
+    expect(draft.questions[0]).toMatchObject({ stem: 'q1', fileUrls: { f1: 'https://cdn.example.com/a.png' } });
   });
 
   it('should report missing rules on remove', async () => {

@@ -327,16 +327,54 @@ describe('Question bank', () => {
     expect((drafts.body.data.list as QuestionBody[]).every((q) => q.status === 'DRAFT')).toBe(true);
   });
 
-  it('should resolve file references in admin output', async () => {
+  it('should return raw file references with file urls in admin output', async () => {
     const imageId = await insertFile(`e2e-question-${unique}.png`, 'image/png');
-    const question = await createQuestion(single('图片', { stem: `看图 ![](file:${imageId}) ${unique}` }));
+    const audioId = await insertFile(`e2e-question-${unique}.mp3`, 'audio/mpeg');
+    const imageUrl = expect.stringMatching(new RegExp(`/api/v1/files/e2e-question-${unique}\\.png$`));
+    const audioUrl = expect.stringMatching(new RegExp(`/api/v1/files/e2e-question-${unique}\\.mp3$`));
+    const image = `![](file:${imageId})`;
 
-    expect(question.stem).not.toContain(`file:${imageId}`);
-    expect(question.stem).toContain(`e2e-question-${unique}.png`);
-    const [stored]: { stem: string }[] = await app
-      .get(DataSource)
-      .query(`SELECT "stem" FROM "question" WHERE "id" = $1`, [question.id]);
-    expect(stored.stem).toContain(`file:${imageId}`);
+    const material = await createQuestion({
+      subjectId,
+      type: 'MATERIAL',
+      stem: `听力材料 ${unique}`,
+      material: `看图 ${image}`,
+      audioFileId: audioId,
+    });
+    expect(material).toMatchObject({
+      material: `看图 ${image}`,
+      audioUrl,
+      fileUrls: { [imageId]: imageUrl, [audioId]: audioUrl },
+    });
+
+    const question = await createQuestion(
+      single('图片', {
+        stem: `看图 ${image} ${unique}`,
+        options: [
+          { key: 'A', content: image },
+          { key: 'B', content: '乙' },
+        ],
+      }),
+    );
+    expect(question).toMatchObject({
+      stem: `看图 ${image} ${unique}`,
+      options: [{ key: 'A', content: image }, { key: 'B' }],
+      audioUrl: null,
+      fileUrls: { [imageId]: imageUrl },
+    });
+    expect(await detail(question.id)).toMatchObject({ stem: question.stem, fileUrls: { [imageId]: imageUrl } });
+
+    const listed = await as(admin)
+      .get('/admin/questions')
+      .query({ subjectId, keyword: '看图', limit: 100 })
+      .expect(200);
+    const found = (listed.body.data.list as QuestionBody[]).find((item) => item.id === question.id);
+    expect(found).toMatchObject({ stem: question.stem, fileUrls: { [imageId]: imageUrl } });
+
+    await as(admin).post(`/admin/questions/${question.id}/submit`).expect(200);
+    await as(admin).post(`/admin/questions/${question.id}/publish`).expect(200);
+    const versions = await as(admin).get(`/admin/questions/${question.id}/versions`).expect(200);
+    expect(versions.body.data[0]).toMatchObject({ stem: question.stem, fileUrls: { [imageId]: imageUrl } });
   });
 
   it('should roll back a material edit when a sub-question hash collides', async () => {

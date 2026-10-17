@@ -6,11 +6,11 @@ import {
   QuestionTransaction,
 } from './infrastructure/persistence/question.repository';
 import { QuestionUsageRepository } from './infrastructure/persistence/question-usage.repository';
-import { Question } from './domain/question';
+import { Question, QuestionSummary } from './domain/question';
 import { QuestionType } from './domain/question-type';
 import { QuestionSource } from './domain/question-source';
 import { QuestionAction, QuestionStatus, QUESTION_TRANSITIONS, publishedCountDelta } from './domain/question-status';
-import { QuestionChangeType, QuestionVersion } from './domain/question-version';
+import { QuestionChangeType } from './domain/question-version';
 import { QuestionOption } from './domain/question-answer';
 import { QuestionContent, normalizeAnswer, validateQuestionContent } from './domain/question-content';
 import { computeContentHash } from './domain/content-hash';
@@ -18,7 +18,7 @@ import { isAnswerChange, isSnapshotChanged, sameKnowledgePoints } from './domain
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { QuestionFilterOptions } from './dto/query-admin-question.dto';
-import { AdminQuestionDto } from './dto/admin-question.dto';
+import { AdminQuestionDto, AdminQuestionVersionDto } from './dto/admin-question.dto';
 import { BatchPublishQuestionsDto, BatchPublishQuestionsResultDto } from './dto/batch-publish-questions.dto';
 import { PublicQuestionUnitDto, toPublicQuestion } from './dto/public-question.dto';
 import { QuestionDrawCriteria, QuestionUnit, groupIntoUnits, packUnits } from './domain/question-unit';
@@ -40,7 +40,7 @@ type UserId = number | string;
 const DRAW_CANDIDATE_FACTOR = 3;
 const MIN_DRAW_CANDIDATES = 20;
 type FileReferencingContent = Pick<Question, 'stem' | 'analysis' | 'material' | 'options'>;
-type FileReferenceSource = Partial<Pick<Question, 'stem' | 'options' | 'analysis' | 'material' | 'audioFileId'>>;
+export type FileReferenceSource = Partial<Pick<Question, 'stem' | 'options' | 'analysis' | 'material' | 'audioFileId'>>;
 
 const DEFAULT_DIFFICULTY = 3;
 
@@ -109,6 +109,10 @@ function fileReferences(source: FileReferenceSource): [string, string[]][] {
   ];
 }
 
+function audioUrlOf(source: FileReferenceSource, fileUrls: Record<string, string>): string | null {
+  return source.audioFileId ? (fileUrls[source.audioFileId.toLowerCase()] ?? null) : null;
+}
+
 function contentTexts(item: FileReferencingContent): string[] {
   return [
     item.stem,
@@ -133,24 +137,29 @@ export class QuestionsService {
     viewerUserId: UserId,
   ): Promise<{ data: AdminQuestionDto[]; total: number }> {
     const { data, total } = await this.questionRepository.findManyWithPaginationAndCount(options);
-    const resolved = await this.resolveFileReferences(data, viewerUserId);
-    return { data: resolved.map((question) => Object.assign(new AdminQuestionDto(), question)), total };
+    return { data: await this.toAdminDtos(data, viewerUserId), total };
   }
 
   async getAdminDetail(id: Question['id'], viewerUserId: UserId): Promise<AdminQuestionDto> {
     const question = await this.findById(id);
     const children = question.type === QuestionType.MATERIAL ? await this.questionRepository.findChildren(id) : [];
-    await this.resolveFileReferences([question, ...children], viewerUserId);
-    const dto = Object.assign(new AdminQuestionDto(), question);
+    const [dto, ...childDtos] = await this.toAdminDtos([question, ...children], viewerUserId);
     if (question.type === QuestionType.MATERIAL) {
-      dto.children = children.map((child) => Object.assign(new AdminQuestionDto(), child));
+      dto.children = childDtos;
     }
     return dto;
   }
 
-  async findVersions(id: Question['id'], viewerUserId: UserId): Promise<QuestionVersion[]> {
+  async findVersions(id: Question['id'], viewerUserId: UserId): Promise<AdminQuestionVersionDto[]> {
     await this.findById(id);
-    return this.resolveFileReferences(await this.questionRepository.findVersions(id), viewerUserId);
+    const versions = await this.questionRepository.findVersions(id);
+    const fileUrls = await this.resolveFileUrls(versions, viewerUserId);
+    return versions.map((version, index) =>
+      Object.assign(new AdminQuestionVersionDto(), version, {
+        audioUrl: audioUrlOf(version, fileUrls[index]),
+        fileUrls: fileUrls[index],
+      }),
+    );
   }
 
   async findById(id: Question['id']): Promise<Question> {
@@ -164,6 +173,12 @@ export class QuestionsService {
   /** 按传入顺序返回，不存在的忽略 */
   async findByIds(ids: Question['id'][]): Promise<Question[]> {
     const found = new Map((await this.questionRepository.findByIds([...new Set(ids)])).map((q) => [q.id, q]));
+    return ids.flatMap((id) => found.get(id) ?? []);
+  }
+
+  /** 按传入顺序返回，不存在的忽略 */
+  async findSummariesByIds(ids: Question['id'][]): Promise<QuestionSummary[]> {
+    const found = new Map((await this.questionRepository.findSummariesByIds([...new Set(ids)])).map((q) => [q.id, q]));
     return ids.flatMap((id) => found.get(id) ?? []);
   }
 
@@ -197,9 +212,11 @@ export class QuestionsService {
     return this.findUnits(packUnits(candidates, target).map((candidate) => candidate.id));
   }
 
-  /** 解析文本中的 file:{id} 引用 */
-  resolveFileTexts(texts: string[], viewerUserId: UserId): Promise<string[]> {
-    return this.fileUrlResolver.resolveMany(texts, viewerUserId);
+  /** 按传入顺序返回各项引用文件的访问地址，键为小写文件 id */
+  async resolveFileUrls(sources: FileReferenceSource[], viewerUserId: UserId): Promise<Record<string, string>[]> {
+    const ids = sources.map((source) => fileReferences(source).flatMap(([, fileIds]) => fileIds));
+    const urls = await this.fileUrlResolver.resolveUrls(ids.flat(), viewerUserId);
+    return ids.map((itemIds) => Object.fromEntries(itemIds.filter((id) => id in urls).map((id) => [id, urls[id]])));
   }
 
   /** 当前版本题面，不含答案与解析 */
@@ -579,6 +596,16 @@ export class QuestionsService {
         throw unprocessable(field, 'fileNotAccessible');
       }
     }
+  }
+
+  private async toAdminDtos(questions: Question[], viewerUserId: UserId): Promise<AdminQuestionDto[]> {
+    const fileUrls = await this.resolveFileUrls(questions, viewerUserId);
+    return questions.map((question, index) =>
+      Object.assign(new AdminQuestionDto(), question, {
+        audioUrl: audioUrlOf(question, fileUrls[index]),
+        fileUrls: fileUrls[index],
+      }),
+    );
   }
 
   private async resolveFileReferences<T extends FileReferencingContent>(

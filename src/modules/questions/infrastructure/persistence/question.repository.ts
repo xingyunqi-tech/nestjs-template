@@ -1,6 +1,6 @@
 import { NullableType } from '../../../../common/types/nullable.type';
 import { IPaginationOptions } from '../../../../common/types/pagination-options';
-import { Question } from '../../domain/question';
+import { Question, QuestionSummary } from '../../domain/question';
 import { QuestionVersion } from '../../domain/question-version';
 import { QuestionDrawCandidate, QuestionDrawCriteria } from '../../domain/question-unit';
 import { QuestionFilterOptions } from '../../dto/query-admin-question.dto';
@@ -74,6 +74,8 @@ export abstract class QuestionRepository {
   abstract findById(id: Question['id']): Promise<NullableType<Question>>;
 
   abstract findByIds(ids: Question['id'][]): Promise<Question[]>;
+
+  abstract findSummariesByIds(ids: Question['id'][]): Promise<QuestionSummary[]>;
 
   abstract findChildren(parentId: Question['id']): Promise<Question[]>;
 

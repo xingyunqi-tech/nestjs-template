@@ -98,12 +98,12 @@ export class PaperRulesService {
 
   async preview(id: PaperRule['id'], viewerUserId: number | string): Promise<PaperDraftDto> {
     const draft = await this.draw(await this.findById(id));
-    const stems = await this.questionsService.resolveFileTexts(
-      draft.questions.map((question) => question.stem),
+    const fileUrls = await this.questionsService.resolveFileUrls(
+      draft.questions.map(({ stem }) => ({ stem })),
       viewerUserId,
     );
     draft.questions.forEach((question, index) => {
-      question.stem = stems[index];
+      question.fileUrls = fileUrls[index];
     });
     return draft;
   }
@@ -143,6 +143,7 @@ export class PaperRulesService {
             questionVersion: question.currentVersion,
             score: item.scorePerQuestion,
             stem: question.stem,
+            fileUrls: {},
           });
         }
       }

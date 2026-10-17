@@ -16,8 +16,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { QuestionsService } from './questions.service';
 import { QuestionAction } from './domain/question-status';
-import { QuestionVersion } from './domain/question-version';
-import { AdminQuestionDto } from './dto/admin-question.dto';
+import { AdminQuestionDto, AdminQuestionVersionDto } from './dto/admin-question.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { QueryAdminQuestionDto } from './dto/query-admin-question.dto';
@@ -105,14 +104,14 @@ export class AdminQuestionsController {
   }
 
   @ApiOperation({ operationId: 'adminGetQuestionVersions', summary: '题目版本历史' })
-  @ApiOkResponse({ type: [QuestionVersion] })
+  @ApiOkResponse({ type: [AdminQuestionVersionDto] })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @Get(':id/versions')
   @HttpCode(HttpStatus.OK)
   findVersions(
     @Param('id', ParseUuidPipe) id: string,
     @Request() request: RequestWithUser,
-  ): Promise<QuestionVersion[]> {
+  ): Promise<AdminQuestionVersionDto[]> {
     return this.questionsService.findVersions(id, request.user.id);
   }
 

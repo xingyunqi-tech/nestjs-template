@@ -15,7 +15,7 @@ import {
   QuestionTransaction,
   TaggableKnowledgePoint,
 } from '../../question.repository';
-import { Question } from '../../../../domain/question';
+import { Question, QuestionSummary } from '../../../../domain/question';
 import { QuestionVersion } from '../../../../domain/question-version';
 import { QuestionType } from '../../../../domain/question-type';
 import { QuestionStatus } from '../../../../domain/question-status';
@@ -159,6 +159,17 @@ export class QuestionRelationalRepository implements QuestionRepository {
     }
     const entities = await this.questionRepository.find({ where: { id: In(ids) }, order: { id: 'ASC' } });
     return withKnowledgePoints(this.questionRepository.manager, entities);
+  }
+
+  async findSummariesByIds(ids: Question['id'][]): Promise<QuestionSummary[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const entities = await this.questionRepository.find({
+      select: { id: true, parentId: true, type: true, stem: true },
+      where: { id: In(ids) },
+    });
+    return entities.map(({ id, parentId, type, stem }) => ({ id, parentId, type, stem }));
   }
 
   async findChildren(parentId: Question['id']): Promise<Question[]> {

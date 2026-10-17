@@ -1,7 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsDefined, IsUUID, Matches, ValidateNested } from 'class-validator';
+import { DailyQuestionSet } from '../domain/daily-question-set';
+import { QuestionType } from '../../questions/domain/question-type';
 import { PublicQuestionUnitDto } from '../../questions/dto/public-question.dto';
+import { FILE_URLS_PROPERTY } from '../../../common/swagger/file-urls.property';
 
 export const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -13,6 +16,28 @@ export class QueryDailySetsDto {
   @ApiProperty({ type: String, format: 'date', example: '2026-10-31' })
   @Matches(DATE_PATTERN)
   to: string;
+}
+
+export class DailySetQuestionDto {
+  @ApiProperty({ type: String, format: 'uuid' })
+  id: string;
+
+  @ApiProperty({ type: String, format: 'uuid', nullable: true, description: '所属材料，同一材料的小题连续排列' })
+  parentId: string | null;
+
+  @ApiProperty({ enum: QuestionType, enumName: 'QuestionType' })
+  type: QuestionType;
+
+  @ApiProperty({ type: String, description: '当前版本题干' })
+  stem: string;
+
+  @ApiProperty(FILE_URLS_PROPERTY)
+  fileUrls: Record<string, string>;
+}
+
+export class AdminDailyQuestionSetDto extends DailyQuestionSet {
+  @ApiProperty({ type: [DailySetQuestionDto], description: '按 questionIds 顺序，已不存在的题目不含' })
+  questions: DailySetQuestionDto[];
 }
 
 export class DailySummaryDto {

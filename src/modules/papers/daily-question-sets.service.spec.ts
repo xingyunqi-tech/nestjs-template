@@ -45,7 +45,12 @@ describe('DailyQuestionSetsService', () => {
   let repository: Mocked<DailyQuestionSetRepository>;
   let usage: Mocked<DailySetUsageRepository>;
   let subjectsService: Mocked<Pick<SubjectsService, 'findById' | 'getPublishedSubject' | 'findAllPublished'>>;
-  let questionsService: Mocked<Pick<QuestionsService, 'drawUnits' | 'findUnitsByQuestionIds' | 'toPublicUnits'>>;
+  let questionsService: Mocked<
+    Pick<
+      QuestionsService,
+      'drawUnits' | 'findUnitsByQuestionIds' | 'toPublicUnits' | 'findSummariesByIds' | 'resolveFileUrls'
+    >
+  >;
   let config: Record<string, unknown>;
   let service: DailyQuestionSetsService;
 
@@ -67,6 +72,16 @@ describe('DailyQuestionSetsService', () => {
       findUnitsByQuestionIds: vi.fn().mockResolvedValue(UNITS),
       toPublicUnits: vi.fn((units: QuestionUnit[]) =>
         Promise.resolve(units.map((unit) => ({ id: unit.root.id }) as never)),
+      ),
+      findSummariesByIds: vi.fn((ids: string[]) =>
+        Promise.resolve(
+          ids
+            .flatMap((id) => [single, ...subQuestions].filter((item) => item.id === id))
+            .map(({ id, parentId, type }) => ({ id, parentId, type, stem: `题干 ${id}` })),
+        ),
+      ),
+      resolveFileUrls: vi.fn((sources: { stem?: string }[]) =>
+        Promise.resolve(sources.map((source) => ({ f1: `url:${source.stem}` }))),
       ),
     };
     config = {};
@@ -224,16 +239,38 @@ describe('DailyQuestionSetsService', () => {
 
   describe('findRange', () => {
     it('should list sets in the range', async () => {
-      await service.findRange(SUBJECT, '2026-10-01', '2026-10-31');
+      await service.findRange(SUBJECT, '2026-10-01', '2026-10-31', 5);
 
       expect(repository.findRange).toHaveBeenCalledWith(SUBJECT, '2026-10-01', '2026-10-31');
     });
 
+    it('should attach question summaries in set order with one lookup', async () => {
+      repository.findRange.mockResolvedValue([
+        set(['c1', 'c2', 'q1'], '2026-10-01'),
+        set(['q1', 'gone'], '2026-10-02'),
+      ]);
+
+      const sets = await service.findRange(SUBJECT, '2026-10-01', '2026-10-31', 5);
+
+      expect(questionsService.findSummariesByIds).toHaveBeenCalledTimes(1);
+      expect(questionsService.findSummariesByIds).toHaveBeenCalledWith(['c1', 'c2', 'q1', 'gone']);
+      expect(questionsService.resolveFileUrls).toHaveBeenCalledWith(
+        [{ stem: '题干 c1' }, { stem: '题干 c2' }, { stem: '题干 q1' }],
+        5,
+      );
+      expect(sets[0].questions).toEqual([
+        { id: 'c1', parentId: 'm1', type: QuestionType.JUDGE, stem: '题干 c1', fileUrls: { f1: 'url:题干 c1' } },
+        { id: 'c2', parentId: 'm1', type: QuestionType.ESSAY, stem: '题干 c2', fileUrls: { f1: 'url:题干 c2' } },
+        { id: 'q1', parentId: null, type: QuestionType.SINGLE, stem: '题干 q1', fileUrls: { f1: 'url:题干 q1' } },
+      ]);
+      expect(sets[1].questions.map((question) => question.id)).toEqual(['q1']);
+    });
+
     it('should reject inverted or oversized ranges', async () => {
-      await expect(service.findRange(SUBJECT, '2026-10-31', '2026-10-01')).rejects.toMatchObject({
+      await expect(service.findRange(SUBJECT, '2026-10-31', '2026-10-01', 5)).rejects.toMatchObject({
         response: { errors: { to: 'invalidDateRange' } },
       });
-      await expect(service.findRange(SUBJECT, '2025-01-01', '2026-10-01')).rejects.toMatchObject({
+      await expect(service.findRange(SUBJECT, '2025-01-01', '2026-10-01', 5)).rejects.toMatchObject({
         response: { errors: { to: 'invalidDateRange' } },
       });
     });

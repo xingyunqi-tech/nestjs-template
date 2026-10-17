@@ -20,21 +20,30 @@ export class FileUrlResolver {
   }
 
   async resolveMany(contents: string[], viewerUserId?: number | string | null): Promise<string[]> {
-    const ids = [...new Set(contents.flatMap((content) => extractFileIds(content)))];
+    const ids = contents.flatMap((content) => extractFileIds(content));
     if (ids.length === 0) {
       return contents;
     }
 
-    const urls = new Map<string, string>();
-    const files = await this.filesService.findByIds(ids);
-    await Promise.all(
+    const urls = await this.resolveUrls(ids, viewerUserId);
+    return contents.map((content) =>
+      content.replace(FILE_REFERENCE_PATTERN, (reference, id: string) => urls[id.toLowerCase()] ?? reference),
+    );
+  }
+
+  /** 键为小写文件 id */
+  async resolveUrls(ids: string[], viewerUserId?: number | string | null): Promise<Record<string, string>> {
+    const unique = [...new Set(ids.map((id) => id.toLowerCase()))];
+    if (unique.length === 0) {
+      return {};
+    }
+
+    const files = await this.filesService.findByIds(unique);
+    const entries = await Promise.all(
       files
         .filter((file) => this.filesService.canAccess(file, viewerUserId))
-        .map(async (file: FileType) => urls.set(file.id.toLowerCase(), await buildFileUrl(file))),
+        .map(async (file: FileType) => [file.id.toLowerCase(), await buildFileUrl(file)] as const),
     );
-
-    return contents.map((content) =>
-      content.replace(FILE_REFERENCE_PATTERN, (reference, id: string) => urls.get(id.toLowerCase()) ?? reference),
-    );
+    return Object.fromEntries(entries);
   }
 }

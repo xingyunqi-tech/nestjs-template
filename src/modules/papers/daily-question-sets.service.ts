@@ -3,7 +3,14 @@ import { DailyQuestionSetRepository } from './infrastructure/persistence/daily-q
 import { DailySetUsageRepository } from './infrastructure/persistence/daily-set-usage.repository';
 import { DailyQuestionSet } from './domain/daily-question-set';
 import { businessDate, daysBetween } from './domain/business-date';
-import { DailySummaryDto, DailyTrialDto, TrialCheckDto, TrialCheckResultDto } from './dto/daily.dto';
+import {
+  AdminDailyQuestionSetDto,
+  DailySetQuestionDto,
+  DailySummaryDto,
+  DailyTrialDto,
+  TrialCheckDto,
+  TrialCheckResultDto,
+} from './dto/daily.dto';
 import { SubjectsService } from '../exams/subjects.service';
 import { QuestionsService } from '../questions/questions.service';
 import { QuestionUnit, takeLeadingUnits } from '../questions/domain/question-unit';
@@ -106,7 +113,12 @@ export class DailyQuestionSetsService {
     };
   }
 
-  async findRange(subjectId: string, from: string, to: string): Promise<DailyQuestionSet[]> {
+  async findRange(
+    subjectId: string,
+    from: string,
+    to: string,
+    viewerUserId: number | string,
+  ): Promise<AdminDailyQuestionSetDto[]> {
     await this.subjectsService.findById(subjectId);
     if (!isValidDate(from) || !isValidDate(to)) {
       throw unprocessable('from', 'invalidDate');
@@ -115,7 +127,31 @@ export class DailyQuestionSetsService {
     if (days < 0 || days >= MAX_RANGE_DAYS) {
       throw unprocessable('to', 'invalidDateRange');
     }
-    return this.dailyQuestionSetRepository.findRange(subjectId, from, to);
+    const sets = await this.dailyQuestionSetRepository.findRange(subjectId, from, to);
+    const questions = await this.questionsService.findSummariesByIds([
+      ...new Set(sets.flatMap((set) => set.questionIds)),
+    ]);
+    const fileUrls = await this.questionsService.resolveFileUrls(
+      questions.map(({ stem }) => ({ stem })),
+      viewerUserId,
+    );
+    const summaries = new Map(
+      questions.map((question, index) => [
+        question.id,
+        Object.assign(new DailySetQuestionDto(), {
+          id: question.id,
+          parentId: question.parentId,
+          type: question.type,
+          stem: question.stem,
+          fileUrls: fileUrls[index],
+        }),
+      ]),
+    );
+    return sets.map((set) =>
+      Object.assign(new AdminDailyQuestionSetDto(), set, {
+        questions: set.questionIds.flatMap((id) => summaries.get(id) ?? []),
+      }),
+    );
   }
 
   /** 当日及以后的题组可重新生成；已有用户会话时拒绝 */

@@ -14,6 +14,7 @@ import { ResolvePromisesInterceptor } from './common/serializer.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { MetricsMiddleware } from './infrastructure/metrics/metrics.middleware';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { applyRequestBodyContent } from './common/swagger/api-request-body-content';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -118,7 +119,7 @@ async function bootstrap(): Promise<void> {
       })
       .build();
 
-    const document = SwaggerModule.createDocument(app, options);
+    const document = applyRequestBodyContent(SwaggerModule.createDocument(app, options));
     SwaggerModule.setup('docs', app, document, {
       jsonDocumentUrl: 'docs-json',
       swaggerOptions: {

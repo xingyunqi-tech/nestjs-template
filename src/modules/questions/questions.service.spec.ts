@@ -15,7 +15,7 @@ import { Question } from './domain/question';
 import { QuestionType } from './domain/question-type';
 import { QuestionAction, QuestionStatus } from './domain/question-status';
 import { QuestionSource } from './domain/question-source';
-import { QuestionChangeType } from './domain/question-version';
+import { QuestionChangeType, QuestionVersion } from './domain/question-version';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { QuestionImportItem, QuestionImportItemError } from './question-import';
 import { SubjectsService } from '../exams/subjects.service';
@@ -28,6 +28,7 @@ const SUBJECT = 's1';
 const PUBLIC_FILE = '11111111-1111-4111-8111-111111111111';
 const PRIVATE_FILE = '22222222-2222-4222-8222-222222222222';
 const MISSING_FILE = '33333333-3333-4333-8333-333333333333';
+const PUBLIC_URL = 'https://cdn.example.com/p.png';
 const FILES = [
   { id: PUBLIC_FILE, path: '/p.png', visibility: FileVisibility.PUBLIC },
   { id: PRIVATE_FILE, path: '/q.png', visibility: FileVisibility.PRIVATE },
@@ -166,14 +167,19 @@ describe('QuestionsService', () => {
   let findDrawCandidates: Mocked<QuestionRepository>['findDrawCandidates'];
   let subjectsService: Mocked<Pick<SubjectsService, 'findById'>>;
   let filesService: Mocked<Pick<FilesService, 'findByIds' | 'canAccess'>>;
+  let repository: QuestionRepository;
   let service: QuestionsService;
 
   beforeEach(() => {
     store = new FakeStore();
     findDrawCandidates = vi.fn();
-    const repository: QuestionRepository = {
+    repository = {
       findById: (id) => Promise.resolve(store.questions.has(id) ? store.snapshot(id) : null),
       findByIds: (ids) => store.findForUpdate(ids),
+      findSummariesByIds: (ids) =>
+        store
+          .findForUpdate(ids)
+          .then((found) => found.map(({ id, parentId, type, stem }) => ({ id, parentId, type, stem }))),
       findChildren: (parentId) => store.findChildrenForUpdate([parentId]),
       findChildrenByParentIds: (parentIds) => store.findChildrenForUpdate(parentIds),
       findDrawCandidates,
@@ -187,7 +193,13 @@ describe('QuestionsService', () => {
       findByIds: vi.fn((ids: string[]) => Promise.resolve(FILES.filter((file) => ids.includes(file.id)))),
       canAccess: vi.fn((file: { visibility?: FileVisibility }) => file.visibility !== FileVisibility.PRIVATE),
     };
-    const fileUrlResolver = { resolveMany: (contents: string[]) => Promise.resolve(contents) };
+    const fileUrlResolver = {
+      resolveMany: (contents: string[]) =>
+        Promise.resolve(contents.map((content) => content.replaceAll(`file:${PUBLIC_FILE}`, PUBLIC_URL))),
+      resolveUrls: vi.fn((ids: string[]) =>
+        Promise.resolve(ids.includes(PUBLIC_FILE) ? { [PUBLIC_FILE]: PUBLIC_URL } : {}),
+      ),
+    };
     service = new QuestionsService(
       repository,
       usage,
@@ -581,6 +593,17 @@ describe('QuestionsService', () => {
       return { materialId: material.id, childIds: [first.id, second.id] };
     };
 
+    it('should return summaries in the given order and skip missing ids', async () => {
+      const single = await create(singleDto());
+      const { materialId, childIds } = await createMaterial();
+
+      await expect(service.findSummariesByIds([childIds[1], 'missing', single.id, childIds[1]])).resolves.toEqual([
+        { id: childIds[1], parentId: materialId, type: QuestionType.SINGLE, stem: '第二小题' },
+        { id: single.id, parentId: null, type: QuestionType.SINGLE, stem: '下列说法正确的是' },
+        { id: childIds[1], parentId: materialId, type: QuestionType.SINGLE, stem: '第二小题' },
+      ]);
+    });
+
     it('should build units in the given order and skip sub-questions', async () => {
       const single = await create(singleDto());
       const { materialId, childIds } = await createMaterial();
@@ -629,6 +652,71 @@ describe('QuestionsService', () => {
       expect(dto.children?.[0]).not.toHaveProperty('answer');
       expect(dto).not.toHaveProperty('analysis');
       expect(units[0].questions[0].answer).toEqual({ keys: ['B'] });
+    });
+  });
+
+  describe('file references', () => {
+    const image = `![](file:${PUBLIC_FILE})`;
+
+    it('should keep raw references in admin detail and attach file and audio urls', async () => {
+      const material = await create({ ...materialDto(`资料 ${image}`), audioFileId: PUBLIC_FILE });
+      await create(singleDto({ parentId: material.id, options: [{ key: 'A', content: image }, OPTIONS[1]] }));
+
+      const detail = await service.getAdminDetail(material.id, 1);
+
+      expect(detail).toMatchObject({
+        material: `资料 ${image}`,
+        audioUrl: PUBLIC_URL,
+        fileUrls: { [PUBLIC_FILE]: PUBLIC_URL },
+      });
+      expect(detail.children?.[0]).toMatchObject({
+        options: [{ key: 'A', content: image }, OPTIONS[1]],
+        audioUrl: null,
+        fileUrls: { [PUBLIC_FILE]: PUBLIC_URL },
+      });
+    });
+
+    it('should leave file urls empty when nothing is referenced', async () => {
+      const created = await create(singleDto());
+
+      expect(created).toMatchObject({ audioUrl: null, fileUrls: {} });
+    });
+
+    it('should attach the audio url to admin versions', async () => {
+      const material = await create({ ...materialDto(), audioFileId: PUBLIC_FILE });
+      vi.mocked(repository.findVersions).mockResolvedValue([
+        { ...store.snapshot(material.id), questionId: material.id, version: 1 } as unknown as QuestionVersion,
+      ]);
+
+      const [version] = await service.findVersions(material.id, 1);
+
+      expect(version).toMatchObject({ audioUrl: PUBLIC_URL, fileUrls: { [PUBLIC_FILE]: PUBLIC_URL } });
+    });
+
+    it('should keep raw references in admin lists and versions', async () => {
+      const created = await create(singleDto({ stem: `看图 ${image}` }));
+      vi.mocked(repository.findManyWithPaginationAndCount).mockResolvedValue({
+        data: [store.snapshot(created.id)],
+        total: 1,
+      });
+      vi.mocked(repository.findVersions).mockResolvedValue([
+        { ...store.snapshot(created.id), questionId: created.id, version: 1 } as unknown as QuestionVersion,
+      ]);
+
+      const { data } = await service.findManyWithPaginationAndCount({ paginationOptions: { page: 1, limit: 20 } }, 1);
+      const [version] = await service.findVersions(created.id, 1);
+
+      expect(data[0]).toMatchObject({ stem: `看图 ${image}`, fileUrls: { [PUBLIC_FILE]: PUBLIC_URL } });
+      expect(version).toMatchObject({ stem: `看图 ${image}`, audioUrl: null, fileUrls: { [PUBLIC_FILE]: PUBLIC_URL } });
+    });
+
+    it('should resolve references to urls in public units', async () => {
+      const created = await create(singleDto({ stem: `看图 ${image}` }));
+
+      const [dto] = await service.toPublicUnits(await service.findUnits([created.id]), null);
+
+      expect(dto.stem).toBe(`看图 ![](${PUBLIC_URL})`);
+      expect(store.snapshot(created.id).stem).toBe(`看图 ${image}`);
     });
   });
 

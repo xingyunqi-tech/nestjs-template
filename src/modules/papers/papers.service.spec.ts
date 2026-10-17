@@ -71,7 +71,7 @@ const sections = [
 describe('PapersService', () => {
   let repository: Mocked<PaperRepository>;
   let subjectsService: Mocked<Pick<SubjectsService, 'findById' | 'getPublishedSubject'>>;
-  let questionsService: Mocked<Pick<QuestionsService, 'findUnits' | 'findByIds' | 'resolveFileTexts'>>;
+  let questionsService: Mocked<Pick<QuestionsService, 'findUnits' | 'findByIds' | 'resolveFileUrls'>>;
   let service: PapersService;
 
   beforeEach(() => {
@@ -94,7 +94,9 @@ describe('PapersService', () => {
       findByIds: vi.fn((ids: string[]) =>
         Promise.resolve(ids.flatMap((id) => [single, essay, ...children].find((item) => item.id === id) ?? [])),
       ),
-      resolveFileTexts: vi.fn((texts: string[]) => Promise.resolve(texts.map((text) => `resolved:${text}`))),
+      resolveFileUrls: vi.fn((sources: { stem?: string }[]) =>
+        Promise.resolve(sources.map((source) => ({ f1: `url:${source.stem}` }))),
+      ),
     };
     service = new PapersService(
       repository,
@@ -298,15 +300,20 @@ describe('PapersService', () => {
   });
 
   describe('getAdminDetail', () => {
-    it('should resolve file references in stems for the viewer', async () => {
+    it('should keep raw stems and attach file urls for the viewer', async () => {
       repository.findQuestions.mockResolvedValue([
         Object.assign(new PaperQuestion(), { paperId: 'p1', questionId: 'q1', sectionIndex: 0, sort: 0, score: 1 }),
       ]);
 
       const detail = await service.getAdminDetail('p1', 5);
 
-      expect(questionsService.resolveFileTexts).toHaveBeenCalledWith(['题干 q1'], 5);
-      expect(detail.questions[0]).toMatchObject({ questionId: 'q1', stem: 'resolved:题干 q1', currentVersion: 3 });
+      expect(questionsService.resolveFileUrls).toHaveBeenCalledWith([{ stem: '题干 q1' }], 5);
+      expect(detail.questions[0]).toMatchObject({
+        questionId: 'q1',
+        stem: '题干 q1',
+        fileUrls: { f1: 'url:题干 q1' },
+        currentVersion: 3,
+      });
     });
   });
 

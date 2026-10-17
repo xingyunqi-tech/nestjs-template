@@ -85,8 +85,8 @@ export class PapersService {
         question,
       ]),
     );
-    const stems = await this.questionsService.resolveFileTexts(
-      rows.map((row) => questions.get(row.questionId)!.stem),
+    const fileUrls = await this.questionsService.resolveFileUrls(
+      rows.map((row) => ({ stem: questions.get(row.questionId)!.stem })),
       viewerUserId,
     );
     const dto = Object.assign(new AdminPaperDto(), paper);
@@ -97,7 +97,8 @@ export class PapersService {
         type: question.type,
         status: question.status,
         currentVersion: question.currentVersion,
-        stem: stems[index],
+        stem: question.stem,
+        fileUrls: fileUrls[index],
       });
     });
     return dto;

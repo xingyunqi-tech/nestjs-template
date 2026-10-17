@@ -63,6 +63,7 @@ describe('Paper catalog', () => {
   let materialId: string;
   let subQuestionIds: string[];
   let draftQuestionId: string;
+  const fileIds: string[] = [];
   const unique = `${Date.now()}`;
 
   const as = (account: Account | null, ip = randomIp()) => {
@@ -182,6 +183,9 @@ describe('Paper catalog', () => {
       }
       if (examId) {
         await dataSource.query(`DELETE FROM "exam" WHERE "id" = $1`, [examId]);
+      }
+      if (fileIds.length > 0) {
+        await dataSource.query(`DELETE FROM "file" WHERE "id" = ANY($1)`, [fileIds]);
       }
       await setRole(app, admin.email, RoleEnum.user);
     } finally {
@@ -440,6 +444,43 @@ describe('Paper catalog', () => {
     await checkTrial({ date: today, answers: [{ questionId: singles[1], answer: { keys: ['B'] } }] }).expect(422);
   });
 
+  it('should resolve file references in public trials and keep them raw for administrators', async () => {
+    const [{ id: imageId }]: { id: string }[] = await app
+      .get(DataSource)
+      .query(
+        `INSERT INTO "file" ("path", "visibility", "mimeType") VALUES ($1, 'PUBLIC', 'image/png') RETURNING "id"`,
+        [`/api/v1/files/e2e-paper-${unique}.png`],
+      );
+    fileIds.push(imageId);
+    const image = `![](file:${imageId})`;
+    const stem = `看图 ${image} ${unique}`;
+    const fileUrls = { [imageId]: expect.stringMatching(new RegExp(`/api/v1/files/e2e-paper-${unique}\\.png$`)) };
+    const questionId = await createQuestion({ ...single('图片题'), stem }, true);
+    try {
+      const today = businessDate();
+      await setDailyQuestions(today, [questionId]);
+
+      const trial = await as(null).get(`/subjects/${subjectId}/daily/trial`).expect(200);
+      const publicStem = (trial.body.data.questions as { stem: string }[])[0].stem;
+      expect(publicStem).not.toContain(`file:${imageId}`);
+      expect(publicStem).toMatch(new RegExp(`/api/v1/files/e2e-paper-${unique}\\.png`));
+
+      const sets = await as(admin).get(`/admin/subjects/${subjectId}/daily-sets?from=${today}&to=${today}`).expect(200);
+      expect(sets.body.data[0].questions).toEqual([{ id: questionId, parentId: null, type: 'SINGLE', stem, fileUrls }]);
+
+      const paper = await createPaper('图片卷');
+      const { body } = await as(admin)
+        .put(`/admin/papers/${paper.id}/questions`, {
+          sections,
+          questions: [{ questionId, sectionIndex: 0, score: 1 }],
+        })
+        .expect(200);
+      expect(body.data.questions[0]).toMatchObject({ questionId, stem, fileUrls });
+    } finally {
+      await as(admin).post(`/admin/questions/${questionId}/offline`).expect(200);
+    }
+  });
+
   it('should stop before a trailing material and grade only trial questions', async () => {
     const today = businessDate();
     await setDailyQuestions(today, [singles[0], singles[1], singles[2], ...subQuestionIds, singles[3]]);
@@ -490,6 +531,12 @@ describe('Paper catalog', () => {
     expect(listed.body.data).toHaveLength(1);
     expect(listed.body.data[0]).toMatchObject({ subjectId, date: today });
     expect(listed.body.data[0].questionIds).toHaveLength(6);
+    expect(listed.body.data[0].questions.map((question: { id: string }) => question.id)).toEqual(
+      listed.body.data[0].questionIds,
+    );
+    expect(listed.body.data[0].questions).toContainEqual(
+      expect.objectContaining({ id: subQuestionIds[1], parentId: materialId, type: 'FILL', stem: `小题二 ${unique}` }),
+    );
 
     const regenerated = await as(admin).post(`/admin/subjects/${subjectId}/daily-sets/${today}/regenerate`).expect(200);
     expect(regenerated.body.data).toMatchObject({ id: listed.body.data[0].id, date: today });

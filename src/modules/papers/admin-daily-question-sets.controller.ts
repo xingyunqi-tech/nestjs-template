@@ -1,13 +1,14 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { DailyQuestionSetsService } from './daily-question-sets.service';
 import { DailyQuestionSet } from './domain/daily-question-set';
-import { QueryDailySetsDto } from './dto/daily.dto';
+import { AdminDailyQuestionSetDto, QueryDailySetsDto } from './dto/daily.dto';
 import { PermissionsGuard } from '../../core/permissions/permissions.guard';
 import { RequirePermissions } from '../../core/permissions/permissions.decorator';
 import { Permission } from '../../core/permissions/permission.enum';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
+import type { RequestWithUser } from '../../common/types/request-with-user.type';
 
 @ApiTags('Admin Daily Question Sets')
 @ApiBearerAuth()
@@ -17,13 +18,17 @@ import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 export class AdminDailyQuestionSetsController {
   constructor(private readonly dailyQuestionSetsService: DailyQuestionSetsService) {}
 
-  @ApiOperation({ operationId: 'adminGetDailyQuestionSets', summary: '每日一练题组（按日期区间）' })
-  @ApiOkResponse({ type: [DailyQuestionSet] })
+  @ApiOperation({ operationId: 'adminGetDailyQuestionSets', summary: '每日一练题组（按日期区间，含题目摘要）' })
+  @ApiOkResponse({ type: [AdminDailyQuestionSetDto] })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @Get()
   @HttpCode(HttpStatus.OK)
-  findRange(@Param('id', ParseUuidPipe) id: string, @Query() query: QueryDailySetsDto): Promise<DailyQuestionSet[]> {
-    return this.dailyQuestionSetsService.findRange(id, query.from, query.to);
+  findRange(
+    @Param('id', ParseUuidPipe) id: string,
+    @Query() query: QueryDailySetsDto,
+    @Request() request: RequestWithUser,
+  ): Promise<AdminDailyQuestionSetDto[]> {
+    return this.dailyQuestionSetsService.findRange(id, query.from, query.to, request.user.id);
   }
 
   @ApiOperation({ operationId: 'adminRegenerateDailyQuestionSet', summary: '重新生成当日及以后的题组' })

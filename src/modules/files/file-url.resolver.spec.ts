@@ -74,6 +74,19 @@ describe('FileUrlResolver', () => {
     expect(repository.findByIds).not.toHaveBeenCalled();
   });
 
+  it('should map accessible file ids to URLs with one query', async () => {
+    await expect(resolver.resolveUrls([PUBLIC_ID.toUpperCase(), PUBLIC_ID, PRIVATE_ID, MISSING_ID], 2)).resolves.toEqual(
+      { [PUBLIC_ID]: 'https://cdn.example.com/audio.mp3' },
+    );
+    expect(repository.findByIds).toHaveBeenCalledTimes(1);
+    expect(repository.findByIds).toHaveBeenCalledWith([PUBLIC_ID, PRIVATE_ID, MISSING_ID]);
+  });
+
+  it('should return an empty map without querying when no ids are given', async () => {
+    await expect(resolver.resolveUrls([])).resolves.toEqual({});
+    expect(repository.findByIds).not.toHaveBeenCalled();
+  });
+
   it('should extract distinct file ids', () => {
     expect(extractFileIds(`file:${PUBLIC_ID} file:${PUBLIC_ID} file:not-a-uuid file:${PRIVATE_ID}`)).toEqual([
       PUBLIC_ID,

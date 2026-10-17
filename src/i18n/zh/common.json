@@ -99,5 +99,19 @@
   "fileNotFound": "文件不存在",
   "fileNotAccessible": "无权访问该文件",
   "alertNotFound": "告警不存在",
-  "invalidFilePurpose": "不支持的上传用途"
+  "invalidFilePurpose": "不支持的上传用途",
+  "examNotFound": "考试不存在",
+  "subjectNotFound": "科目不存在",
+  "knowledgePointNotFound": "知识点不存在",
+  "examProfileNotFound": "未关注该考试",
+  "invalidStatusTransition": "当前状态不能执行该操作",
+  "onlyDraftDeletable": "只能删除草稿状态的内容，已发布过的请下架",
+  "examHasSubjects": "请先删除考试下的科目",
+  "subjectHasKnowledgePoints": "请先删除科目下的知识点",
+  "knowledgePointTooDeep": "知识点最多三级",
+  "knowledgePointHasQuestions": "该知识点已关联题目，请先迁移题目",
+  "knowledgePointHasChildren": "请先删除子知识点",
+  "invalidKnowledgePointParent": "上级知识点无效",
+  "knowledgePointNotLeaf": "只能迁移到末级知识点",
+  "invalidMigrationTarget": "迁移目标须为同一科目下的其他知识点"
 }

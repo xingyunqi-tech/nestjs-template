@@ -76,6 +76,12 @@ export function isUniqueViolation(error: unknown): boolean {
   return !!error && typeof error === 'object' && 'code' in error && error.code === PG_UNIQUE_VIOLATION;
 }
 
+export const PG_FOREIGN_KEY_VIOLATION = '23503';
+
+export function isForeignKeyViolation(error: unknown): boolean {
+  return !!error && typeof error === 'object' && 'code' in error && error.code === PG_FOREIGN_KEY_VIOLATION;
+}
+
 /** 是否为指定唯一约束的冲突 */
 export function isUniqueViolationOf(error: unknown, constraint: string): boolean {
   return isUniqueViolation(error) && (error as { constraint?: string }).constraint === constraint;

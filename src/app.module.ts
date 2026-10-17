@@ -49,6 +49,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { SchedulerModule } from './infrastructure/scheduler/scheduler.module';
 import { AppConfigModule } from './modules/config/config.module';
 import { MonitorModule } from './modules/monitor/monitor.module';
+import { ExamsModule } from './modules/exams/exams.module';
 
 const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
   useClass: TypeOrmConfigService,
@@ -188,6 +189,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     SharesModule,
     AppConfigModule,
     MonitorModule,
+    ExamsModule,
   ],
 })
 export class AppModule {}

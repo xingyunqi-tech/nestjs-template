@@ -99,5 +99,19 @@
   "fileNotFound": "File not found",
   "fileNotAccessible": "You cannot access this file",
   "alertNotFound": "Alert not found",
-  "invalidFilePurpose": "Unsupported upload purpose"
+  "invalidFilePurpose": "Unsupported upload purpose",
+  "examNotFound": "Exam not found",
+  "subjectNotFound": "Subject not found",
+  "knowledgePointNotFound": "Knowledge point not found",
+  "examProfileNotFound": "Exam is not followed",
+  "invalidStatusTransition": "This action is not allowed in the current status",
+  "onlyDraftDeletable": "Only drafts can be deleted; take published content offline instead",
+  "examHasSubjects": "Delete the subjects of this exam first",
+  "subjectHasKnowledgePoints": "Delete the knowledge points of this subject first",
+  "knowledgePointTooDeep": "Knowledge points can be nested at most three levels",
+  "knowledgePointHasQuestions": "This knowledge point has questions; migrate them first",
+  "knowledgePointHasChildren": "Delete the child knowledge points first",
+  "invalidKnowledgePointParent": "Invalid parent knowledge point",
+  "knowledgePointNotLeaf": "Questions can only be migrated to a leaf knowledge point",
+  "invalidMigrationTarget": "The target must be another knowledge point of the same subject"
 }

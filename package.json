@@ -25,6 +25,8 @@
     "seed:run:prod": "node ./dist/infrastructure/database/seeds/relational/run-seed.js",
     "permissions:clear-cache": "ts-node -P tsconfig.app.json ./src/core/permissions/clear-permission-cache.ts",
     "permissions:clear-cache:prod": "node ./dist/core/permissions/clear-permission-cache.js",
+    "knowledge-points:recount": "ts-node -P tsconfig.app.json ./src/modules/exams/scripts/recount-knowledge-point-questions.ts",
+    "knowledge-points:recount:prod": "node ./dist/modules/exams/scripts/recount-knowledge-point-questions.js",
     "build": "nest build",
     "format": "prettier . --write",
     "format:check": "prettier . --check",

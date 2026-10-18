@@ -38,6 +38,7 @@ describe('LearningStatsService', () => {
     repository = {
       applyKnowledgeResult: vi.fn().mockResolvedValue(undefined),
       addDailyStat: vi.fn().mockResolvedValue(undefined),
+      rebuildKnowledgeStats: vi.fn().mockResolvedValue(undefined),
       claimMockSessionDuration: vi.fn().mockResolvedValue(null),
       findLeafStats: vi.fn(),
       aggregateSubtreeAnswers: vi.fn(),

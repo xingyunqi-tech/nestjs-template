@@ -92,6 +92,7 @@ describe('PapersService', () => {
       removeDraft: vi.fn().mockResolvedValue(true),
       createGenerated: vi.fn(),
       removeStaleGenerated: vi.fn(),
+      raiseQuestionVersion: vi.fn(),
     };
     attempts = { findUserScores: vi.fn().mockResolvedValue(new Map()) };
     subjectsService = { findById: vi.fn(), getPublishedSubject: vi.fn().mockResolvedValue({ id: SUBJECT }) };

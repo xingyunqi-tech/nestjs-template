@@ -4,9 +4,14 @@ import { DataSource, EntityManager, QueryFailedError } from 'typeorm';
 import { PendingRecordCursor, StatsEventRepository, StatsEventTransaction } from '../../stats-event.repository';
 import { StatsRecord } from '../../../../domain/stats-record';
 import { NullableType } from '../../../../../../common/types/nullable.type';
-import { TransactionHandle, createTransactionHandle } from '../../../../../../common/database/transaction-handle';
+import {
+  TransactionHandle,
+  createTransactionHandle,
+  entityManagerOf,
+} from '../../../../../../common/database/transaction-handle';
 
 const DEADLOCK_DETECTED = '40P01';
+const USER_LOCK_NAMESPACE = 'stats:user:';
 const UNIQUE_VIOLATION = '23505';
 const MAX_TRANSACTION_ATTEMPTS = 3;
 const RETRY_BACKOFF_MS = 20;
@@ -27,6 +32,13 @@ class RelationalStatsEventTransaction implements StatsEventTransaction {
 
   constructor(private readonly manager: EntityManager) {
     this.handle = createTransactionHandle(manager);
+  }
+
+  async lockRecordUser(id: string): Promise<void> {
+    await this.manager.query(
+      `SELECT pg_advisory_xact_lock(hashtext($2 || "userId")) FROM "answer_record" WHERE "id" = $1`,
+      [id, USER_LOCK_NAMESPACE],
+    );
   }
 
   async claimRecord(id: string): Promise<boolean> {
@@ -96,6 +108,12 @@ class RelationalStatsEventTransaction implements StatsEventTransaction {
 @Injectable()
 export class StatsEventRelationalRepository implements StatsEventRepository {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+
+  async lockUser(handle: TransactionHandle, userId: number): Promise<void> {
+    await entityManagerOf(handle).query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+      `${USER_LOCK_NAMESPACE}${userId}`,
+    ]);
+  }
 
   async findRecordUserId(id: string): Promise<NullableType<number>> {
     const rows: { userId: number }[] = await this.dataSource.query(

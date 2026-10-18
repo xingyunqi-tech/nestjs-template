@@ -49,6 +49,10 @@ export class WrongBookService {
     }
   }
 
+  rebuildFromRecords(handle: TransactionHandle, userId: number, questionId: string, subjectId: string): Promise<void> {
+    return this.wrongQuestionRepository.rebuildFromRecords(handle, { userId, questionId, subjectId });
+  }
+
   findActiveQuestionIds(userId: number, subjectId: string): Promise<string[]> {
     return this.wrongQuestionRepository.findActivePublishedQuestionIds(userId, subjectId);
   }

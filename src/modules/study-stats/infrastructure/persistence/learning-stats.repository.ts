@@ -53,6 +53,9 @@ export abstract class LearningStatsRepository {
 
   abstract addDailyStat(handle: TransactionHandle, delta: DailyStatDelta): Promise<void>;
 
+  /** 该用户在该题叶子知识点上的统计由已计入的作答记录全量重建 */
+  abstract rebuildKnowledgeStats(handle: TransactionHandle, userId: number, questionId: string): Promise<void>;
+
   /** 会话内此前没有已计入的其他记录时返回会话用时与交卷统计日，否则返回 null */
   abstract claimMockSessionDuration(
     handle: TransactionHandle,

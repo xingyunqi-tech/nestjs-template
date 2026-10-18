@@ -316,6 +316,7 @@ describe('Platform foundation', () => {
         'content-import',
         'mock-submit',
         'study-stats',
+        'errata',
       ]);
 
       await api(app).get('/api/v1/admin/monitor/queues').set('Authorization', `Bearer ${user.token}`).expect(403);

@@ -66,6 +66,52 @@ export class LearningStatsRelationalRepository implements LearningStatsRepositor
     );
   }
 
+  async rebuildKnowledgeStats(handle: TransactionHandle, userId: number, questionId: string): Promise<void> {
+    const manager = entityManagerOf(handle);
+    await manager.query(
+      `SELECT s."id" FROM "user_knowledge_stat" AS s
+       WHERE s."userId" = $1 AND s."knowledgePointId" IN (
+         SELECT link."knowledgePointId" FROM "question_knowledge_point" AS link
+         INNER JOIN "knowledge_point" AS kp ON kp."id" = link."knowledgePointId"
+         WHERE link."questionId" = $2 AND kp."isLeaf"
+       )
+       ORDER BY s."knowledgePointId"
+       FOR UPDATE OF s`,
+      [userId, questionId],
+    );
+    await manager.query(
+      `WITH leaves AS (
+         SELECT link."knowledgePointId" AS "id" FROM "question_knowledge_point" AS link
+         INNER JOIN "knowledge_point" AS kp ON kp."id" = link."knowledgePointId"
+         WHERE link."questionId" = $2 AND kp."isLeaf"
+       ),
+       ranked AS (
+         SELECT leaves."id" AS "knowledgePointId", r."id", r."isCorrect", r."gradedAt", r."statsAppliedAt",
+                row_number() OVER (PARTITION BY leaves."id" ORDER BY r."statsAppliedAt" DESC, r."id" DESC) AS "rank"
+         FROM leaves
+         INNER JOIN "question_knowledge_point" AS link ON link."knowledgePointId" = leaves."id"
+         INNER JOIN "answer_record" AS r ON r."questionId" = link."questionId"
+         WHERE r."userId" = $1 AND r."statsAppliedAt" IS NOT NULL AND r."isCorrect" IS NOT NULL
+       )
+       INSERT INTO "user_knowledge_stat" AS s
+         ("userId", "knowledgePointId", "answered", "correct", "recentResults", "lastAnsweredAt")
+       SELECT $1, "knowledgePointId", count(*)::int, (count(*) FILTER (WHERE "isCorrect"))::int,
+              array_agg(CASE WHEN "isCorrect" THEN 1 ELSE 0 END ORDER BY "statsAppliedAt", "id")
+                FILTER (WHERE "rank" <= $3)::smallint[],
+              max(COALESCE("gradedAt", "statsAppliedAt"))
+       FROM ranked
+       GROUP BY "knowledgePointId"
+       ORDER BY "knowledgePointId"
+       ON CONFLICT ("userId", "knowledgePointId") DO UPDATE SET
+         "answered" = EXCLUDED."answered",
+         "correct" = EXCLUDED."correct",
+         "recentResults" = EXCLUDED."recentResults",
+         "lastAnsweredAt" = EXCLUDED."lastAnsweredAt",
+         "updatedAt" = now()`,
+      [userId, questionId, RECENT_RESULTS_LIMIT],
+    );
+  }
+
   async claimMockSessionDuration(
     handle: TransactionHandle,
     sessionId: string,

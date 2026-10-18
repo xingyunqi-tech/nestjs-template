@@ -4,6 +4,7 @@ import { Question, QuestionSummary } from '../../domain/question';
 import { QuestionVersion } from '../../domain/question-version';
 import { QuestionDrawCandidate, QuestionDrawCriteria } from '../../domain/question-unit';
 import { QuestionFilterOptions } from '../../dto/query-admin-question.dto';
+import { TransactionHandle } from '../../../../common/database/transaction-handle';
 
 export type CreateQuestionData = Omit<
   Question,
@@ -41,6 +42,8 @@ export type KnowledgePointCountDelta = { knowledgePointId: string; delta: number
 
 /** 在持有科目锁的事务内执行的题目写操作 */
 export interface QuestionTransaction {
+  readonly handle: TransactionHandle;
+
   /** 按 id 顺序加行锁 */
   findForUpdate(ids: Question['id'][]): Promise<Question[]>;
 
@@ -93,6 +96,9 @@ export abstract class QuestionRepository {
   }): Promise<{ data: Question[]; total: number }>;
 
   abstract findVersions(questionId: Question['id']): Promise<QuestionVersion[]>;
+
+  /** 事务内增减全站首次作答正确人次，不低于 0 */
+  abstract adjustStatCorrect(handle: TransactionHandle, id: Question['id'], delta: number): Promise<void>;
 
   abstract findVersionsByKeys(keys: QuestionVersionKey[]): Promise<QuestionVersion[]>;
 

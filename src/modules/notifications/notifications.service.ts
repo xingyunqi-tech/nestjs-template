@@ -4,11 +4,12 @@ import { Queue } from 'bullmq';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { QueryNotificationDto } from './dto/query-notification.dto';
 import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
-import { NotificationRepository } from './infrastructure/persistence/notification.repository';
+import { InAppBatch, NotificationRepository } from './infrastructure/persistence/notification.repository';
 import { NotificationSettingRepository } from './infrastructure/persistence/notification-setting.repository';
 import { Notification, NotificationCategory, NotificationChannel, NotificationType } from './domain/notification';
 import { NotificationSetting } from './domain/notification-setting';
 import { IPaginationOptions } from '../../common/types/pagination-options';
+import { TransactionHandle } from '../../common/database/transaction-handle';
 import { NOTIFICATION_QUEUE } from '../../infrastructure/queue/notification-queue/notification-queue.constants';
 import { formatSubscribeAmount, formatSubscribeTime } from '../../integrations/wechat/utils/subscribe-value.util';
 import { WechatSubscribePayload, WechatSubscribeScene } from './wechat-subscribe';
@@ -29,6 +30,10 @@ export class NotificationsService {
     result: Omit<Notification['sentChannels'][string], 'sentAt'>,
   ): Promise<void> {
     await this.notificationRepository.recordChannelResult(id, channel, { ...result, sentAt: new Date() });
+  }
+
+  createInAppBatch(handle: TransactionHandle, batch: InAppBatch): Promise<number> {
+    return this.notificationRepository.insertInAppBatch(handle, batch);
   }
 
   async create(createNotificationDto: CreateNotificationDto): Promise<Notification> {

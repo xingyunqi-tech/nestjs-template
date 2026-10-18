@@ -50,6 +50,45 @@ export class WrongQuestionRelationalRepository implements WrongQuestionRepositor
     );
   }
 
+  async rebuildFromRecords(
+    handle: TransactionHandle,
+    data: Pick<WrongAnswerData, 'userId' | 'questionId' | 'subjectId'>,
+  ): Promise<void> {
+    const manager = entityManagerOf(handle);
+    await manager.query(`SELECT "id" FROM "wrong_question" WHERE "userId" = $1 AND "questionId" = $2 FOR UPDATE`, [
+      data.userId,
+      data.questionId,
+    ]);
+    const rows: { wrongCount: number }[] = await manager.query(
+      `WITH wrong AS (
+         SELECT r."id", r."answer", COALESCE(r."gradedAt", r."answeredAt") AS "wrongAt"
+         FROM "answer_record" AS r
+         WHERE r."userId" = $1 AND r."questionId" = $2 AND r."statsAppliedAt" IS NOT NULL AND r."isCorrect" = false
+       ),
+       latest AS (SELECT "answer" FROM wrong ORDER BY "wrongAt" DESC, "id" DESC LIMIT 1)
+       INSERT INTO "wrong_question" AS w
+         ("userId", "questionId", "subjectId", "wrongCount", "consecutiveCorrect", "lastWrongAnswer",
+          "firstWrongAt", "lastWrongAt", "status")
+       SELECT $1, $2, $3, count(*)::int, 0, (SELECT "answer" FROM latest), min("wrongAt"), max("wrongAt"), $4
+       FROM wrong
+       HAVING count(*) > 0
+       ON CONFLICT ("userId", "questionId") DO UPDATE SET
+         "wrongCount" = EXCLUDED."wrongCount",
+         "lastWrongAnswer" = EXCLUDED."lastWrongAnswer",
+         "firstWrongAt" = EXCLUDED."firstWrongAt",
+         "lastWrongAt" = EXCLUDED."lastWrongAt",
+         "updatedAt" = now()
+       RETURNING w."wrongCount"`,
+      [data.userId, data.questionId, data.subjectId, WrongQuestionStatus.ACTIVE],
+    );
+    if (rows.length === 0) {
+      await manager.query(`DELETE FROM "wrong_question" WHERE "userId" = $1 AND "questionId" = $2`, [
+        data.userId,
+        data.questionId,
+      ]);
+    }
+  }
+
   async recordCorrect(handle: TransactionHandle, data: CorrectAnswerData): Promise<void> {
     await entityManagerOf(handle).query(
       `UPDATE "wrong_question" SET

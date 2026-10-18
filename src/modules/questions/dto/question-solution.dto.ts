@@ -11,7 +11,7 @@ export class QuestionSolutionDto {
   analysis: string | null;
 }
 
-/** 答案取题目最新版本，解析取渲染的版本 */
+/** 答案与解析均取题目当前版本，analysis 为已解析文件引用的当前解析 */
 export function toQuestionSolution(question: Question, analysis: string | null): QuestionSolutionDto {
   const dto = new QuestionSolutionDto();
   if (question.answer && 'rubricId' in question.answer) {

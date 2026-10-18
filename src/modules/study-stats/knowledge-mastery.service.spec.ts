@@ -44,6 +44,7 @@ describe('KnowledgeMasteryService', () => {
     repository = {
       applyKnowledgeResult: vi.fn(),
       addDailyStat: vi.fn(),
+      rebuildKnowledgeStats: vi.fn(),
       claimMockSessionDuration: vi.fn(),
       findLeafStats: vi.fn().mockResolvedValue([]),
       aggregateSubtreeAnswers: vi.fn().mockResolvedValue([]),

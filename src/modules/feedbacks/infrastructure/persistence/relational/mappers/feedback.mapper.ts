@@ -12,6 +12,11 @@ export class FeedbackMapper {
     domain.contact = entity.contact;
     domain.status = entity.status;
     domain.reply = entity.reply;
+    domain.questionId = entity.questionId;
+    domain.questionVersion = entity.questionVersion;
+    domain.reason = entity.reason;
+    domain.errataId = entity.errataId;
+    domain.messageId = entity.messageId;
     domain.createdAt = entity.createdAt;
     domain.updatedAt = entity.updatedAt;
     return domain;
@@ -24,7 +29,7 @@ export class FeedbackMapper {
       entity.id = Number(domain.id);
     }
     if (domain.userId !== undefined) {
-      entity.userId = Number(domain.userId);
+      entity.userId = domain.userId === null ? null : Number(domain.userId);
     }
     if (domain.type !== undefined) {
       entity.type = domain.type;
@@ -43,6 +48,21 @@ export class FeedbackMapper {
     }
     if (domain.reply !== undefined) {
       entity.reply = domain.reply;
+    }
+    if (domain.questionId !== undefined) {
+      entity.questionId = domain.questionId;
+    }
+    if (domain.questionVersion !== undefined) {
+      entity.questionVersion = domain.questionVersion;
+    }
+    if (domain.reason !== undefined) {
+      entity.reason = domain.reason;
+    }
+    if (domain.errataId !== undefined) {
+      entity.errataId = domain.errataId;
+    }
+    if (domain.messageId !== undefined) {
+      entity.messageId = domain.messageId;
     }
 
     return entity;

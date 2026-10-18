@@ -42,6 +42,7 @@ import { FavoritesService } from '../favorites/favorites.service';
 import { QuestionNotesModule } from '../question-notes/question-notes.module';
 import { QuestionNotesService } from '../question-notes/question-notes.service';
 import { QuestionAssociationPrerequisiteService } from './question-association-prerequisite.service';
+import { AnswerRegradeService } from './answer-regrade.service';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { QuestionAssociationPrerequisiteService } from './question-association-p
     InProgressMockQuestionsService,
     QuestionAccessService,
     QuestionAssociationPrerequisiteService,
+    AnswerRegradeService,
     AbandonInactiveSessionsTask,
     {
       provide: StatsEventPublisher,
@@ -117,6 +119,8 @@ import { QuestionAssociationPrerequisiteService } from './question-association-p
     AnswerVisibilityService,
     InProgressMockQuestionsService,
     QuestionAssociationPrerequisiteService,
+    QuestionAccessService,
+    AnswerRegradeService,
   ],
 })
 export class PracticeModule {}

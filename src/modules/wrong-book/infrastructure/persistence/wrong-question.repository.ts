@@ -51,6 +51,12 @@ export abstract class WrongQuestionRepository {
   /** 事务内 upsert：错误次数 +1、连续答对归零、置为 ACTIVE */
   abstract recordWrong(handle: TransactionHandle, data: WrongAnswerData): Promise<void>;
 
+  /** 事务内按已计入的判错记录重算；无判错记录时删除，无错题记录时新建为 ACTIVE，不改状态与连续答对次数 */
+  abstract rebuildFromRecords(
+    handle: TransactionHandle,
+    data: Pick<WrongAnswerData, 'userId' | 'questionId' | 'subjectId'>,
+  ): Promise<void>;
+
   /** 事务内：ACTIVE 且 statDate 晚于 lastCorrectDate 时连续答对 +1，达到阈值置为 MASTERED */
   abstract recordCorrect(handle: TransactionHandle, data: CorrectAnswerData): Promise<void>;
 

@@ -5,6 +5,7 @@ import { Paper } from '../../domain/paper';
 import { PaperQuestion } from '../../domain/paper-question';
 import { PaperType } from '../../domain/paper-type';
 import { PaperFilterOptions } from '../../dto/query-admin-paper.dto';
+import { TransactionHandle } from '../../../../common/database/transaction-handle';
 
 export type CreatePaperData = Omit<Paper, 'id' | 'attemptCount' | 'questionCount' | 'createdAt' | 'updatedAt'>;
 
@@ -80,4 +81,7 @@ export abstract class PaperRepository {
 
   /** 仅删除草稿，返回是否删除 */
   abstract removeDraft(id: Paper['id']): Promise<boolean>;
+
+  /** 事务内把引用该题低于 version 的试卷题目版本更新为 version，返回更新行数 */
+  abstract raiseQuestionVersion(handle: TransactionHandle, questionId: string, version: number): Promise<number>;
 }

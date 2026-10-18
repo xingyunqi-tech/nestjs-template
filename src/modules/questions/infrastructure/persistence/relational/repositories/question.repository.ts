@@ -25,6 +25,11 @@ import { QuestionFilterOptions } from '../../../../dto/query-admin-question.dto'
 import { KnowledgePointQuestionCountService } from '../../../../../exams/knowledge-point-question-count.service';
 import { NullableType } from '../../../../../../common/types/nullable.type';
 import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
+import {
+  TransactionHandle,
+  createTransactionHandle,
+  entityManagerOf,
+} from '../../../../../../common/database/transaction-handle';
 
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
@@ -46,10 +51,14 @@ async function withKnowledgePoints(manager: EntityManager, entities: QuestionEnt
 }
 
 class RelationalQuestionTransaction implements QuestionTransaction {
+  readonly handle: TransactionHandle;
+
   constructor(
     private readonly manager: EntityManager,
     private readonly knowledgePointQuestionCountService: KnowledgePointQuestionCountService,
-  ) {}
+  ) {
+    this.handle = createTransactionHandle(manager);
+  }
 
   async findForUpdate(ids: Question['id'][]): Promise<Question[]> {
     if (ids.length === 0) {
@@ -304,6 +313,16 @@ export class QuestionRelationalRepository implements QuestionRepository {
       order: { version: 'DESC' },
     });
     return entities.map((entity) => QuestionVersionMapper.toDomain(entity));
+  }
+
+  async adjustStatCorrect(handle: TransactionHandle, id: Question['id'], delta: number): Promise<void> {
+    if (delta === 0) {
+      return;
+    }
+    await entityManagerOf(handle).query(
+      `UPDATE "question" SET "statCorrect" = GREATEST("statCorrect" + $2, 0) WHERE "id" = $1`,
+      [id, Math.trunc(delta)],
+    );
   }
 
   async findVersionsByKeys(keys: QuestionVersionKey[]): Promise<QuestionVersion[]> {

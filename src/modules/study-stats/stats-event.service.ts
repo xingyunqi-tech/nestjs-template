@@ -4,6 +4,7 @@ import { StatsEventRepository } from './infrastructure/persistence/stats-event.r
 import { WrongBookUpdater } from './ports/wrong-book.updater';
 import { LearningStatsUpdater } from './ports/learning-stats.updater';
 import { CheckInEvaluator } from './ports/check-in.evaluator';
+import { TransactionHandle } from '../../common/database/transaction-handle';
 
 const USER_LOCK_TTL_MS = 60_000;
 
@@ -66,6 +67,7 @@ export class StatsEventService {
   /** 返回是否计入；已计入或未判分时跳过 */
   async applyRecord(recordId: string): Promise<boolean> {
     const applied = await this.repository.transaction(async (tx) => {
+      await tx.lockRecordUser(recordId);
       if (!(await tx.claimRecord(recordId))) {
         return null;
       }
@@ -86,7 +88,13 @@ export class StatsEventService {
     return true;
   }
 
-  private async withUserLock(userId: number, work: () => Promise<void>): Promise<StatsJobResult> {
+  /** 事务内取得该用户统计写入的 advisory 锁，与统计事件处理器的事务互斥 */
+  lockUserStats(handle: TransactionHandle, userId: number): Promise<void> {
+    return this.repository.lockUser(handle, userId);
+  }
+
+  /** 持有 stats:user:{userId} 锁执行 work，锁被占用时不执行并返回 locked */
+  async withUserLock(userId: number, work: () => Promise<void>): Promise<StatsJobResult> {
     const key = statsUserLockKey(userId);
     const token = await this.lockService.tryAcquire(key, USER_LOCK_TTL_MS);
     if (!token) {

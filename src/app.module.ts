@@ -61,6 +61,9 @@ import { WrongBookApiModule } from './modules/wrong-book/wrong-book-api.module';
 import { StudyStatsApiModule } from './modules/study-stats/study-stats-api.module';
 import { QuestionNotesApiModule } from './modules/question-notes/question-notes-api.module';
 import { StudyStatsQueueModule } from './infrastructure/queue/study-stats-queue/study-stats-queue.module';
+import { ErrataModule } from './modules/errata/errata.module';
+import { QuestionReportsApiModule } from './modules/feedbacks/question-reports-api.module';
+import { ErrataQueueModule } from './infrastructure/queue/errata-queue/errata-queue.module';
 
 const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
   useClass: TypeOrmConfigService,
@@ -209,9 +212,12 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     WrongBookApiModule,
     StudyStatsApiModule,
     QuestionNotesApiModule,
+    ErrataModule,
+    QuestionReportsApiModule,
     ConditionalModule.registerWhen(ImportQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(MockSubmitQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(StudyStatsQueueModule, isRedisEnabled),
+    ConditionalModule.registerWhen(ErrataQueueModule, isRedisEnabled),
   ],
 })
 export class AppModule {}

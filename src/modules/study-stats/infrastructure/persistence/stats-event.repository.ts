@@ -5,6 +5,9 @@ import { StatsRecord } from '../../domain/stats-record';
 export interface StatsEventTransaction {
   readonly handle: TransactionHandle;
 
+  /** 以事务级 advisory 锁串行同一用户的统计写入 */
+  lockRecordUser(id: StatsRecord['id']): Promise<void>;
+
   /** 抢占记录，返回是否抢占成功 */
   claimRecord(id: StatsRecord['id']): Promise<boolean>;
 
@@ -21,6 +24,9 @@ export interface PendingRecordCursor {
 }
 
 export abstract class StatsEventRepository {
+  /** 事务内取得该用户统计写入的 advisory 锁，与统计事件处理器互斥 */
+  abstract lockUser(handle: TransactionHandle, userId: number): Promise<void>;
+
   abstract findRecordUserId(id: StatsRecord['id']): Promise<NullableType<number>>;
 
   /** 会话内已判分且未计入统计的记录 */

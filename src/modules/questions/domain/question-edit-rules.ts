@@ -31,6 +31,13 @@ export function isAnswerChange(current: QuestionContent, next: QuestionContent):
   );
 }
 
+/** 勘误只改答案内容，不能改题型、选项 key 集合与填空空数 */
+export function isErrataCompatible(current: QuestionContent, next: QuestionContent): boolean {
+  return (
+    current.type === next.type && optionKeys(current) === optionKeys(next) && blankCount(current) === blankCount(next)
+  );
+}
+
 export function sameKnowledgePoints(a: string[], b: string[]): boolean {
   return a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',');
 }

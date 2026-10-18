@@ -1,14 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsArray, MaxLength, ArrayMaxSize } from 'class-validator';
-import { FeedbackType } from '../domain/feedback';
+import { IsIn, IsNotEmpty, IsOptional, IsString, IsArray, MaxLength, ArrayMaxSize } from 'class-validator';
+import { FeedbackType, GENERAL_FEEDBACK_TYPES } from '../domain/feedback';
 
 export class CreateFeedbackDto {
   @ApiProperty({
-    enum: FeedbackType,
+    enum: GENERAL_FEEDBACK_TYPES,
     example: FeedbackType.SUGGESTION,
     description: 'Type of feedback',
   })
-  @IsEnum(FeedbackType)
+  @IsIn(GENERAL_FEEDBACK_TYPES)
   @IsNotEmpty()
   type: FeedbackType;
 

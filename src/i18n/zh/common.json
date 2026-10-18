@@ -194,5 +194,12 @@
   "paperRequired": "模拟考试请选择试卷",
   "mockSessionBusy": "考试状态变化中，请稍后重试",
   "reportNotAvailable": "会话结束后才能查看成绩报告",
-  "wrongQuestionNotFound": "错题不存在"
+  "wrongQuestionNotFound": "错题不存在",
+  "errataNotFound": "勘误任务不存在",
+  "errataMaterialNotAllowed": "材料不能勘误，请对小题勘误",
+  "errataQuestionNotPublished": "题目未发布过，请直接编辑",
+  "errataUnchanged": "答案与解析没有变化",
+  "errataNotRetryable": "只能继续执行失败或超过 10 分钟未进展的勘误任务",
+  "errataNotLinkable": "只能关联同一题目的勘误任务",
+  "questionReportNotFound": "纠错单不存在或不属于该题目"
 }

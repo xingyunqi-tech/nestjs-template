@@ -194,5 +194,12 @@
   "paperRequired": "Please choose a paper for the mock exam",
   "mockSessionBusy": "The exam is changing state, please try again later",
   "reportNotAvailable": "The report is available after the session ends",
-  "wrongQuestionNotFound": "Wrong question not found"
+  "wrongQuestionNotFound": "Wrong question not found",
+  "errataNotFound": "Errata not found",
+  "errataMaterialNotAllowed": "A material cannot be corrected, correct its sub-questions instead",
+  "errataQuestionNotPublished": "The question has never been published, edit it directly",
+  "errataUnchanged": "The answer and analysis are unchanged",
+  "errataNotRetryable": "Only failed errata or errata without progress for 10 minutes can be resumed",
+  "errataNotLinkable": "Only errata of the same question can be linked",
+  "questionReportNotFound": "Question report not found or not for this question"
 }

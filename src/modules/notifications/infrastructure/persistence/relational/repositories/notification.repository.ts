@@ -2,13 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Raw, Repository } from 'typeorm';
 import { NotificationEntity } from '../entities/notification.entity';
-import { NotificationRepository } from '../../notification.repository';
+import { InAppBatch, NotificationRepository } from '../../notification.repository';
 import { NotificationMapper } from '../mappers/notification.mapper';
 import { Notification, NotificationChannel } from '../../../../domain/notification';
 import { NullableType } from '../../../../../../common/types/nullable.type';
 import { QueryNotificationDto } from '../../../../dto/query-notification.dto';
 import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
 import { DeepPartial } from '../../../../../../common/types/deep-partial.type';
+import { TransactionHandle, entityManagerOf } from '../../../../../../common/database/transaction-handle';
 
 /** 用户可见的通知：投递渠道包含站内信 */
 const inAppChannel = (): FindOptionsWhere<NotificationEntity>['channels'] =>
@@ -34,6 +35,32 @@ export class NotificationRelationalRepository implements NotificationRepository 
       .andWhere('"deletedAt" IS NULL')
       .setParameter('patch', JSON.stringify({ [channel]: result }))
       .execute();
+  }
+
+  async insertInAppBatch(handle: TransactionHandle, batch: InAppBatch): Promise<number> {
+    if (batch.userIds.length === 0) {
+      return 0;
+    }
+    const rows: unknown[] = await entityManagerOf(handle).query(
+      `INSERT INTO "notification" ("userId", "type", "category", "title", "content", "metadata", "channels")
+       SELECT target."userId", $2::varchar, $3::varchar, $4::varchar, $5::text, $6::jsonb, $7::jsonb
+       FROM unnest($1::int[]) AS target("userId")
+       WHERE NOT EXISTS (
+         SELECT 1 FROM "notification_setting" AS setting
+         WHERE setting."userId" = target."userId" AND setting."category" = $3::varchar AND NOT setting."enableInApp"
+       )
+       RETURNING "id"`,
+      [
+        batch.userIds,
+        batch.type,
+        batch.category,
+        batch.title,
+        batch.content,
+        batch.metadata === null ? null : JSON.stringify(batch.metadata),
+        JSON.stringify([NotificationChannel.IN_APP]),
+      ],
+    );
+    return rows.length;
   }
 
   async create(data: Omit<Notification, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>): Promise<Notification> {

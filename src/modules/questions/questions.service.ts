@@ -11,10 +11,15 @@ import { QuestionType } from './domain/question-type';
 import { QuestionSource } from './domain/question-source';
 import { QuestionAction, QuestionStatus, QUESTION_TRANSITIONS, publishedCountDelta } from './domain/question-status';
 import { QuestionChangeType, QuestionVersion } from './domain/question-version';
-import { QuestionOption } from './domain/question-answer';
+import { QuestionAnswer, QuestionOption } from './domain/question-answer';
 import { QuestionContent, normalizeAnswer, validateQuestionContent } from './domain/question-content';
 import { computeContentHash } from './domain/content-hash';
-import { isAnswerChange, isSnapshotChanged, sameKnowledgePoints } from './domain/question-edit-rules';
+import {
+  isAnswerChange,
+  isErrataCompatible,
+  isSnapshotChanged,
+  sameKnowledgePoints,
+} from './domain/question-edit-rules';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { QuestionFilterOptions } from './dto/query-admin-question.dto';
@@ -35,6 +40,7 @@ import { FilesService } from '../files/files.service';
 import { FileUrlResolver, extractFileIds, replaceFileReferences } from '../files/file-url.resolver';
 import { BusinessException } from '../../common/exceptions/business.exception';
 import { IPaginationOptions } from '../../common/types/pagination-options';
+import { TransactionHandle } from '../../common/database/transaction-handle';
 
 type UserId = number | string;
 
@@ -44,6 +50,18 @@ type FileReferencingContent = Pick<Question, 'stem' | 'analysis' | 'material' | 
 export type FileReferenceSource = Partial<Pick<Question, 'stem' | 'options' | 'analysis' | 'material' | 'audioFileId'>>;
 
 const DEFAULT_DIFFICULTY = 3;
+
+export interface ErrataChanges {
+  answer: QuestionAnswer;
+  analysis?: string | null;
+}
+
+export interface ErrataVersion {
+  question: Question;
+  fromVersion: number;
+  toVersion: number;
+  answerChanged: boolean;
+}
 
 function notFound(): NotFoundException {
   return new NotFoundException({ error: 'questionNotFound' });
@@ -239,7 +257,7 @@ export class QuestionsService {
     });
   }
 
-  /** 题面按 versions 指定的版本渲染（缺省为当前版本，材料取小题快照记录的材料版本）；solutionIds 中的题目附带答案与解析 */
+  /** 题面按 versions 指定的版本渲染（缺省为当前版本，材料取小题快照记录的材料版本）；solutionIds 中的题目附带当前版本的答案与解析 */
   async renderUnits(
     units: QuestionUnit[],
     viewerUserId: UserId | null,
@@ -270,7 +288,7 @@ export class QuestionsService {
     const solutions = new Map(
       items
         .filter((item) => item.question.type !== QuestionType.MATERIAL && options.solutionIds?.has(item.question.id))
-        .map((item) => [item.question.id, toQuestionSolution(item.question, (item.snapshot ?? item.current).analysis)]),
+        .map((item) => [item.question.id, toQuestionSolution(item.question, item.current.analysis)]),
     );
     return {
       units: units.map((unit) => {
@@ -378,6 +396,59 @@ export class QuestionsService {
       }
       return { rootId, ids };
     });
+  }
+
+  /** 基于当前版本只改答案与解析并生成 ERRATA 版本；work 与版本写入在同一事务内执行 */
+  async applyErrata<T>(
+    id: Question['id'],
+    changes: ErrataChanges,
+    work: (handle: TransactionHandle, version: ErrataVersion) => Promise<T>,
+  ): Promise<T> {
+    const existing = await this.findById(id);
+    return this.questionRepository.transaction([existing.subjectId], async (tx) => {
+      const [current] = await tx.findForUpdate([id]);
+      if (!current) {
+        throw notFound();
+      }
+      if (current.type === QuestionType.MATERIAL) {
+        throw unprocessable('id', 'errataMaterialNotAllowed');
+      }
+      if (current.currentVersion === 0) {
+        throw conflict('errataQuestionNotPublished');
+      }
+      const next: QuestionContent = {
+        ...current,
+        answer: normalizeAnswer(current.type, changes.answer),
+        analysis: changes.analysis !== undefined ? changes.analysis : current.analysis,
+      };
+      this.assertContent(next, current.parentId !== null);
+      if (!isErrataCompatible(current, next)) {
+        throw unprocessable('answer', 'invalidQuestionAnswer');
+      }
+      if (!isSnapshotChanged(current, next)) {
+        throw unprocessable('answer', 'errataUnchanged');
+      }
+
+      const [parent] = current.parentId ? await tx.findForUpdate([current.parentId]) : [];
+      const toVersion = current.currentVersion + 1;
+      await tx.update([id], { answer: next.answer, analysis: next.analysis, currentVersion: toVersion });
+      await tx.insertVersion({
+        ...snapshotOf(next, parent ? parent.currentVersion : null),
+        questionId: id,
+        version: toVersion,
+        changeType: QuestionChangeType.ERRATA,
+      });
+      return work(tx.handle, {
+        question: current,
+        fromVersion: current.currentVersion,
+        toVersion,
+        answerChanged: isAnswerChange(current, next),
+      });
+    });
+  }
+
+  adjustStatCorrect(handle: TransactionHandle, id: Question['id'], delta: number): Promise<void> {
+    return this.questionRepository.adjustStatCorrect(handle, id, delta);
   }
 
   private async insertInTx(tx: QuestionTransaction, dto: CreateQuestionDto, content: QuestionContent): Promise<string> {

@@ -13,6 +13,7 @@ export enum NotificationCategory {
   SYSTEM = 'SYSTEM',
   PROMOTION = 'PROMOTION',
   ACTIVITY = 'ACTIVITY',
+  STUDY = 'STUDY',
 }
 
 export enum NotificationChannel {

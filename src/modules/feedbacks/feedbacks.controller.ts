@@ -72,8 +72,7 @@ export class FeedbacksController {
   async findOne(@Request() request: RequestWithUser, @Param('id', ParseIdPipe) id: number): Promise<Feedback> {
     const feedback = await this.feedbacksService.findById(id);
 
-    // Check if feedback exists and belongs to current user
-    if (feedback?.userId.toString() !== request.user.id.toString()) {
+    if (feedback?.userId?.toString() !== request.user.id.toString()) {
       throw new NotFoundException({
         error: 'feedbackNotFound',
       });

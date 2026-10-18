@@ -42,6 +42,7 @@ describe('WrongBookService', () => {
     repository = {
       recordWrong: vi.fn().mockResolvedValue(undefined),
       recordCorrect: vi.fn().mockResolvedValue(undefined),
+      rebuildFromRecords: vi.fn().mockResolvedValue(undefined),
       findActivePublishedQuestionIds: vi.fn().mockResolvedValue([]),
       findQuestionIdsInBook: vi.fn().mockResolvedValue([]),
       findManyWithPaginationAndCount: vi.fn(),

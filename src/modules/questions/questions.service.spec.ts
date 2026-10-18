@@ -23,6 +23,7 @@ import { FilesService } from '../files/files.service';
 import { FileUrlResolver } from '../files/file-url.resolver';
 import { FileVisibility } from '../files/domain/file-visibility';
 import { BusinessException } from '../../common/exceptions/business.exception';
+import { TransactionHandle } from '../../common/database/transaction-handle';
 
 const SUBJECT = 's1';
 const PUBLIC_FILE = '11111111-1111-4111-8111-111111111111';
@@ -39,6 +40,7 @@ const OPTIONS = [
 ];
 
 class FakeStore implements QuestionTransaction {
+  readonly handle = Object.freeze({}) as TransactionHandle;
   questions = new Map<string, Question>();
   points: TaggableKnowledgePoint[] = [
     { id: 'leaf1', subjectId: SUBJECT, isLeaf: true },
@@ -186,6 +188,7 @@ describe('QuestionsService', () => {
       findDrawCandidates,
       findManyWithPaginationAndCount: vi.fn(),
       findVersions: vi.fn(),
+      adjustStatCorrect: vi.fn().mockResolvedValue(undefined),
       findVersionsByKeys: (keys) =>
         Promise.resolve(
           store.versions
@@ -568,6 +571,102 @@ describe('QuestionsService', () => {
     });
   });
 
+  describe('applyErrata', () => {
+    const noop = () => Promise.resolve('done');
+
+    it('should write an ERRATA version with the new answer and analysis and run work in the same transaction', async () => {
+      const { id } = await create(singleDto());
+      await publish(id);
+      const work = vi.fn().mockResolvedValue('linked');
+
+      await expect(service.applyErrata(id, { answer: { keys: ['A'] }, analysis: '新解析' }, work)).resolves.toBe(
+        'linked',
+      );
+
+      expect(store.questions.get(id)).toMatchObject({ answer: { keys: ['A'] }, analysis: '新解析', currentVersion: 2 });
+      expect(store.versions.at(-1)).toMatchObject({
+        questionId: id,
+        version: 2,
+        changeType: QuestionChangeType.ERRATA,
+        answer: { keys: ['A'] },
+        analysis: '新解析',
+        stem: '下列说法正确的是',
+      });
+      expect(work).toHaveBeenCalledWith(store.handle, {
+        question: expect.objectContaining({ id, currentVersion: 1 }),
+        fromVersion: 1,
+        toVersion: 2,
+        answerChanged: true,
+      });
+    });
+
+    it('should keep the current analysis when none is given and record the material version of a sub-question', async () => {
+      const material = await create(materialDto());
+      const sub = await create(singleDto({ parentId: material.id }));
+      await publish(material.id);
+
+      await service.applyErrata(sub.id, { answer: { keys: ['A'] } }, noop);
+
+      expect(store.versions.at(-1)).toMatchObject({ questionId: sub.id, analysis: '解析', materialVersion: 1 });
+    });
+
+    it('should roll back the version when work fails', async () => {
+      const { id } = await create(singleDto());
+      await publish(id);
+
+      await expect(
+        service.applyErrata(id, { answer: { keys: ['A'] } }, () => Promise.reject(new Error('conflict'))),
+      ).rejects.toThrow('conflict');
+
+      expect(store.questions.get(id)).toMatchObject({ answer: { keys: ['B'] }, currentVersion: 1 });
+      expect(store.versions).toHaveLength(1);
+    });
+
+    it('should reject questions never published', async () => {
+      const { id } = await create(singleDto());
+
+      await expect(service.applyErrata(id, { answer: { keys: ['A'] } }, noop)).rejects.toMatchObject({
+        response: { error: 'errataQuestionNotPublished' },
+      });
+    });
+
+    it('should reject materials', async () => {
+      const material = await create(materialDto());
+      await create(singleDto({ parentId: material.id }));
+      await publish(material.id);
+
+      await expect(service.applyErrata(material.id, { answer: { keys: ['A'] } }, noop)).rejects.toMatchObject({
+        response: { errors: { id: 'errataMaterialNotAllowed' } },
+      });
+    });
+
+    it('should reject an unchanged answer and analysis', async () => {
+      const { id } = await create(singleDto());
+      await publish(id);
+
+      await expect(service.applyErrata(id, { answer: { keys: ['B'] } }, noop)).rejects.toMatchObject({
+        response: { errors: { answer: 'errataUnchanged' } },
+      });
+    });
+
+    it('should reject answers with unknown options or a different blank count', async () => {
+      const single = await create(singleDto());
+      const fill = await create(
+        singleDto({ type: QuestionType.FILL, stem: '填空', options: null, answer: { blanks: [['甲']] } }),
+      );
+      await publish(single.id);
+      await publish(fill.id);
+
+      await expect(service.applyErrata(single.id, { answer: { keys: ['Z'] } }, noop)).rejects.toMatchObject({
+        response: { errors: { answer: 'invalidQuestionAnswer' } },
+      });
+      await expect(service.applyErrata(fill.id, { answer: { blanks: [['甲'], ['乙']] } }, noop)).rejects.toMatchObject({
+        response: { errors: { answer: 'invalidQuestionAnswer' } },
+      });
+      await expect(service.applyErrata(fill.id, { answer: { blanks: [['丙']] } }, noop)).resolves.toBe('done');
+    });
+  });
+
   describe('remove', () => {
     it('should delete a draft material together with its sub-questions', async () => {
       const material = await create(materialDto());
@@ -773,6 +872,22 @@ describe('QuestionsService', () => {
       expect(current.units[0]).toMatchObject({ material: '资料 v2', version: 2 });
       expect(current.units[0].children?.[0]).toMatchObject({ stem: '小题 v2', version: 2 });
       expect(pinned.solutions.size).toBe(0);
+    });
+
+    it('should render the pinned stem with the current answer and analysis', async () => {
+      const { id } = await create(singleDto({ stem: '题干 v1', analysis: '旧解析' }));
+      await publish(id);
+      await service.update(id, { stem: '题干 v2' }, 1);
+      await service.applyErrata(id, { answer: { keys: ['A'] }, analysis: '新解析' }, () => Promise.resolve());
+      const units = await service.findUnits([id]);
+
+      const { units: rendered, solutions } = await service.renderUnits(units, null, {
+        versions: { [id]: 1 },
+        solutionIds: new Set([id]),
+      });
+
+      expect(rendered[0]).toMatchObject({ stem: '题干 v1', version: 1 });
+      expect(solutions.get(id)).toEqual({ answer: { keys: ['A'] }, analysis: '新解析' });
     });
 
     it('should attach the latest answer and the rendered analysis only to requested questions', async () => {

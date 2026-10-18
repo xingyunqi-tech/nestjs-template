@@ -22,6 +22,7 @@ import { PaperFilterOptions } from '../../../../dto/query-admin-paper.dto';
 import { ContentStatus } from '../../../../../exams/domain/content-status';
 import { NullableType } from '../../../../../../common/types/nullable.type';
 import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
+import { TransactionHandle, entityManagerOf } from '../../../../../../common/database/transaction-handle';
 
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
@@ -253,6 +254,16 @@ export class PaperRelationalRepository implements PaperRepository {
   async removeDraft(id: Paper['id']): Promise<boolean> {
     const result = await this.paperRepository.delete({ id, status: ContentStatus.DRAFT });
     return (result.affected ?? 0) > 0;
+  }
+
+  async raiseQuestionVersion(handle: TransactionHandle, questionId: string, version: number): Promise<number> {
+    const result = await entityManagerOf(handle)
+      .createQueryBuilder()
+      .update(PaperQuestionEntity)
+      .set({ questionVersion: version })
+      .where('"questionId" = :questionId AND "questionVersion" < :version', { questionId, version })
+      .execute();
+    return result.affected ?? 0;
   }
 
   private async insertQuestions(manager: EntityManager, questions: PaperQuestion[]): Promise<void> {

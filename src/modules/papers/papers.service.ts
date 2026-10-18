@@ -20,6 +20,7 @@ import { QuestionsService } from '../questions/questions.service';
 import { QuestionStatus } from '../questions/domain/question-status';
 import { QuestionType } from '../questions/domain/question-type';
 import { IPaginationOptions } from '../../common/types/pagination-options';
+import { TransactionHandle } from '../../common/database/transaction-handle';
 
 type UserId = number | string;
 type ViewerId = UserId | null;
@@ -88,6 +89,10 @@ export class PapersService {
   /** 用户在科目内作答过（答案非空）的题目所属出题单位 id；since 为空时不限时间 */
   findAnsweredRootIds(userId: number, subjectId: string, since: Date | null = null): Promise<string[]> {
     return this.paperAttemptRepository.findAnsweredRootIds(userId, subjectId, since);
+  }
+
+  raiseQuestionVersion(handle: TransactionHandle, questionId: string, version: number): Promise<number> {
+    return this.paperRepository.raiseQuestionVersion(handle, questionId, version);
   }
 
   /** 按 sort 排序 */

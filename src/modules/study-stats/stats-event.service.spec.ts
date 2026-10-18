@@ -39,6 +39,7 @@ function createStore(records: StatsRecord[]) {
   const handle = {} as TransactionHandle;
   const tx: Mocked<StatsEventTransaction> = {
     handle,
+    lockRecordUser: vi.fn().mockResolvedValue(undefined),
     claimRecord: vi.fn((id: string) => {
       if (applied.has(id) || !graded.has(id)) {
         return Promise.resolve(false);
@@ -74,6 +75,7 @@ describe('StatsEventService', () => {
       return true;
     });
     repository = {
+      lockUser: vi.fn().mockResolvedValue(undefined),
       findRecordUserId: vi.fn((id: string) => Promise.resolve(records.find((item) => item.id === id)?.userId ?? null)),
       findPendingSessionRecords: vi.fn().mockResolvedValue(records.map(({ id, userId }) => ({ id, userId }))),
       findStalePendingRecords: vi.fn(),
@@ -116,6 +118,10 @@ describe('StatsEventService', () => {
     await expect(service.processRecord('r1')).resolves.toBe('done');
 
     expect(calls).toEqual(['wrongBook:r1', 'learning:r1', 'checkIn:r1', 'first:r1', 'learning.afterCommit:r1']);
+    expect(store.tx.lockRecordUser).toHaveBeenCalledWith('r1');
+    expect(store.tx.lockRecordUser.mock.invocationCallOrder[0]).toBeLessThan(
+      store.tx.claimRecord.mock.invocationCallOrder[0],
+    );
     expect(store.tx.claimRecord).toHaveBeenCalledWith('r1');
     expect(store.tx.findRecord).toHaveBeenCalledWith('r1');
     expect(steps.wrongBook.apply).toHaveBeenCalledWith(store.handle, record());

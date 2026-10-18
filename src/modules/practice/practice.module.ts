@@ -7,6 +7,8 @@ import { QuestionsModule } from '../questions/questions.module';
 import { PapersModule } from '../papers/papers.module';
 import { FilesModule } from '../files/files.module';
 import { AppConfigModule } from '../config/config.module';
+import { StudyStatsModule } from '../study-stats/study-stats.module';
+import { StatsEventQueue } from '../study-stats/stats-event.queue';
 import { SchedulerModule } from '../../infrastructure/scheduler/scheduler.module';
 import { isRedisEnabled } from '../../infrastructure/redis/config/redis.config';
 import { MOCK_SUBMIT_QUEUE } from '../../infrastructure/queue/mock-submit-queue/mock-submit-queue.constants';
@@ -23,7 +25,7 @@ import { QuestionAccessService } from './question-access.service';
 import { AbandonInactiveSessionsTask } from './abandon-inactive-sessions.task';
 import { PracticeSessionsController } from './practice-sessions.controller';
 import { QuestionAccessController } from './question-access.controller';
-import { NoopStatsEventPublisher, StatsEventPublisher } from './ports/stats-event.publisher';
+import { StatsEventPublisher } from './ports/stats-event.publisher';
 import { EmptyWrongBookReader, WrongBookReader } from './ports/wrong-book.reader';
 import { EmptyWeakPointReader, WeakPointReader } from './ports/weak-point.reader';
 import { EmptyQuestionAssociationReader, QuestionAssociationReader } from './ports/question-association.reader';
@@ -37,6 +39,7 @@ import { EmptyQuestionAssociationReader, QuestionAssociationReader } from './por
     FilesModule,
     AppConfigModule,
     SchedulerModule,
+    StudyStatsModule,
     ConditionalModule.registerWhen(BullModule.registerQueue({ name: MOCK_SUBMIT_QUEUE }), isRedisEnabled),
   ],
   controllers: [PracticeSessionsController, QuestionAccessController],
@@ -52,7 +55,11 @@ import { EmptyQuestionAssociationReader, QuestionAssociationReader } from './por
     InProgressMockQuestionsService,
     QuestionAccessService,
     AbandonInactiveSessionsTask,
-    { provide: StatsEventPublisher, useClass: NoopStatsEventPublisher },
+    {
+      provide: StatsEventPublisher,
+      inject: [StatsEventQueue],
+      useFactory: (queue: StatsEventQueue): StatsEventPublisher => queue,
+    },
     { provide: WrongBookReader, useClass: EmptyWrongBookReader },
     { provide: WeakPointReader, useClass: EmptyWeakPointReader },
     { provide: QuestionAssociationReader, useClass: EmptyQuestionAssociationReader },

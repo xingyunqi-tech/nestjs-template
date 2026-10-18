@@ -37,6 +37,9 @@ export class AiUsageItemDto {
   @ApiProperty({ type: Number })
   outputTokens: number;
 
+  @ApiProperty({ type: Number, description: '命中上下文缓存的输入 token，已包含在 inputTokens 中' })
+  cachedInputTokens: number;
+
   @ApiProperty({ type: Number, description: '估算成本（元）' })
   cost: number;
 }
@@ -53,6 +56,9 @@ export class AiUsageTotalDto {
 
   @ApiProperty({ type: Number })
   outputTokens: number;
+
+  @ApiProperty({ type: Number, description: '命中上下文缓存的输入 token，已包含在 inputTokens 中' })
+  cachedInputTokens: number;
 
   @ApiProperty({ type: Number, description: '估算成本（元）' })
   cost: number;

@@ -74,6 +74,7 @@ export class AiBudgetService {
         failures: usage.countsAsRequest && usage.failed ? 1 : 0,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
+        cachedInputTokens: usage.cachedInputTokens,
         cost,
       }),
     ]);

@@ -67,14 +67,14 @@ describe('AiBudgetService', () => {
       kind: 'chat',
       model: 'deepseek-chat',
       inputTokens: 1_000_000,
-      cachedInputTokens: 0,
+      cachedInputTokens: 500_000,
       outputTokens: 0,
       failed: true,
       countsAsRequest: true,
     });
 
-    expect(cost).toBe(2);
-    await expect(store.getNumber(aiCostKey('2026-10-18'))).resolves.toBe(2);
+    expect(cost).toBe(1.25);
+    await expect(store.getNumber(aiCostKey('2026-10-18'))).resolves.toBe(1.25);
     expect(usageRepository.increment).toHaveBeenCalledWith({
       date: '2026-10-18',
       model: 'deepseek-chat',
@@ -83,7 +83,8 @@ describe('AiBudgetService', () => {
       failures: 1,
       inputTokens: 1_000_000,
       outputTokens: 0,
-      cost: 2,
+      cachedInputTokens: 500_000,
+      cost: 1.25,
     });
   });
 

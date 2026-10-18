@@ -12,6 +12,7 @@ export class AiUsageDailyMapper {
     domain.failures = raw.failures;
     domain.inputTokens = Number(raw.inputTokens);
     domain.outputTokens = Number(raw.outputTokens);
+    domain.cachedInputTokens = Number(raw.cachedInputTokens);
     domain.cost = Number(raw.cost);
     domain.createdAt = raw.createdAt;
     domain.updatedAt = raw.updatedAt;

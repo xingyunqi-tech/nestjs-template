@@ -113,7 +113,7 @@ describe('AI tutor', () => {
     model: llmModel,
     inputTokens: 1000,
     outputTokens: 200,
-    cachedInputTokens: 0,
+    cachedInputTokens: 400,
   });
 
   const answerScript: LlmScript = async function* () {
@@ -469,8 +469,16 @@ describe('AI tutor', () => {
       await as(account).get(`/admin/ai/usage?from=${today}&to=${today}`).expect(403);
       const usageResponse = await as(admin).get(`/admin/ai/usage?from=${today}&to=${today}`).expect(200);
       const row = (usageResponse.body.data.items as { model: string }[]).find((item) => item.model === llmModel);
-      expect(row).toMatchObject({ date: today, kind: 'chat', requests: 3, failures: 1, inputTokens: 3000 });
+      expect(row).toMatchObject({
+        date: today,
+        kind: 'chat',
+        requests: 3,
+        failures: 1,
+        inputTokens: 3000,
+        cachedInputTokens: 1200,
+      });
       expect(usageResponse.body.data.total.requests).toBeGreaterThanOrEqual(3);
+      expect(usageResponse.body.data.total.cachedInputTokens).toBeGreaterThanOrEqual(1200);
       await as(admin).get(`/admin/ai/usage?from=${today}&to=2000-01-01`).expect(422);
     });
 

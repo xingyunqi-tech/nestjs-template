@@ -15,16 +15,27 @@ export class AiUsageDailyRelationalRepository implements AiUsageDailyRepository 
 
   async increment(data: AiUsageIncrement): Promise<void> {
     await this.repository.query(
-      `INSERT INTO "ai_usage_daily" ("date", "model", "kind", "requests", "failures", "inputTokens", "outputTokens", "cost")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO "ai_usage_daily" ("date", "model", "kind", "requests", "failures", "inputTokens", "outputTokens", "cachedInputTokens", "cost")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT ("date", "model", "kind") DO UPDATE SET
          "requests" = "ai_usage_daily"."requests" + EXCLUDED."requests",
          "failures" = "ai_usage_daily"."failures" + EXCLUDED."failures",
          "inputTokens" = "ai_usage_daily"."inputTokens" + EXCLUDED."inputTokens",
          "outputTokens" = "ai_usage_daily"."outputTokens" + EXCLUDED."outputTokens",
+         "cachedInputTokens" = "ai_usage_daily"."cachedInputTokens" + EXCLUDED."cachedInputTokens",
          "cost" = "ai_usage_daily"."cost" + EXCLUDED."cost",
          "updatedAt" = now()`,
-      [data.date, data.model, data.kind, data.requests, data.failures, data.inputTokens, data.outputTokens, data.cost],
+      [
+        data.date,
+        data.model,
+        data.kind,
+        data.requests,
+        data.failures,
+        data.inputTokens,
+        data.outputTokens,
+        data.cachedInputTokens,
+        data.cost,
+      ],
     );
   }
 

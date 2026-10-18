@@ -36,6 +36,7 @@ export class AiUsageService {
       failures: row.failures,
       inputTokens: row.inputTokens,
       outputTokens: row.outputTokens,
+      cachedInputTokens: row.cachedInputTokens,
       cost: row.cost,
     }));
     const total = items.reduce<AiUsageTotalDto>(
@@ -44,9 +45,10 @@ export class AiUsageService {
         failures: sum.failures + item.failures,
         inputTokens: sum.inputTokens + item.inputTokens,
         outputTokens: sum.outputTokens + item.outputTokens,
+        cachedInputTokens: sum.cachedInputTokens + item.cachedInputTokens,
         cost: sum.cost + item.cost,
       }),
-      { requests: 0, failures: 0, inputTokens: 0, outputTokens: 0, cost: 0 },
+      { requests: 0, failures: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cost: 0 },
     );
     total.cost = Math.round(total.cost * COST_SCALE) / COST_SCALE;
     return { items, total };

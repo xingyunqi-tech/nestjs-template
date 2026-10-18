@@ -29,6 +29,9 @@ export class AiUsageDailyEntity extends EntityRelationalHelper {
   @Column({ type: 'bigint', default: 0 })
   outputTokens: string;
 
+  @Column({ type: 'bigint', default: 0 })
+  cachedInputTokens: string;
+
   @Column({ type: 'numeric', precision: 14, scale: 6, default: 0 })
   cost: string;
 

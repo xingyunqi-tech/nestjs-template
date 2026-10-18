@@ -14,6 +14,7 @@ describe('AiUsageService', () => {
       failures: 1,
       inputTokens: 100,
       outputTokens: 50,
+      cachedInputTokens: 40,
       cost,
     });
   let quota: { getStatus: ReturnType<typeof vi.fn> };
@@ -40,9 +41,23 @@ describe('AiUsageService', () => {
     expect(usage.findRange).toHaveBeenCalledWith('2026-10-12', '2026-10-18');
     expect(result.items).toEqual([
       expect.objectContaining({ date: '2026-10-17', model: 'a', kind: 'chat', requests: 3, failures: 1, cost: 0.1 }),
-      expect.objectContaining({ date: '2026-10-18', model: 'b', inputTokens: 100, outputTokens: 50, cost: 0.2 }),
+      expect.objectContaining({
+        date: '2026-10-18',
+        model: 'b',
+        inputTokens: 100,
+        outputTokens: 50,
+        cachedInputTokens: 40,
+        cost: 0.2,
+      }),
     ]);
-    expect(result.total).toEqual({ requests: 6, failures: 2, inputTokens: 200, outputTokens: 100, cost: 0.3 });
+    expect(result.total).toEqual({
+      requests: 6,
+      failures: 2,
+      inputTokens: 200,
+      outputTokens: 100,
+      cachedInputTokens: 80,
+      cost: 0.3,
+    });
   });
 
   it.each([

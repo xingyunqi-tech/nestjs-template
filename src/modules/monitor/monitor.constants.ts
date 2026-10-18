@@ -4,6 +4,7 @@ import { IMPORT_QUEUE } from '../../infrastructure/queue/import-queue/import-que
 import { MOCK_SUBMIT_QUEUE } from '../../infrastructure/queue/mock-submit-queue/mock-submit-queue.constants';
 import { STUDY_STATS_QUEUE } from '../../infrastructure/queue/study-stats-queue/study-stats-queue.constants';
 import { ERRATA_QUEUE } from '../../infrastructure/queue/errata-queue/errata-queue.constants';
+import { ACCOUNT_CLEANUP_QUEUE } from '../../infrastructure/queue/account-cleanup-queue/account-cleanup-queue.constants';
 
 export const MONITORED_QUEUES: readonly string[] = [
   MAIL_QUEUE,
@@ -12,6 +13,7 @@ export const MONITORED_QUEUES: readonly string[] = [
   MOCK_SUBMIT_QUEUE,
   STUDY_STATS_QUEUE,
   ERRATA_QUEUE,
+  ACCOUNT_CLEANUP_QUEUE,
 ];
 
 /** 接收告警站内通知的管理员数量上限 */

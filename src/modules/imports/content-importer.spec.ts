@@ -105,7 +105,7 @@ describe('ContentImporter', () => {
     );
   });
 
-  const run = (content: ImportPackage, publish = false) => importer.run(content, { publish, ownerUserId: 7 });
+  const run = (content: ImportPackage, publish = false) => importer.run(content, { publish });
 
   it('should import knowledge points, a material group, standalone questions and a paper', async () => {
     const progress: number[] = [];
@@ -127,7 +127,7 @@ describe('ContentImporter', () => {
         },
         { 'chart.png': PNG_BYTES },
       ),
-      { publish: true, ownerUserId: 7 },
+      { publish: true },
       (current) => {
         progress.push(current.succeeded + current.failed);
         return Promise.resolve();
@@ -138,7 +138,7 @@ describe('ContentImporter', () => {
     expect(progress).toEqual([0, 1, 2, 3, 4]);
     expect(knowledgePointsService.ensurePath).toHaveBeenCalledWith(SUBJECT_ID, ['常识', '科技']);
     expect(fileStorageService.storeDeduplicated).toHaveBeenCalledTimes(1);
-    expect(fileStorageService.storeDeduplicated).toHaveBeenCalledWith(PNG_BYTES, 'chart.png', FilePurpose.IMAGE, 7);
+    expect(fileStorageService.storeDeduplicated).toHaveBeenCalledWith(PNG_BYTES, 'chart.png', FilePurpose.IMAGE, null);
     expect(fileStorageService.remove).not.toHaveBeenCalled();
 
     const [materialUnit, fillUnit] = questionsService.importUnit.mock.calls.map(([unit]) => unit);

@@ -82,6 +82,9 @@ export abstract class PaperRepository {
   /** 仅删除草稿，返回是否删除 */
   abstract removeDraft(id: Paper['id']): Promise<boolean>;
 
+  /** 删除该用户的个人生成试卷；仍有练习会话引用时因外键约束失败 */
+  abstract removeGeneratedByOwner(ownerUserId: number): Promise<void>;
+
   /** 事务内把引用该题低于 version 的试卷题目版本更新为 version，返回更新行数 */
   abstract raiseQuestionVersion(handle: TransactionHandle, questionId: string, version: number): Promise<number>;
 }

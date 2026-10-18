@@ -164,7 +164,7 @@ export class ImportsService {
       let reported = 0;
       const outcome = await this.contentImporter.run(
         pkg,
-        { publish: job.publishOnImport, ownerUserId: job.createdBy },
+        { publish: job.publishOnImport },
         async (progress: ImportProgress) => {
           const processed = progress.succeeded + progress.failed + progress.skipped;
           if (processed === 0 || processed - reported >= IMPORT_PROGRESS_INTERVAL) {

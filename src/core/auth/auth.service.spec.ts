@@ -467,13 +467,12 @@ describe('AuthService', () => {
       expect(usersService.remove).not.toHaveBeenCalled();
     });
 
-    it('should delete the account and its sessions after the current password is verified', async () => {
+    it('should delete the account after the current password is verified', async () => {
       await useUser({ password: await hashPassword(OLD_PASSWORD) });
 
       await service.softDelete({ id: 1 }, { oldPassword: OLD_PASSWORD });
 
       expect(usersService.remove).toHaveBeenCalledWith(1);
-      expect(sessionService.deleteByUserId).toHaveBeenCalledWith({ userId: 1 });
     });
   });
 

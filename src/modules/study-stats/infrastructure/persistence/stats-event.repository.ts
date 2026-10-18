@@ -42,4 +42,7 @@ export abstract class StatsEventRepository {
 
   /** 在事务内执行；死锁时短暂退避后整体重试 */
   abstract transaction<T>(work: (tx: StatsEventTransaction) => Promise<T>): Promise<T>;
+
+  /** 持有该用户的统计 advisory 锁，删除知识点统计、每日统计与打卡 */
+  abstract removeUserStats(userId: number): Promise<void>;
 }

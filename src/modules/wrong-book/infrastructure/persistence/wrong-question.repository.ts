@@ -78,4 +78,6 @@ export abstract class WrongQuestionRepository {
 
   /** 已掌握的恢复为 ACTIVE 且连续答对归零；不存在时返回 null */
   abstract restore(userId: number, questionId: string): Promise<NullableType<WrongQuestion>>;
+
+  abstract removeByUser(userId: number): Promise<void>;
 }

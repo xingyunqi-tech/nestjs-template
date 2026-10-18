@@ -58,4 +58,7 @@ export abstract class NotificationRepository {
   abstract countByUserId(userId: Notification['userId'], filterOptions?: QueryNotificationDto | null): Promise<number>;
 
   abstract remove(id: Notification['id']): Promise<void>;
+
+  /** 物理删除该用户的全部通知（含已软删除的） */
+  abstract removeByUser(userId: number): Promise<void>;
 }

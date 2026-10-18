@@ -43,6 +43,7 @@ import { QuestionNotesModule } from '../question-notes/question-notes.module';
 import { QuestionNotesService } from '../question-notes/question-notes.service';
 import { QuestionAssociationPrerequisiteService } from './question-association-prerequisite.service';
 import { AnswerRegradeService } from './answer-regrade.service';
+import { PracticeAccountCleaner } from './practice-account.cleaner';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { AnswerRegradeService } from './answer-regrade.service';
     QuestionAssociationPrerequisiteService,
     AnswerRegradeService,
     AbandonInactiveSessionsTask,
+    PracticeAccountCleaner,
     {
       provide: StatsEventPublisher,
       inject: [StatsEventQueue],

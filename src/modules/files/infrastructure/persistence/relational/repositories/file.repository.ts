@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FileEntity } from '../entities/file.entity';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, MoreThan, Repository } from 'typeorm';
 import { FileRepository } from '../../file.repository';
 
 import { FileMapper } from '../mappers/file.mapper';
@@ -47,7 +47,10 @@ export class FileRelationalRepository implements FileRepository {
     visibility: NonNullable<FileType['visibility']>,
     mimeType: string,
   ): Promise<NullableType<FileType>> {
-    const entity = await this.fileRepository.findOne({ where: { sha256, visibility, mimeType }, order: { id: 'ASC' } });
+    const entity = await this.fileRepository.findOne({
+      where: { sha256, visibility, mimeType, ownerUserId: IsNull() },
+      order: { id: 'ASC' },
+    });
     return entity ? FileMapper.toDomain(entity) : null;
   }
 
@@ -55,8 +58,24 @@ export class FileRelationalRepository implements FileRepository {
     await this.fileRepository.delete({ id });
   }
 
+  async removeWithin(id: FileType['id'], afterDelete: () => Promise<void>): Promise<void> {
+    await this.fileRepository.manager.transaction(async (manager) => {
+      await manager.delete(FileEntity, { id });
+      await afterDelete();
+    });
+  }
+
   async findByPath(path: FileType['path']): Promise<NullableType<FileType>> {
     const entity = await this.fileRepository.findOne({ where: { path } });
     return entity ? FileMapper.toDomain(entity) : null;
+  }
+
+  async findByOwner(ownerUserId: number, afterId: FileType['id'] | null, limit: number): Promise<FileType[]> {
+    const entities = await this.fileRepository.find({
+      where: { ownerUserId, ...(afterId !== null && { id: MoreThan(afterId) }) },
+      order: { id: 'ASC' },
+      take: limit,
+    });
+    return entities.map((entity) => FileMapper.toDomain(entity));
   }
 }

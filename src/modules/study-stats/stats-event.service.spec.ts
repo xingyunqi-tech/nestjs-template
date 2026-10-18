@@ -79,6 +79,7 @@ describe('StatsEventService', () => {
       findRecordUserId: vi.fn((id: string) => Promise.resolve(records.find((item) => item.id === id)?.userId ?? null)),
       findPendingSessionRecords: vi.fn().mockResolvedValue(records.map(({ id, userId }) => ({ id, userId }))),
       findStalePendingRecords: vi.fn(),
+      removeUserStats: vi.fn(),
       transaction: vi.fn((work) => work(store.tx)) as never,
     };
     service = new StatsEventService(

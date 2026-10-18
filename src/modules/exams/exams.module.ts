@@ -11,6 +11,7 @@ import { ExamProfilesController } from './exam-profiles.controller';
 import { AdminExamsController } from './admin-exams.controller';
 import { AdminSubjectsController } from './admin-subjects.controller';
 import { AdminKnowledgePointsController } from './admin-knowledge-points.controller';
+import { ExamsAccountCleaner } from './exams-account.cleaner';
 
 @Module({
   imports: [RelationalExamPersistenceModule, FilesModule],
@@ -22,6 +23,7 @@ import { AdminKnowledgePointsController } from './admin-knowledge-points.control
     AdminKnowledgePointsController,
   ],
   providers: [
+    ExamsAccountCleaner,
     ExamsService,
     SubjectsService,
     KnowledgePointsService,

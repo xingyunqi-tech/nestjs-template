@@ -64,6 +64,9 @@ import { StudyStatsQueueModule } from './infrastructure/queue/study-stats-queue/
 import { ErrataModule } from './modules/errata/errata.module';
 import { QuestionReportsApiModule } from './modules/feedbacks/question-reports-api.module';
 import { ErrataQueueModule } from './infrastructure/queue/errata-queue/errata-queue.module';
+import { ConsentsModule } from './modules/consents/consents.module';
+import { AccountCleanupModule } from './modules/account-cleanup/account-cleanup.module';
+import { AccountCleanupQueueModule } from './infrastructure/queue/account-cleanup-queue/account-cleanup-queue.module';
 
 const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
   useClass: TypeOrmConfigService,
@@ -214,10 +217,13 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     QuestionNotesApiModule,
     ErrataModule,
     QuestionReportsApiModule,
+    ConsentsModule,
+    AccountCleanupModule,
     ConditionalModule.registerWhen(ImportQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(MockSubmitQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(StudyStatsQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(ErrataQueueModule, isRedisEnabled),
+    ConditionalModule.registerWhen(AccountCleanupQueueModule, isRedisEnabled),
   ],
 })
 export class AppModule {}

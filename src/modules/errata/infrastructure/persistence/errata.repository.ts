@@ -47,8 +47,12 @@ export abstract class ErrataRepository {
   /** 记录用户已处理并累加已处理数；同一用户只计一次 */
   abstract markUserProcessed(handle: TransactionHandle, id: Errata['id'], userId: number): Promise<void>;
 
-  /** 事务内把至多 limit 个未通知的已处理用户置为已通知，返回这些用户 */
-  abstract claimNoticeUsers(handle: TransactionHandle, id: Errata['id'], limit: number): Promise<number[]>;
+  /** 事务内把至多 limit 个未通知的已处理用户置为已通知，返回置为已通知的数量与其中未注销的用户 */
+  abstract claimNoticeUsers(
+    handle: TransactionHandle,
+    id: Errata['id'],
+    limit: number,
+  ): Promise<{ claimed: number; activeUserIds: number[] }>;
 
   abstract finish(id: Errata['id']): Promise<NullableType<Errata>>;
 
@@ -59,4 +63,6 @@ export abstract class ErrataRepository {
 
   /** 在事务内执行；死锁时短暂退避后整体重试 */
   abstract transaction<T>(work: (handle: TransactionHandle) => Promise<T>): Promise<T>;
+
+  abstract removeUserLinks(userId: number): Promise<void>;
 }

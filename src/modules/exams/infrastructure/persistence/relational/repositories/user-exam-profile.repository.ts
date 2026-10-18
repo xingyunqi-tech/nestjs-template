@@ -141,4 +141,8 @@ export class UserExamProfileRelationalRepository implements UserExamProfileRepos
   private async lockUserProfiles(manager: EntityManager, userId: UserExamProfile['userId']): Promise<void> {
     await manager.query(`SELECT pg_advisory_xact_lock(hashtext('user_exam_profile'), $1)`, [Number(userId)]);
   }
+
+  async removeByUser(userId: number): Promise<void> {
+    await this.profileRepository.delete({ userId });
+  }
 }

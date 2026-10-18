@@ -32,6 +32,7 @@ describe('ExamProfilesService', () => {
       upsert: vi.fn(),
       markCurrent: vi.fn(),
       remove: vi.fn(),
+      removeByUser: vi.fn(),
     };
     examsService = {
       getPublishedExam: vi.fn(),

@@ -182,6 +182,11 @@ export abstract class PracticeSessionRepository {
   /** 将 lastActiveAt 早于 before 的进行中会话置为 ABANDONED，跳过 excludedModes，返回处理数 */
   abstract abandonInactive(before: Date, excludedModes: PracticeMode[], batchSize: number): Promise<number>;
 
+  abstract findInProgressMockIds(userId: number): Promise<string[]>;
+
+  /** 删除该用户的全部会话，作答记录随会话级联删除 */
+  abstract removeByUser(userId: number): Promise<void>;
+
   /** 在事务内执行；死锁时短暂退避后整体重试 */
   abstract transaction<T>(work: (tx: PracticeTransaction) => Promise<T>): Promise<T>;
 }

@@ -20,7 +20,8 @@ describe('FilesService', () => {
   let service: FilesService;
 
   beforeEach(() => {
-    repository = { create: vi.fn(), findById: vi.fn(), findByIds: vi.fn(), findByPath: vi.fn(), findReusable: vi.fn(), remove: vi.fn() };
+    repository = { create: vi.fn(), findById: vi.fn(), findByIds: vi.fn(), findByPath: vi.fn(), findReusable: vi.fn(), remove: vi.fn(), findByOwner: vi.fn(),
+      removeWithin: vi.fn() };
     service = new FilesService(repository);
   });
 

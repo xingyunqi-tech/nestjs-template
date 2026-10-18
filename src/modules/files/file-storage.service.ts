@@ -11,7 +11,7 @@ import { FilePurpose } from './domain/file-purpose';
 import { FileVisibility } from './domain/file-visibility';
 import { FileDriver } from './config/file-config.type';
 import { createS3Client } from './config/s3-client.factory';
-import { FILE_PURPOSE_RULES, fileExtension, fileTooLargeError, fileTypeNotAllowedError, mimeTypeFor } from './file-purposes';
+import { FILE_PURPOSE_RULES, fileExtension, fileOwnerFor, fileTooLargeError, fileTypeNotAllowedError, mimeTypeFor } from './file-purposes';
 import { LOCAL_FILES_ROOT, localDiskPath, localFileUrlPath } from './local-file-path';
 import { AllConfigType } from '../../config/config.type';
 
@@ -44,7 +44,7 @@ export class FileStorageService {
     return this.write(content, fileName, purpose, mimeType, ownerUserId);
   }
 
-  /** 公共用途下已有相同内容与类型的文件时复用，不再写入 */
+  /** 公共用途下已有相同内容与类型的无主文件时复用，不再写入 */
   async storeDeduplicated(
     content: Buffer,
     fileName: string,
@@ -72,13 +72,15 @@ export class FileStorageService {
     return Buffer.from(await output.Body.transformToByteArray());
   }
 
+  /** 事务内先删除记录再删除存储对象，存储删除失败时回滚记录 */
   async remove(file: FileType): Promise<void> {
-    await this.fileRepository.remove(file.id);
-    if (this.isLocal()) {
-      await unlink(localDiskPath(file.path)).catch(() => undefined);
-    } else {
-      await this.client().send(new DeleteObjectCommand({ Bucket: this.bucket(), Key: file.path }));
-    }
+    await this.fileRepository.removeWithin(file.id, async () => {
+      if (this.isLocal()) {
+        await unlink(localDiskPath(file.path)).catch(() => undefined);
+      } else {
+        await this.client().send(new DeleteObjectCommand({ Bucket: this.bucket(), Key: file.path }));
+      }
+    });
   }
 
   private assertStorable(content: Buffer, fileName: string, purpose: FilePurpose): string {
@@ -112,7 +114,7 @@ export class FileStorageService {
     }
     return this.fileRepository.create({
       path,
-      ownerUserId,
+      ownerUserId: fileOwnerFor(purpose, ownerUserId),
       visibility: FILE_PURPOSE_RULES[purpose].visibility,
       mimeType,
       size: content.length,

@@ -242,4 +242,8 @@ export class WrongQuestionRelationalRepository implements WrongQuestionRepositor
     const entity = await this.repository.findOne({ where: { userId, questionId } });
     return entity ? WrongQuestionMapper.toDomain(entity) : null;
   }
+
+  async removeByUser(userId: number): Promise<void> {
+    await this.repository.delete({ userId });
+  }
 }

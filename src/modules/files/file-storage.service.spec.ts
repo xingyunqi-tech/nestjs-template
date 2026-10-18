@@ -32,11 +32,13 @@ describe('FileStorageService', () => {
       findByPath: vi.fn(),
       findReusable: vi.fn().mockResolvedValue(null),
       remove: vi.fn(),
+      removeWithin: vi.fn((_id: string, afterDelete: () => Promise<void>) => afterDelete()),
+      findByOwner: vi.fn(),
     };
     const values: Record<string, unknown> = {
       'file.driver': FileDriver.LOCAL,
       'app.apiPrefix': 'api',
-      'file.maxSizes': { [FilePurpose.IMAGE]: 1024, [FilePurpose.IMPORT]: 1024 },
+      'file.maxSizes': { [FilePurpose.IMAGE]: 1024, [FilePurpose.CONTENT_IMAGE]: 1024, [FilePurpose.IMPORT]: 1024 },
     };
     const configService = { get: vi.fn((key: string) => values[key]), getOrThrow: vi.fn((key: string) => values[key]) };
     service = new FileStorageService(repository, configService as unknown as ConfigService<AllConfigType>);
@@ -90,8 +92,16 @@ describe('FileStorageService', () => {
 
     await service.remove(file);
 
-    expect(repository.remove).toHaveBeenCalledWith(file.id);
+    expect(repository.removeWithin).toHaveBeenCalledWith(file.id, expect.any(Function));
     await expect(readFile(localDiskPath(file.path))).rejects.toThrow();
+  });
+
+  it('should store content assets without an owner', async () => {
+    await service.store(CONTENT, 'e.png', FilePurpose.CONTENT_IMAGE, 1);
+    await service.store(CONTENT, 'f.png', FilePurpose.IMAGE, 1);
+
+    expect(repository.create).toHaveBeenNthCalledWith(1, expect.objectContaining({ ownerUserId: null }));
+    expect(repository.create).toHaveBeenNthCalledWith(2, expect.objectContaining({ ownerUserId: 1 }));
   });
 
   it('should reject disallowed types and oversized content', async () => {

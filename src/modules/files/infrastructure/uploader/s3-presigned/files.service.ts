@@ -9,7 +9,7 @@ import { randomStringGenerator } from '@nestjs/common/utils/random-string-genera
 import { ConfigService } from '@nestjs/config';
 import { FileType } from '../../../domain/file';
 import { FilePurpose } from '../../../domain/file-purpose';
-import { FILE_PURPOSE_RULES, fileTooLargeError, fileTypeNotAllowedError, mimeTypeFor } from '../../../file-purposes';
+import { FILE_PURPOSE_RULES, fileOwnerFor, fileTooLargeError, fileTypeNotAllowedError, mimeTypeFor } from '../../../file-purposes';
 import { AllConfigType } from '../../../../../config/config.type';
 
 @Injectable()
@@ -58,7 +58,7 @@ export class FilesS3PresignedService {
     const signedUrl = await getSignedUrl(this.s3, command, { expiresIn: 3600 });
     const data = await this.fileRepository.create({
       path: key,
-      ownerUserId,
+      ownerUserId: fileOwnerFor(purpose, ownerUserId),
       visibility: FILE_PURPOSE_RULES[purpose].visibility,
       mimeType,
       size: file.fileSize,

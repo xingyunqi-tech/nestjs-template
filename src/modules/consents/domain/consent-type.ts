@@ -1,0 +1,5 @@
+export enum ConsentType {
+  PRIVACY_POLICY = 'PRIVACY_POLICY',
+  USER_AGREEMENT = 'USER_AGREEMENT',
+  AI_SERVICE = 'AI_SERVICE',
+}

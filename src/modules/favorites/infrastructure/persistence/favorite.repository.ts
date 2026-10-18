@@ -39,4 +39,6 @@ export abstract class FavoriteRepository {
   ): Promise<void>;
 
   abstract count(filter: FavoriteFilter): Promise<number>;
+
+  abstract removeByUser(userId: number): Promise<void>;
 }

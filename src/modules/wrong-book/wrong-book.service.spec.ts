@@ -49,6 +49,7 @@ describe('WrongBookService', () => {
       countSummary: vi.fn(),
       master: vi.fn(),
       restore: vi.fn(),
+      removeByUser: vi.fn(),
     };
     config = { getValue: vi.fn().mockResolvedValue(3) };
     service = new WrongBookService(repository, config as unknown as AppConfigService);

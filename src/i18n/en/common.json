@@ -201,5 +201,7 @@
   "errataUnchanged": "The answer and analysis are unchanged",
   "errataNotRetryable": "Only failed errata or errata without progress for 10 minutes can be resumed",
   "errataNotLinkable": "Only errata of the same question can be linked",
-  "questionReportNotFound": "Question report not found or not for this question"
+  "questionReportNotFound": "Question report not found or not for this question",
+  "consentVersionNotCurrent": "The agreement version is outdated, please review and agree again",
+  "userNotDeleted": "User has not been deleted"
 }

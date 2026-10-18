@@ -16,6 +16,7 @@ import { ErrataQueue } from './errata.queue';
 import { AdminErrataController } from './admin-errata.controller';
 import { ErrataWatchdogTask } from './errata-watchdog.task';
 import { SchedulerModule } from '../../infrastructure/scheduler/scheduler.module';
+import { ErrataAccountCleaner } from './errata-account.cleaner';
 
 @Module({
   imports: [
@@ -31,7 +32,7 @@ import { SchedulerModule } from '../../infrastructure/scheduler/scheduler.module
     ConditionalModule.registerWhen(BullModule.registerQueue({ name: ERRATA_QUEUE }), isRedisEnabled),
   ],
   controllers: [AdminErrataController],
-  providers: [ErrataService, ErrataQueue, ErrataWatchdogTask],
+  providers: [ErrataService, ErrataQueue, ErrataWatchdogTask, ErrataAccountCleaner],
   exports: [ErrataService, RelationalErrataPersistenceModule],
 })
 export class ErrataModule {}

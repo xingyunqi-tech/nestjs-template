@@ -10,6 +10,7 @@ const MB = 1024 * 1024;
 const MAX_SIZE_ENV: Record<FilePurpose, [env: string, defaultBytes: number]> = {
   [FilePurpose.IMAGE]: ['FILE_IMAGE_MAX_SIZE', 5 * MB],
   [FilePurpose.PRIVATE_IMAGE]: ['FILE_PRIVATE_IMAGE_MAX_SIZE', 10 * MB],
+  [FilePurpose.CONTENT_IMAGE]: ['FILE_CONTENT_IMAGE_MAX_SIZE', 5 * MB],
   [FilePurpose.AUDIO]: ['FILE_AUDIO_MAX_SIZE', 20 * MB],
   [FilePurpose.IMPORT]: ['FILE_IMPORT_MAX_SIZE', 50 * MB],
   [FilePurpose.EXPORT]: ['FILE_EXPORT_MAX_SIZE', 20 * MB],
@@ -53,6 +54,11 @@ class EnvironmentVariablesValidator {
   @IsInt()
   @Min(1)
   FILE_PRIVATE_IMAGE_MAX_SIZE: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  FILE_CONTENT_IMAGE_MAX_SIZE: number;
 
   @IsOptional()
   @IsInt()

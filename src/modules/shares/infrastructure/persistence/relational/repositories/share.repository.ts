@@ -139,4 +139,8 @@ export class ShareRelationalRepository implements ShareRepository {
   async remove(id: Share['id']): Promise<void> {
     await this.shareRepository.softDelete(id);
   }
+
+  async removeByUser(userId: number): Promise<void> {
+    await this.shareRepository.delete({ userId });
+  }
 }

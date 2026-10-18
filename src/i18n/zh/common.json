@@ -201,5 +201,7 @@
   "errataUnchanged": "答案与解析没有变化",
   "errataNotRetryable": "只能继续执行失败或超过 10 分钟未进展的勘误任务",
   "errataNotLinkable": "只能关联同一题目的勘误任务",
-  "questionReportNotFound": "纠错单不存在或不属于该题目"
+  "questionReportNotFound": "纠错单不存在或不属于该题目",
+  "consentVersionNotCurrent": "协议版本已更新，请重新查看后同意",
+  "userNotDeleted": "用户未注销"
 }

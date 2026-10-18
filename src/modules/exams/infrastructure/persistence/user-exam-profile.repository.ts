@@ -27,4 +27,6 @@ export abstract class UserExamProfileRepository {
 
   /** 删除当前考试时，最近关注的另一个已发布考试成为当前，没有则为空；返回是否存在该关注 */
   abstract remove(userId: UserExamProfile['userId'], examId: UserExamProfile['examId']): Promise<boolean>;
+
+  abstract removeByUser(userId: number): Promise<void>;
 }

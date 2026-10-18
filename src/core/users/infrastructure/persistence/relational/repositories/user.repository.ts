@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { FindOptionsWhere, Repository, In, IsNull } from 'typeorm';
+import { FindOptionsWhere, Repository, In, IsNull, Not } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { UserEntity } from '../entities/user.entity';
 import { NullableType } from '../../../../../../common/types/nullable.type';
@@ -96,6 +96,14 @@ export class UsersRelationalRepository implements UserRepository {
       relations: { photo: true, role: true, status: true },
     });
 
+    return entity ? UserMapper.toDomain(entity) : null;
+  }
+
+  async findDeletedById(id: User['id']): Promise<NullableType<User>> {
+    const entity = await this.usersRepository.findOne({
+      where: { id: Number(id), deletedAt: Not(IsNull()) },
+      withDeleted: true,
+    });
     return entity ? UserMapper.toDomain(entity) : null;
   }
 
@@ -205,5 +213,9 @@ export class UsersRelationalRepository implements UserRepository {
       });
       await manager.softDelete(UserEntity, id);
     });
+  }
+
+  async detachPhoto(id: User['id']): Promise<void> {
+    await this.usersRepository.update({ id: Number(id) }, { photo: null });
   }
 }

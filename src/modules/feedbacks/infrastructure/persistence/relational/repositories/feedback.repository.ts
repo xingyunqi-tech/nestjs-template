@@ -159,4 +159,8 @@ export class FeedbackRelationalRepository implements FeedbackRepository {
       .execute();
     return result.affected ?? 0;
   }
+
+  async anonymizeByUser(userId: number): Promise<void> {
+    await this.feedbackRepository.update({ userId }, { userId: null, contact: null, images: null });
+  }
 }

@@ -37,4 +37,14 @@ export class MockSubmitScheduler {
       );
     }
   }
+
+  /** 移除尚未执行的自动交卷任务，执行中的任务不受影响 */
+  async cancel(sessionIds: string[]): Promise<void> {
+    if (!this.queue) {
+      return;
+    }
+    for (const sessionId of sessionIds) {
+      await this.queue.remove(sessionId);
+    }
+  }
 }

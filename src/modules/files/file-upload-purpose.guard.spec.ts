@@ -15,6 +15,7 @@ const MB = 1024 * 1024;
 const MAX_SIZES: Record<FilePurpose, number> = {
   [FilePurpose.IMAGE]: 5 * MB,
   [FilePurpose.PRIVATE_IMAGE]: 10 * MB,
+  [FilePurpose.CONTENT_IMAGE]: 5 * MB,
   [FilePurpose.AUDIO]: 20 * MB,
   [FilePurpose.IMPORT]: 50 * MB,
   [FilePurpose.EXPORT]: 20 * MB,
@@ -43,13 +44,17 @@ describe('FileUploadPurposeGuard', () => {
     await expect(guard.canActivate(context('private-image', RoleEnum.user))).resolves.toBe(true);
   });
 
-  it('should allow admins to upload audio', async () => {
+  it('should allow admins to upload audio and content images', async () => {
     await expect(guard.canActivate(context('audio', RoleEnum.admin, 15 * MB))).resolves.toBe(true);
+    await expect(guard.canActivate(context('content-image', RoleEnum.admin))).resolves.toBe(true);
   });
 
   it('should reject users uploading audio or import packages with 403', async () => {
     await expect(guard.canActivate(context('audio', RoleEnum.user))).rejects.toBeInstanceOf(ForbiddenException);
     await expect(guard.canActivate(context('import', RoleEnum.user))).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(guard.canActivate(context('content-image', RoleEnum.user))).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('should reject an unknown purpose with 422', async () => {

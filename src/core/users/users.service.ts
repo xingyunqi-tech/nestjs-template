@@ -20,6 +20,7 @@ import { throwValidationError } from '../../common/utils/exceptions.util';
 import { maskEmail, maskPhone } from '../../common/utils/sanitize.utils';
 import { validateEmailUniqueness, validatePhoneUniqueness } from '../../common/utils/validation.utils';
 import { SessionService } from '../session/session.service';
+import { AccountCleanupProducer } from '../../infrastructure/account-cleanup/account-cleanup.producer';
 
 @Injectable()
 export class UsersService {
@@ -29,6 +30,7 @@ export class UsersService {
     private readonly usersRepository: UserRepository,
     private readonly filesService: FilesService,
     private readonly sessionService: SessionService,
+    private readonly accountCleanupProducer: AccountCleanupProducer,
   ) {}
 
   /**
@@ -196,6 +198,14 @@ export class UsersService {
     return this.usersRepository.findById(id);
   }
 
+  findDeletedById(id: User['id']): Promise<NullableType<User>> {
+    return this.usersRepository.findDeletedById(id);
+  }
+
+  detachPhoto(id: User['id']): Promise<void> {
+    return this.usersRepository.detachPhoto(id);
+  }
+
   /**
    * 根据ID列表批量查找用户
    * @param ids - 用户ID列表
@@ -339,12 +349,14 @@ export class UsersService {
   }
 
   /**
-   * 删除用户（软删除）
+   * 注销用户：先删除全部会话再软删除，并入队账号数据清理
    * @param id - 用户ID
    */
   async remove(id: User['id']): Promise<void> {
     this.logger.log(`Removing user: ${id}`);
+    await this.sessionService.deleteByUserId({ userId: id });
     await this.usersRepository.remove(id);
+    await this.accountCleanupProducer.enqueueCleanup(Number(id));
     this.logger.log(`User removed successfully: ${id}`);
   }
 }

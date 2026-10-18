@@ -467,6 +467,18 @@ export class PracticeSessionRelationalRepository implements PracticeSessionRepos
     }
   }
 
+  async findInProgressMockIds(userId: number): Promise<string[]> {
+    const rows = await this.sessionRepository.find({
+      select: { id: true },
+      where: { userId, mode: PracticeMode.MOCK, status: PracticeSessionStatus.IN_PROGRESS },
+    });
+    return rows.map((row) => row.id);
+  }
+
+  async removeByUser(userId: number): Promise<void> {
+    await this.sessionRepository.delete({ userId });
+  }
+
   async transaction<T>(work: (tx: PracticeTransaction) => Promise<T>): Promise<T> {
     for (let attempt = 1; ; attempt += 1) {
       try {

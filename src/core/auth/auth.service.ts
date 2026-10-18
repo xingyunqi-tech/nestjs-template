@@ -685,7 +685,6 @@ export class AuthService {
     await this.verifyIdentity(currentUser, dto);
 
     await this.usersService.remove(user.id);
-    await this.sessionService.deleteByUserId({ userId: user.id });
     this.logger.log(`User account deleted: ${user.id}`);
   }
 

@@ -28,6 +28,8 @@ describe('FileUrlResolver', () => {
       findByPath: vi.fn(),
       findReusable: vi.fn(),
       remove: vi.fn(),
+      findByOwner: vi.fn(),
+      removeWithin: vi.fn(),
       findByIds: vi.fn().mockResolvedValue([
         file(PUBLIC_ID, 'audio.mp3', FileVisibility.PUBLIC, null),
         file(PRIVATE_ID, 'photo.jpg', FileVisibility.PRIVATE, 1),

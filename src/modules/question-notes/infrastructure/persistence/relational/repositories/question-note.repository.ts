@@ -64,4 +64,8 @@ export class QuestionNoteRelationalRepository implements QuestionNoteRepository 
     );
     return rows.map((row) => row.questionId);
   }
+
+  async removeByUser(userId: number): Promise<void> {
+    await this.repository.delete({ userId });
+  }
 }

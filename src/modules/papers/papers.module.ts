@@ -10,6 +10,7 @@ import { DailyQuestionSetsService } from './daily-question-sets.service';
 import { GenerateDailyQuestionSetsTask } from './generate-daily-question-sets.task';
 import { PaperGenerationService } from './paper-generation.service';
 import { CleanupGeneratedPapersTask } from './cleanup-generated-papers.task';
+import { PapersAccountCleaner } from './papers-account.cleaner';
 import { PapersController } from './papers.controller';
 import { AdminPapersController } from './admin-papers.controller';
 import { AdminPaperRulesController } from './admin-paper-rules.controller';
@@ -25,6 +26,7 @@ import { AdminDailyQuestionSetsController } from './admin-daily-question-sets.co
     DailyQuestionSetsService,
     GenerateDailyQuestionSetsTask,
     CleanupGeneratedPapersTask,
+    PapersAccountCleaner,
   ],
   exports: [PapersService, PaperRulesService, DailyQuestionSetsService, RelationalPaperPersistenceModule],
 })

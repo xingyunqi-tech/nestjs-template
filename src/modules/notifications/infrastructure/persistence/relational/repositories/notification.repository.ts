@@ -211,4 +211,8 @@ export class NotificationRelationalRepository implements NotificationRepository 
   async remove(id: Notification['id']): Promise<void> {
     await this.notificationRepository.softDelete(id);
   }
+
+  async removeByUser(userId: number): Promise<void> {
+    await this.notificationRepository.delete({ userId });
+  }
 }

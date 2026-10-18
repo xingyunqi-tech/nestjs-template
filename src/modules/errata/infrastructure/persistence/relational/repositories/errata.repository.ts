@@ -134,17 +134,32 @@ export class ErrataRelationalRepository implements ErrataRepository {
     }
   }
 
-  async claimNoticeUsers(handle: TransactionHandle, id: string, limit: number): Promise<number[]> {
-    const [rows]: [{ userId: number }[], number] = await entityManagerOf(handle).query(
-      `UPDATE "errata_user" SET "notified" = true
-       WHERE "errataId" = $1 AND NOT "notified" AND "userId" IN (
-         SELECT "userId" FROM "errata_user" WHERE "errataId" = $1 AND NOT "notified"
-         ORDER BY "userId" LIMIT $2 FOR UPDATE SKIP LOCKED
+  async claimNoticeUsers(
+    handle: TransactionHandle,
+    id: string,
+    limit: number,
+  ): Promise<{ claimed: number; activeUserIds: number[] }> {
+    const rows: { userId: number; active: boolean }[] = await entityManagerOf(handle).query(
+      `WITH claimed AS (
+         UPDATE "errata_user" SET "notified" = true
+         WHERE "errataId" = $1 AND NOT "notified" AND "userId" IN (
+           SELECT "userId" FROM "errata_user" WHERE "errataId" = $1 AND NOT "notified"
+           ORDER BY "userId" LIMIT $2 FOR UPDATE SKIP LOCKED
+         )
+         RETURNING "userId"
        )
-       RETURNING "userId"`,
+       SELECT c."userId", (u."id" IS NOT NULL) AS "active"
+       FROM claimed AS c
+       LEFT JOIN "user" AS u ON u."id" = c."userId" AND u."deletedAt" IS NULL`,
       [id, limit],
     );
-    return rows.map((row) => row.userId).sort((a, b) => a - b);
+    return {
+      claimed: rows.length,
+      activeUserIds: rows
+        .filter((row) => row.active)
+        .map((row) => row.userId)
+        .sort((a, b) => a - b),
+    };
   }
 
   async finish(id: string): Promise<NullableType<Errata>> {
@@ -191,5 +206,9 @@ export class ErrataRelationalRepository implements ErrataRepository {
         await sleep(RETRY_BACKOFF_MS * attempt + Math.floor(Math.random() * RETRY_BACKOFF_MS));
       }
     }
+  }
+
+  async removeUserLinks(userId: number): Promise<void> {
+    await this.repository.query(`DELETE FROM "errata_user" WHERE "userId" = $1`, [userId]);
   }
 }

@@ -85,4 +85,8 @@ export class NotificationSettingRelationalRepository implements NotificationSett
       }
     }
   }
+
+  async removeByUser(userId: number): Promise<void> {
+    await this.settingRepository.delete({ userId });
+  }
 }

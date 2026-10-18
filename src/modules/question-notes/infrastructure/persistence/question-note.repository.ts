@@ -24,4 +24,6 @@ export abstract class QuestionNoteRepository {
 
   /** questionIds 中该用户写过笔记的题目 */
   abstract findQuestionIdsWithNote(userId: number, questionIds: string[]): Promise<string[]>;
+
+  abstract removeByUser(userId: number): Promise<void>;
 }

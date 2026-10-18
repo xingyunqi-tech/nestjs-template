@@ -251,6 +251,10 @@ export class PaperRelationalRepository implements PaperRepository {
     }
   }
 
+  async removeGeneratedByOwner(ownerUserId: number): Promise<void> {
+    await this.paperRepository.delete({ ownerUserId, type: PaperType.GENERATED });
+  }
+
   async removeDraft(id: Paper['id']): Promise<boolean> {
     const result = await this.paperRepository.delete({ id, status: ContentStatus.DRAFT });
     return (result.affected ?? 0) > 0;

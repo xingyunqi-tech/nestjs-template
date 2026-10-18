@@ -99,4 +99,8 @@ export class FavoriteRelationalRepository implements FavoriteRepository {
   async count(filter: FavoriteFilter): Promise<number> {
     return this.favoriteRepository.count({ where: whereOf(filter) });
   }
+
+  async removeByUser(userId: number): Promise<void> {
+    await this.favoriteRepository.delete({ userId });
+  }
 }

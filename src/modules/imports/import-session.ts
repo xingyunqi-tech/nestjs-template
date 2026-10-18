@@ -47,7 +47,6 @@ export interface ImportSessionDeps {
 
 export interface ImportRunOptions {
   publish: boolean;
-  ownerUserId: number | null;
 }
 
 export type ImportProgressListener = (progress: ImportProgress) => Promise<void>;
@@ -634,7 +633,7 @@ export class ImportSession {
           content,
           request.name,
           request.purpose,
-          this.options.ownerUserId,
+          null,
         );
         this.assetFileIds.set(cacheKey, file.id);
         if (!reused) {

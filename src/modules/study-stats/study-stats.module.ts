@@ -17,6 +17,7 @@ import { CheckInEvaluator } from './ports/check-in.evaluator';
 import { LearningStatsService } from './learning-stats.service';
 import { CheckInService } from './check-in.service';
 import { KnowledgeMasteryService } from './knowledge-mastery.service';
+import { StudyStatsAccountCleaner } from './study-stats-account.cleaner';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { KnowledgeMasteryService } from './knowledge-mastery.service';
     KnowledgeMasteryService,
     { provide: LearningStatsUpdater, useExisting: LearningStatsService },
     { provide: CheckInEvaluator, useExisting: CheckInService },
+    StudyStatsAccountCleaner,
   ],
   exports: [StatsEventQueue, StatsEventService, LearningStatsService, CheckInService, KnowledgeMasteryService],
 })

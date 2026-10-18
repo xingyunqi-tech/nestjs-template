@@ -8,7 +8,7 @@ import { AllConfigType } from '../../../../../config/config.type';
 import { FileType } from '../../../domain/file';
 import { FilePurpose } from '../../../domain/file-purpose';
 import { FileVisibility } from '../../../domain/file-visibility';
-import { FILE_PURPOSE_RULES, fileTooLargeError, mimeTypeFor } from '../../../file-purposes';
+import { FILE_PURPOSE_RULES, fileOwnerFor, fileTooLargeError, mimeTypeFor } from '../../../file-purposes';
 import { NullableType } from '../../../../../common/types/nullable.type';
 import { localFileUrlPath } from '../../../local-file-path';
 
@@ -41,7 +41,7 @@ export class FilesLocalService {
     return {
       file: await this.fileRepository.create({
         path: this.publicPath(file.path),
-        ownerUserId,
+        ownerUserId: fileOwnerFor(purpose, ownerUserId),
         visibility: FILE_PURPOSE_RULES[purpose].visibility,
         mimeType: mimeTypeFor(purpose, file.originalname),
         size: file.size,

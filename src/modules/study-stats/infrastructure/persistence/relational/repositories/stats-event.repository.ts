@@ -161,4 +161,14 @@ export class StatsEventRelationalRepository implements StatsEventRepository {
       }
     }
   }
+
+  removeUserStats(userId: number): Promise<void> {
+    return this.transaction(async (tx) => {
+      await this.lockUser(tx.handle, userId);
+      const manager = entityManagerOf(tx.handle);
+      await manager.query(`DELETE FROM "user_knowledge_stat" WHERE "userId" = $1`, [userId]);
+      await manager.query(`DELETE FROM "user_daily_stat" WHERE "userId" = $1`, [userId]);
+      await manager.query(`DELETE FROM "study_checkin" WHERE "userId" = $1`, [userId]);
+    });
+  }
 }

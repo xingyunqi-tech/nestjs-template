@@ -179,4 +179,8 @@ export class AddressRelationalRepository implements AddressRepository {
 
     return where;
   }
+
+  async removeByUser(userId: number): Promise<void> {
+    await this.addressRepository.delete({ userId });
+  }
 }

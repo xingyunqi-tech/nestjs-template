@@ -7,6 +7,8 @@ export interface FilePurposeRule {
   mimeTypes: Readonly<Record<string, string>>;
   visibility: FileVisibility;
   permission?: Permission;
+  /** 内容素材：文件无归属用户，不随上传者注销删除 */
+  contentAsset?: boolean;
 }
 
 const IMAGE_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
@@ -17,10 +19,17 @@ export const FILE_PURPOSE_RULES: Readonly<Record<FilePurpose, FilePurposeRule>> 
     mimeTypes: { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' },
     visibility: FileVisibility.PRIVATE,
   },
+  [FilePurpose.CONTENT_IMAGE]: {
+    mimeTypes: IMAGE_TYPES,
+    visibility: FileVisibility.PUBLIC,
+    permission: Permission.CONTENT_MANAGE,
+    contentAsset: true,
+  },
   [FilePurpose.AUDIO]: {
     mimeTypes: { mp3: 'audio/mpeg', m4a: 'audio/mp4' },
     visibility: FileVisibility.PUBLIC,
     permission: Permission.CONTENT_MANAGE,
+    contentAsset: true,
   },
   [FilePurpose.IMPORT]: {
     mimeTypes: {
@@ -37,6 +46,10 @@ export const FILE_PURPOSE_RULES: Readonly<Record<FilePurpose, FilePurposeRule>> 
     permission: Permission.CONTENT_MANAGE,
   },
 };
+
+export function fileOwnerFor(purpose: FilePurpose, uploaderId: number | null): number | null {
+  return FILE_PURPOSE_RULES[purpose].contentAsset ? null : uploaderId;
+}
 
 /** 未传用途时按公开图片处理，无法识别时返回 null */
 export function parseFilePurpose(value: unknown): FilePurpose | null {

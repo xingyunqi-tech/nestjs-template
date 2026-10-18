@@ -34,4 +34,7 @@ export abstract class ShareRepository {
   abstract countByUserId(userId: Share['userId'], filterOptions?: QueryShareDto | null): Promise<number>;
 
   abstract remove(id: Share['id']): Promise<void>;
+
+  /** 物理删除该用户的分享（含已软删除的）及其访问记录 */
+  abstract removeByUser(userId: number): Promise<void>;
 }

@@ -3,6 +3,7 @@ import { UsersService } from './users.service';
 import { UserRepository } from './infrastructure/persistence/user.repository';
 import { FilesService } from '../../modules/files/files.service';
 import { SessionService } from '../session/session.service';
+import { AccountCleanupProducer } from '../../infrastructure/account-cleanup/account-cleanup.producer';
 import { FileType } from '../../modules/files/domain/file';
 import { FileVisibility } from '../../modules/files/domain/file-visibility';
 import { ForbiddenException, UnprocessableEntityException } from '@nestjs/common';
@@ -23,6 +24,7 @@ describe('UsersService', () => {
         repository as unknown as UserRepository,
         {} as FilesService,
         sessionService as unknown as SessionService,
+        {} as AccountCleanupProducer,
       );
     });
 
@@ -36,6 +38,33 @@ describe('UsersService', () => {
       await service.updateByAdmin(1, { firstName: 'A' });
 
       expect(sessionService.deleteByUserId).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remove', () => {
+    it('should revoke the sessions, soft delete the user and then enqueue the account cleanup', async () => {
+      const calls: string[] = [];
+      const track = (name: string) =>
+        vi.fn(() => {
+          calls.push(name);
+          return Promise.resolve();
+        });
+      const repository = { remove: track('remove') };
+      const sessionService = { deleteByUserId: track('sessions') };
+      const producer = { enqueueCleanup: track('enqueue') };
+      const service = new UsersService(
+        repository as unknown as UserRepository,
+        {} as FilesService,
+        sessionService as unknown as SessionService,
+        producer as unknown as AccountCleanupProducer,
+      );
+
+      await service.remove(7);
+
+      expect(repository.remove).toHaveBeenCalledWith(7);
+      expect(sessionService.deleteByUserId).toHaveBeenCalledWith({ userId: 7 });
+      expect(producer.enqueueCleanup).toHaveBeenCalledWith(7);
+      expect(calls).toEqual(['sessions', 'remove', 'enqueue']);
     });
   });
 
@@ -54,6 +83,7 @@ describe('UsersService', () => {
         repository as unknown as UserRepository,
         new FilesService(fileRepository as unknown as ConstructorParameters<typeof FilesService>[0]),
         {} as SessionService,
+        {} as AccountCleanupProducer,
       );
     });
 

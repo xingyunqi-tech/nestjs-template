@@ -20,4 +20,6 @@ export abstract class NotificationSettingRepository {
   ): Promise<NotificationSetting | null>;
 
   abstract initializeDefaultSettings(userId: NotificationSetting['userId']): Promise<void>;
+
+  abstract removeByUser(userId: number): Promise<void>;
 }

@@ -4,7 +4,7 @@ import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { FileRepository } from '../../persistence/file.repository';
 import { FileType } from '../../../domain/file';
 import { FilePurpose } from '../../../domain/file-purpose';
-import { FILE_PURPOSE_RULES, fileTooLargeError, mimeTypeFor } from '../../../file-purposes';
+import { FILE_PURPOSE_RULES, fileOwnerFor, fileTooLargeError, mimeTypeFor } from '../../../file-purposes';
 import { createS3Client } from '../../../config/s3-client.factory';
 import { AllConfigType } from '../../../../../config/config.type';
 
@@ -44,7 +44,7 @@ export class FilesS3Service {
     return {
       file: await this.fileRepository.create({
         path: file.key,
-        ownerUserId,
+        ownerUserId: fileOwnerFor(purpose, ownerUserId),
         visibility: FILE_PURPOSE_RULES[purpose].visibility,
         mimeType: mimeTypeFor(purpose, file.originalname),
         size: file.size,

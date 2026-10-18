@@ -92,7 +92,8 @@ describe('ErrataService', () => {
       setAffectedUsers: vi.fn().mockResolvedValue(undefined),
       touch: vi.fn().mockResolvedValue(undefined),
       markUserProcessed: vi.fn().mockResolvedValue(undefined),
-      claimNoticeUsers: vi.fn().mockResolvedValue([]),
+      claimNoticeUsers: vi.fn().mockResolvedValue({ claimed: 0, activeUserIds: [] }),
+      removeUserLinks: vi.fn(),
       finish: vi.fn().mockResolvedValue(errata({ status: ErrataStatus.DONE })),
       fail: vi.fn().mockResolvedValue(undefined),
       reopen: vi.fn().mockResolvedValue(true),
@@ -298,7 +299,7 @@ describe('ErrataService', () => {
     });
 
     it('should notify claimed users, finish and then resolve linked reports', async () => {
-      repository.claimNoticeUsers.mockResolvedValueOnce([3, 8]);
+      repository.claimNoticeUsers.mockResolvedValueOnce({ claimed: 2, activeUserIds: [3, 8] });
 
       await expect(service.execute('e1')).resolves.toMatchObject({
         status: 'finished',
@@ -321,9 +322,20 @@ describe('ErrataService', () => {
       expect(feedbacks.resolveByErrata).toHaveBeenCalledWith('e1', '已勘误');
     });
 
+    it('should notify only active users and keep claiming while a full batch was claimed', async () => {
+      repository.claimNoticeUsers
+        .mockResolvedValueOnce({ claimed: 500, activeUserIds: [3] })
+        .mockResolvedValueOnce({ claimed: 0, activeUserIds: [] });
+
+      await service.execute('e1');
+
+      expect(repository.claimNoticeUsers).toHaveBeenCalledTimes(2);
+      expect(notifications.createInAppBatch.mock.calls[0][1]).toMatchObject({ userIds: [3] });
+    });
+
     it('should not mention scores in the notice of an analysis-only errata', async () => {
       repository.start.mockResolvedValue(errata({ answerChanged: false }));
-      repository.claimNoticeUsers.mockResolvedValueOnce([3]);
+      repository.claimNoticeUsers.mockResolvedValueOnce({ claimed: 1, activeUserIds: [3] });
 
       await service.execute('e1');
 

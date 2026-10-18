@@ -39,4 +39,7 @@ export abstract class AddressRepository {
   abstract remove(id: Address['id']): Promise<void>;
 
   abstract countByUserId(userId: Address['userId'], filterOptions?: FilterAddressDto | null): Promise<number>;
+
+  /** 物理删除该用户的全部地址（含已软删除的） */
+  abstract removeByUser(userId: number): Promise<void>;
 }

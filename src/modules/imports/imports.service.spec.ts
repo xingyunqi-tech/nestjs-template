@@ -158,7 +158,7 @@ describe('ImportsService', () => {
 
       expect(contentImporter.run).toHaveBeenCalledWith(
         expect.objectContaining({ assets: new Map() }),
-        { publish: true, ownerUserId: 3 },
+        { publish: true },
         expect.any(Function),
       );
       const [content, name, purpose, owner] = fileStorageService.store.mock.calls[0];

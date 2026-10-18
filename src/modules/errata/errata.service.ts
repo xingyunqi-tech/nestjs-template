@@ -234,16 +234,20 @@ export class ErrataService {
   private async notifyUsers(errata: Errata): Promise<void> {
     for (;;) {
       const notified = await this.errataRepository.transaction(async (handle) => {
-        const userIds = await this.errataRepository.claimNoticeUsers(handle, errata.id, NOTIFY_BATCH_SIZE);
+        const { claimed, activeUserIds } = await this.errataRepository.claimNoticeUsers(
+          handle,
+          errata.id,
+          NOTIFY_BATCH_SIZE,
+        );
         await this.notificationsService.createInAppBatch(handle, {
-          userIds,
+          userIds: activeUserIds,
           type: NotificationType.INFO,
           category: NotificationCategory.STUDY,
           title: NOTIFICATION_TITLE,
           content: errata.answerChanged ? ANSWER_NOTIFICATION : ANALYSIS_NOTIFICATION,
           metadata: { errataId: errata.id, questionId: errata.questionId },
         });
-        return userIds.length;
+        return claimed;
       });
       if (notified < NOTIFY_BATCH_SIZE) {
         return;

@@ -13,6 +13,7 @@ import { FileType } from '../../../domain/file';
 const MAX_SIZES: Record<FilePurpose, number> = {
   [FilePurpose.IMAGE]: 10,
   [FilePurpose.PRIVATE_IMAGE]: 10,
+  [FilePurpose.CONTENT_IMAGE]: 10,
   [FilePurpose.AUDIO]: 100,
   [FilePurpose.IMPORT]: 100,
   [FilePurpose.EXPORT]: 100,
@@ -42,6 +43,8 @@ describe('FilesLocalService', () => {
       findByPath: vi.fn(),
       findReusable: vi.fn(),
       remove: vi.fn(),
+      findByOwner: vi.fn(),
+      removeWithin: vi.fn(),
     };
     service = new FilesLocalService(config, repository);
   });
@@ -58,6 +61,14 @@ describe('FilesLocalService', () => {
       mimeType: 'image/jpeg',
       size: 5,
     });
+  });
+
+  it('should record content assets without an owner', async () => {
+    await service.create({ path: 'files/a.png', size: 5, originalname: 'a.png' } as Express.Multer.File, 7, FilePurpose.CONTENT_IMAGE);
+    await service.create({ path: 'files/b.mp3', size: 5, originalname: 'b.mp3' } as Express.Multer.File, 7, FilePurpose.AUDIO);
+
+    expect(repository.create).toHaveBeenNthCalledWith(1, expect.objectContaining({ ownerUserId: null }));
+    expect(repository.create).toHaveBeenNthCalledWith(2, expect.objectContaining({ ownerUserId: null }));
   });
 
   it('should delete the stored file and reject it when it exceeds the purpose limit', async () => {

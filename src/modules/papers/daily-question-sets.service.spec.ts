@@ -61,7 +61,11 @@ describe('DailyQuestionSetsService', () => {
       upsert: vi.fn((subjectId, date, questionIds) => Promise.resolve(set(questionIds, date))),
       findRange: vi.fn().mockResolvedValue([]),
     };
-    usage = { hasSessions: vi.fn().mockResolvedValue(false) };
+    usage = {
+      hasSessions: vi.fn().mockResolvedValue(false),
+      runLocked: vi.fn((_subjectId, _date, work: () => Promise<unknown>) => work()) as never,
+      findInProgressMockQuestionIds: vi.fn().mockResolvedValue([]),
+    };
     subjectsService = {
       findById: vi.fn(),
       getPublishedSubject: vi.fn(),
@@ -171,6 +175,18 @@ describe('DailyQuestionSetsService', () => {
       ]);
     });
 
+    it('should reject questions in an ongoing mock of the signed-in user without grading', async () => {
+      usage.findInProgressMockQuestionIds.mockResolvedValue(['q1']);
+      const answers = [{ questionId: 'q1', answer: { keys: ['B'] } }];
+
+      await expect(service.checkTrial(SUBJECT, { date: businessDate(), answers }, 9)).rejects.toMatchObject({
+        errorKey: 'questionInMockInProgress',
+        response: { errors: { questionIds: ['q1'] } },
+      });
+      expect(usage.findInProgressMockQuestionIds).toHaveBeenCalledWith(9, ['q1']);
+      await expect(service.checkTrial(SUBJECT, { date: businessDate(), answers })).resolves.toBeDefined();
+    });
+
     it('should reject questions beyond the trial', async () => {
       await expect(
         service.checkTrial(SUBJECT, { date: businessDate(), answers: [{ questionId: 'q2', answer: { keys: ['B'] } }] }),
@@ -208,6 +224,7 @@ describe('DailyQuestionSetsService', () => {
       const today = businessDate();
 
       await expect(service.regenerate(SUBJECT, today)).resolves.toMatchObject({ date: today });
+      expect(usage.runLocked).toHaveBeenCalledWith(SUBJECT, today, expect.any(Function));
       expect(usage.hasSessions).toHaveBeenCalledWith(SUBJECT, today);
       expect(repository.upsert).toHaveBeenCalledWith(SUBJECT, today, ['q1', 'c1', 'c2', 'q2']);
     });

@@ -41,21 +41,39 @@ export function takeLeadingUnits(units: QuestionUnit[], count: number): Question
   return taken;
 }
 
-/** 将按顺序排列的可作答题目按所属材料归组，连续的同材料小题合为一个单位 */
+/** 将可作答题目按所属材料归组：单位按首次出现的位置排列，同一材料的小题合入同一单位 */
 export function groupIntoUnits(questions: Question[], materials: Map<Question['id'], Question>): QuestionUnit[] {
   const units: QuestionUnit[] = [];
+  const byMaterial = new Map<Question['id'], QuestionUnit>();
   for (const question of questions) {
     const material = question.parentId ? materials.get(question.parentId) : undefined;
-    const last = units.at(-1);
-    if (material && last?.root.id === material.id) {
-      last.questions.push(question);
+    const existing = material && byMaterial.get(material.id);
+    if (existing) {
+      existing.questions.push(question);
     } else if (material) {
-      units.push({ root: material, questions: [question] });
+      const unit = { root: material, questions: [question] };
+      byMaterial.set(material.id, unit);
+      units.push(unit);
     } else if (!question.parentId) {
       units.push({ root: question, questions: [question] });
     }
   }
   return units;
+}
+
+/** 合并同一出题单位，按首次出现的位置排列 */
+export function mergeUnits(units: QuestionUnit[]): QuestionUnit[] {
+  const merged = new Map<Question['id'], QuestionUnit>();
+  for (const unit of units) {
+    const existing = merged.get(unit.root.id);
+    if (existing) {
+      const known = new Set(existing.questions.map((question) => question.id));
+      existing.questions.push(...unit.questions.filter((question) => !known.has(question.id)));
+    } else {
+      merged.set(unit.root.id, { root: unit.root, questions: [...unit.questions] });
+    }
+  }
+  return [...merged.values()];
 }
 
 export interface QuestionDrawCriteria {

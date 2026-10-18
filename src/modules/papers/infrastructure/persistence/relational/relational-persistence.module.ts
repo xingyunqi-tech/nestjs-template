@@ -11,7 +11,7 @@ import { DailySetUsageRepository } from '../daily-set-usage.repository';
 import { PaperRelationalRepository } from './repositories/paper.repository';
 import { PaperRuleRelationalRepository } from './repositories/paper-rule.repository';
 import { DailyQuestionSetRelationalRepository } from './repositories/daily-question-set.repository';
-import { NoSessionDailySetUsageRepository } from './repositories/daily-set-usage.repository';
+import { DailySetUsageRelationalRepository } from './repositories/daily-set-usage.repository';
 
 @Module({
   imports: [TypeOrmModule.forFeature([PaperEntity, PaperQuestionEntity, PaperRuleEntity, DailyQuestionSetEntity])],
@@ -19,7 +19,7 @@ import { NoSessionDailySetUsageRepository } from './repositories/daily-set-usage
     { provide: PaperRepository, useClass: PaperRelationalRepository },
     { provide: PaperRuleRepository, useClass: PaperRuleRelationalRepository },
     { provide: DailyQuestionSetRepository, useClass: DailyQuestionSetRelationalRepository },
-    { provide: DailySetUsageRepository, useClass: NoSessionDailySetUsageRepository },
+    { provide: DailySetUsageRepository, useClass: DailySetUsageRelationalRepository },
   ],
   exports: [PaperRepository, PaperRuleRepository, DailyQuestionSetRepository, DailySetUsageRepository],
 })

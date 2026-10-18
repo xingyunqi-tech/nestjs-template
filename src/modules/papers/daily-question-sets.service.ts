@@ -93,8 +93,12 @@ export class DailyQuestionSetsService {
     };
   }
 
-  /** 按题目最新答案判分，不落库 */
-  async checkTrial(subjectId: string, dto: TrialCheckDto): Promise<TrialCheckResultDto> {
+  /** 按题目最新答案判分，不落库；登录用户提交其进行中模考的题目时拒绝 */
+  async checkTrial(
+    subjectId: string,
+    dto: TrialCheckDto,
+    viewerUserId: number | null = null,
+  ): Promise<TrialCheckResultDto> {
     const today = businessDate();
     const yesterday = businessDate(new Date(Date.now() - DAY_MS));
     if (dto.date !== today && dto.date !== yesterday) {
@@ -104,6 +108,15 @@ export class DailyQuestionSetsService {
     const questions = new Map(units.flatMap((unit) => unit.questions).map((question) => [question.id, question]));
     if (dto.answers.some((item) => !questions.has(item.questionId))) {
       throw unprocessable('answers', 'questionNotInTrial');
+    }
+    if (viewerUserId !== null) {
+      const inMock = await this.dailySetUsageRepository.findInProgressMockQuestionIds(
+        viewerUserId,
+        dto.answers.map((item) => item.questionId),
+      );
+      if (inMock.length > 0) {
+        throw new BusinessException('questionInMockInProgress', { questionIds: inMock });
+      }
     }
     return {
       results: dto.answers.map((item) => {
@@ -163,14 +176,16 @@ export class DailyQuestionSetsService {
     if (date < businessDate()) {
       throw unprocessable('date', 'dailySetDateInPast');
     }
-    if (await this.dailySetUsageRepository.hasSessions(subjectId, date)) {
-      throw new ConflictException({ error: 'dailySetInUse' });
-    }
     const questionIds = await this.drawQuestionIds(subjectId);
     if (questionIds.length === 0) {
       throw new BusinessException('noQuestionsAvailable');
     }
-    return this.dailyQuestionSetRepository.upsert(subjectId, date, questionIds);
+    return this.dailySetUsageRepository.runLocked(subjectId, date, async () => {
+      if (await this.dailySetUsageRepository.hasSessions(subjectId, date)) {
+        throw new ConflictException({ error: 'dailySetInUse' });
+      }
+      return this.dailyQuestionSetRepository.upsert(subjectId, date, questionIds);
+    });
   }
 
   private async today(subjectId: string): Promise<{ date: string; set: DailyQuestionSet | null }> {

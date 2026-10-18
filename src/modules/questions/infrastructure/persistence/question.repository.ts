@@ -33,6 +33,8 @@ export type QuestionChanges = Partial<
 
 export type CreateQuestionVersionData = Omit<QuestionVersion, 'id' | 'createdAt' | 'updatedAt'>;
 
+export type QuestionVersionKey = Pick<QuestionVersion, 'questionId' | 'version'>;
+
 export type TaggableKnowledgePoint = { id: string; subjectId: string; isLeaf: boolean };
 
 export type KnowledgePointCountDelta = { knowledgePointId: string; delta: number };
@@ -91,6 +93,8 @@ export abstract class QuestionRepository {
   }): Promise<{ data: Question[]; total: number }>;
 
   abstract findVersions(questionId: Question['id']): Promise<QuestionVersion[]>;
+
+  abstract findVersionsByKeys(keys: QuestionVersionKey[]): Promise<QuestionVersion[]>;
 
   /** 按顺序取得各科目锁后在同一事务内执行；与知识点树变更共用科目锁 */
   abstract transaction<T>(

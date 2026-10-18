@@ -76,13 +76,19 @@ export class PapersController {
     return this.dailyQuestionSetsService.getTrial(id);
   }
 
-  @ApiOperation({ operationId: 'checkSubjectDailyTrial', summary: '游客试做判分，只返回对错，不落库' })
+  @ApiOperation({ operationId: 'checkSubjectDailyTrial', summary: '游客试做判分（可选登录），只返回对错，不落库' })
+  @ApiBearerAuth()
   @ApiOkResponse({ type: TrialCheckResultDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseGuards(OptionalJwtAuthGuard)
   @Post('subjects/:id/daily/trial/check')
   @HttpCode(HttpStatus.OK)
-  checkTrial(@Param('id', ParseUuidPipe) id: string, @Body() dto: TrialCheckDto): Promise<TrialCheckResultDto> {
-    return this.dailyQuestionSetsService.checkTrial(id, dto);
+  checkTrial(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() dto: TrialCheckDto,
+    @Request() request: OptionalUserRequest,
+  ): Promise<TrialCheckResultDto> {
+    return this.dailyQuestionSetsService.checkTrial(id, dto, request.user ? Number(request.user.id) : null);
   }
 }

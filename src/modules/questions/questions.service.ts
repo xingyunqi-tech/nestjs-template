@@ -10,7 +10,7 @@ import { Question, QuestionSummary } from './domain/question';
 import { QuestionType } from './domain/question-type';
 import { QuestionSource } from './domain/question-source';
 import { QuestionAction, QuestionStatus, QUESTION_TRANSITIONS, publishedCountDelta } from './domain/question-status';
-import { QuestionChangeType } from './domain/question-version';
+import { QuestionChangeType, QuestionVersion } from './domain/question-version';
 import { QuestionOption } from './domain/question-answer';
 import { QuestionContent, normalizeAnswer, validateQuestionContent } from './domain/question-content';
 import { computeContentHash } from './domain/content-hash';
@@ -21,6 +21,7 @@ import { QuestionFilterOptions } from './dto/query-admin-question.dto';
 import { AdminQuestionDto, AdminQuestionVersionDto } from './dto/admin-question.dto';
 import { BatchPublishQuestionsDto, BatchPublishQuestionsResultDto } from './dto/batch-publish-questions.dto';
 import { PublicQuestionUnitDto, toPublicQuestion } from './dto/public-question.dto';
+import { QuestionSolutionDto, toQuestionSolution } from './dto/question-solution.dto';
 import { QuestionDrawCriteria, QuestionUnit, groupIntoUnits, packUnits } from './domain/question-unit';
 import {
   QuestionImportFields,
@@ -236,6 +237,91 @@ export class QuestionsService {
       }
       return dto;
     });
+  }
+
+  /** 题面按 versions 指定的版本渲染（缺省为当前版本，材料取小题快照记录的材料版本）；solutionIds 中的题目附带答案与解析 */
+  async renderUnits(
+    units: QuestionUnit[],
+    viewerUserId: UserId | null,
+    options: { versions?: Record<string, number>; solutionIds?: ReadonlySet<string> } = {},
+  ): Promise<{ units: PublicQuestionUnitDto[]; solutions: Map<Question['id'], QuestionSolutionDto> }> {
+    const snapshots = options.versions
+      ? await this.findRenderSnapshots(units, options.versions)
+      : new Map<Question['id'], QuestionVersion>();
+    const items = units.flatMap((unit) => {
+      const questions = unit.root.type === QuestionType.MATERIAL ? [unit.root, ...unit.questions] : [unit.root];
+      return questions.map((question) => {
+        const snapshot = snapshots.get(question.id);
+        return { question, snapshot: snapshot && { ...snapshot }, current: { ...question } };
+      });
+    });
+    const fileUrls = await this.resolveFileReferences(
+      items.map((item) => item.snapshot ?? item.current),
+      viewerUserId,
+    );
+    const rendered = new Map(
+      items.map((item) => [
+        item.question.id,
+        item.snapshot
+          ? toPublicQuestion(item.question, item.snapshot, fileUrls)
+          : toPublicQuestion(item.current, undefined, fileUrls),
+      ]),
+    );
+    const solutions = new Map(
+      items
+        .filter((item) => item.question.type !== QuestionType.MATERIAL && options.solutionIds?.has(item.question.id))
+        .map((item) => [item.question.id, toQuestionSolution(item.question, (item.snapshot ?? item.current).analysis)]),
+    );
+    return {
+      units: units.map((unit) => {
+        const dto = Object.assign(new PublicQuestionUnitDto(), rendered.get(unit.root.id));
+        if (unit.root.type === QuestionType.MATERIAL) {
+          dto.children = unit.questions.map((question) => rendered.get(question.id)!);
+        }
+        return dto;
+      }),
+      solutions,
+    };
+  }
+
+  /** 与当前版本不同的版本快照，键为题目 id */
+  private async findRenderSnapshots(
+    units: QuestionUnit[],
+    versions: Record<string, number>,
+  ): Promise<Map<Question['id'], QuestionVersion>> {
+    const questions = units.flatMap((unit) => unit.questions);
+    const requested = (question: Question): number => versions[question.id] ?? question.currentVersion;
+    const childSnapshots = await this.questionRepository.findVersionsByKeys(
+      questions
+        .filter((question) => question.parentId !== null || requested(question) !== question.currentVersion)
+        .filter((question) => requested(question) > 0)
+        .map((question) => ({ questionId: question.id, version: requested(question) })),
+    );
+    const byQuestion = new Map(childSnapshots.map((snapshot) => [snapshot.questionId, snapshot]));
+
+    const materialSnapshots = await this.questionRepository.findVersionsByKeys(
+      units.flatMap((unit) => {
+        if (unit.root.type !== QuestionType.MATERIAL) {
+          return [];
+        }
+        const materialVersion = unit.questions
+          .map((question) => byQuestion.get(question.id)?.materialVersion)
+          .find((version) => typeof version === 'number');
+        return materialVersion && materialVersion !== unit.root.currentVersion
+          ? [{ questionId: unit.root.id, version: materialVersion }]
+          : [];
+      }),
+    );
+
+    const result = new Map<Question['id'], QuestionVersion>();
+    for (const question of questions) {
+      const snapshot = byQuestion.get(question.id);
+      if (snapshot && snapshot.version !== question.currentVersion) {
+        result.set(question.id, snapshot);
+      }
+    }
+    materialSnapshots.forEach((snapshot) => result.set(snapshot.questionId, snapshot));
+    return result;
   }
 
   async create(dto: CreateQuestionDto, userId: UserId): Promise<AdminQuestionDto> {

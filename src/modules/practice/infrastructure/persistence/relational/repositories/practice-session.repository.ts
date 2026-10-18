@@ -1,0 +1,317 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { EntityManager, In, QueryFailedError, Repository } from 'typeorm';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
+import { PracticeSessionEntity } from '../entities/practice-session.entity';
+import { AnswerRecordEntity } from '../entities/answer-record.entity';
+import { PracticeSessionMapper } from '../mappers/practice-session.mapper';
+import { AnswerRecordMapper } from '../mappers/answer-record.mapper';
+import {
+  AnswerRecordChanges,
+  CreatePracticeSessionData,
+  DailySessionKey,
+  InsertAnswerRecordData,
+  PracticeSessionFilter,
+  PracticeSessionRepository,
+  PracticeTransaction,
+  SessionCounterDelta,
+} from '../../practice-session.repository';
+import { PracticeMode } from '../../../../domain/practice-mode';
+import { PracticeSession, PracticeSessionStatus, SubmitType } from '../../../../domain/practice-session';
+import { AnswerRecord } from '../../../../domain/answer-record';
+import { NullableType } from '../../../../../../common/types/nullable.type';
+import { lockDailyQuestionSet } from '../../../../../../infrastructure/database/utils/daily-question-set-lock';
+import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
+
+const DEADLOCK_DETECTED = '40P01';
+const MAX_TRANSACTION_ATTEMPTS = 3;
+const RETRY_BACKOFF_MS = 20;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isDeadlock(error: unknown): boolean {
+  return error instanceof QueryFailedError && (error.driverError as { code?: string })?.code === DEADLOCK_DETECTED;
+}
+
+function recordColumns(changes: AnswerRecordChanges): QueryDeepPartialEntity<AnswerRecordEntity> {
+  const { score, ...rest } = changes;
+  return {
+    ...(rest as QueryDeepPartialEntity<AnswerRecordEntity>),
+    ...(score !== undefined && { score: score === null ? null : score.toFixed(2) }),
+  };
+}
+
+async function inProgressMockQuestionIds(
+  manager: EntityManager,
+  userId: number,
+  questionIds: string[] | null,
+): Promise<string[]> {
+  const rows: { questionId: string }[] = await manager.query(
+    `SELECT DISTINCT item AS "questionId"
+     FROM "practice_session" AS s, unnest(s."questionIds") AS item
+     WHERE s."userId" = $1 AND s."mode" = $2 AND s."status" = $3
+       AND ($4::uuid[] IS NULL OR item = ANY($4::uuid[]))`,
+    [userId, PracticeMode.MOCK, PracticeSessionStatus.IN_PROGRESS, questionIds],
+  );
+  return rows.map((row) => row.questionId);
+}
+
+class RelationalPracticeTransaction implements PracticeTransaction {
+  constructor(private readonly manager: EntityManager) {}
+
+  async lockSessionForWrite(id: string): Promise<NullableType<PracticeSession>> {
+    const entity = await this.manager
+      .createQueryBuilder(PracticeSessionEntity, 's')
+      .setLock('for_no_key_update')
+      .where('s.id = :id', { id })
+      .getOne();
+    return entity ? PracticeSessionMapper.toDomain(entity) : null;
+  }
+
+  findInProgressMockQuestionIds(userId: number, questionIds: string[]): Promise<string[]> {
+    return questionIds.length === 0
+      ? Promise.resolve([])
+      : inProgressMockQuestionIds(this.manager, userId, questionIds);
+  }
+
+  async findRecordsForUpdate(sessionId: string, questionIds: string[]): Promise<AnswerRecord[]> {
+    if (questionIds.length === 0) {
+      return [];
+    }
+    const entities = await this.manager
+      .createQueryBuilder(AnswerRecordEntity, 'r')
+      .setLock('pessimistic_write')
+      .where('r."sessionId" = :sessionId', { sessionId })
+      .andWhere('r."questionId" IN (:...questionIds)', { questionIds })
+      .orderBy('r."questionId"', 'ASC')
+      .getMany();
+    return entities.map((entity) => AnswerRecordMapper.toDomain(entity));
+  }
+
+  async insertRecord(data: InsertAnswerRecordData): Promise<NullableType<AnswerRecord>> {
+    const result = await this.manager
+      .createQueryBuilder()
+      .insert()
+      .into(AnswerRecordEntity)
+      .values(recordColumns(data))
+      .orIgnore()
+      .returning(['id'])
+      .execute();
+    const [row] = result.raw as { id: string }[];
+    if (!row) {
+      return null;
+    }
+    const entity = await this.manager.findOneByOrFail(AnswerRecordEntity, { id: row.id });
+    return AnswerRecordMapper.toDomain(entity);
+  }
+
+  async updateRecord(id: string, changes: AnswerRecordChanges): Promise<AnswerRecord> {
+    await this.manager.update(AnswerRecordEntity, { id }, recordColumns(changes));
+    return AnswerRecordMapper.toDomain(await this.manager.findOneByOrFail(AnswerRecordEntity, { id }));
+  }
+
+  async adjustSessionCounters(id: string, delta: SessionCounterDelta): Promise<void> {
+    await this.manager
+      .createQueryBuilder()
+      .update(PracticeSessionEntity)
+      .set({
+        answeredCount: () => `"answeredCount" + ${Math.trunc(delta.answered)}`,
+        correctCount: () => `"correctCount" + ${Math.trunc(delta.correct)}`,
+        durationSec: () => `"durationSec" + ${Math.trunc(delta.durationSec)}`,
+        lastActiveAt: () => 'now()',
+      })
+      .where('id = :id', { id })
+      .execute();
+  }
+}
+
+@Injectable()
+export class PracticeSessionRelationalRepository implements PracticeSessionRepository {
+  constructor(
+    @InjectRepository(PracticeSessionEntity)
+    private readonly sessionRepository: Repository<PracticeSessionEntity>,
+    @InjectRepository(AnswerRecordEntity)
+    private readonly recordRepository: Repository<AnswerRecordEntity>,
+  ) {}
+
+  async create(data: CreatePracticeSessionData): Promise<PracticeSession> {
+    const entity = await this.sessionRepository.save(
+      this.sessionRepository.create(PracticeSessionMapper.toPersistence(data)),
+    );
+    return (await this.findById(entity.id))!;
+  }
+
+  async findDaily(key: DailySessionKey): Promise<NullableType<PracticeSession>> {
+    const entity = await this.sessionRepository.findOneBy({ ...key, mode: PracticeMode.DAILY });
+    return entity ? PracticeSessionMapper.toDomain(entity) : null;
+  }
+
+  createDaily(
+    key: DailySessionKey,
+    build: () => Promise<CreatePracticeSessionData | null>,
+  ): Promise<NullableType<PracticeSession>> {
+    return this.sessionRepository.manager.transaction(async (manager) => {
+      await lockDailyQuestionSet(manager, key.subjectId, key.dailyDate);
+      const existing = await manager.findOneBy(PracticeSessionEntity, { ...key, mode: PracticeMode.DAILY });
+      if (existing) {
+        return PracticeSessionMapper.toDomain(existing);
+      }
+      const data = await build();
+      if (!data) {
+        return null;
+      }
+      const saved = await manager.save(
+        manager.create(PracticeSessionEntity, PracticeSessionMapper.toPersistence(data)),
+      );
+      return PracticeSessionMapper.toDomain(await manager.findOneByOrFail(PracticeSessionEntity, { id: saved.id }));
+    });
+  }
+
+  async findById(id: string): Promise<NullableType<PracticeSession>> {
+    const entity = await this.sessionRepository.findOneBy({ id });
+    return entity ? PracticeSessionMapper.toDomain(entity) : null;
+  }
+
+  async findRecords(sessionId: string, questionIds?: string[]): Promise<AnswerRecord[]> {
+    if (questionIds?.length === 0) {
+      return [];
+    }
+    const entities = await this.recordRepository.find({
+      where: { sessionId, ...(questionIds && { questionId: In(questionIds) }) },
+    });
+    return entities.map((entity) => AnswerRecordMapper.toDomain(entity));
+  }
+
+  async findManyWithPaginationAndCount(
+    filter: PracticeSessionFilter,
+    paginationOptions: IPaginationOptions,
+  ): Promise<{ data: PracticeSession[]; total: number }> {
+    const [entities, total] = await this.sessionRepository.findAndCount({
+      where: {
+        userId: filter.userId,
+        ...(filter.mode && { mode: filter.mode }),
+        ...(filter.status && { status: filter.status }),
+      },
+      order: { startedAt: 'DESC', id: 'DESC' },
+      skip: (paginationOptions.page - 1) * paginationOptions.limit,
+      take: paginationOptions.limit,
+    });
+    return { data: entities.map((entity) => PracticeSessionMapper.toDomain(entity)), total };
+  }
+
+  async findOngoing(userId: number, limit: number): Promise<PracticeSession[]> {
+    const entities = await this.sessionRepository.find({
+      where: { userId, status: PracticeSessionStatus.IN_PROGRESS },
+      order: { lastActiveAt: 'DESC', id: 'DESC' },
+      take: limit,
+    });
+    return entities.map((entity) => PracticeSessionMapper.toDomain(entity));
+  }
+
+  findInProgressMockQuestionIds(userId: number): Promise<string[]> {
+    return inProgressMockQuestionIds(this.sessionRepository.manager, userId, null);
+  }
+
+  async findAnsweredRootIds(userId: number, subjectId: string): Promise<string[]> {
+    const rows: { rootId: string }[] = await this.recordRepository.query(
+      `SELECT DISTINCT COALESCE(q."parentId", q."id") AS "rootId"
+       FROM "answer_record" AS r
+       INNER JOIN "question" AS q ON q."id" = r."questionId"
+       WHERE r."userId" = $1 AND q."subjectId" = $2 AND r."answer" IS NOT NULL`,
+      [userId, subjectId],
+    );
+    return rows.map((row) => row.rootId);
+  }
+
+  async findWrongQuestionIds(session: PracticeSession): Promise<string[]> {
+    const entities = await this.recordRepository.find({
+      select: { questionId: true },
+      where: { sessionId: session.id, isCorrect: false },
+    });
+    const wrong = new Set(entities.map((entity) => entity.questionId));
+    return session.questionIds.filter((id) => wrong.has(id));
+  }
+
+  async findQuestionIdsInUserSessions(userId: number, questionIds: string[]): Promise<string[]> {
+    if (questionIds.length === 0) {
+      return [];
+    }
+    const rows: { id: string }[] = await this.sessionRepository.query(
+      `SELECT candidate.id AS "id"
+       FROM unnest($2::uuid[]) AS candidate(id)
+       WHERE EXISTS (
+         SELECT 1 FROM "practice_session" AS s
+         WHERE s."userId" = $1 AND s."questionIds" @> ARRAY[candidate.id]
+       )`,
+      [userId, questionIds],
+    );
+    return rows.map((row) => row.id);
+  }
+
+  async updateProgress(id: string, lastIndex: number): Promise<void> {
+    await this.sessionRepository
+      .createQueryBuilder()
+      .update(PracticeSessionEntity)
+      .set({ lastIndex, lastActiveAt: () => 'now()' })
+      .where('id = :id', { id })
+      .execute();
+  }
+
+  async closeInProgress(
+    id: string,
+    status: PracticeSessionStatus.SUBMITTED | PracticeSessionStatus.ABANDONED,
+    submitType: SubmitType | null,
+  ): Promise<boolean> {
+    const result = await this.sessionRepository
+      .createQueryBuilder()
+      .update(PracticeSessionEntity)
+      .set({
+        status,
+        submitType,
+        ...(status === PracticeSessionStatus.SUBMITTED && { submittedAt: () => 'now()' }),
+      })
+      .where('id = :id AND status = :inProgress', { id, inProgress: PracticeSessionStatus.IN_PROGRESS })
+      .execute();
+    return (result.affected ?? 0) > 0;
+  }
+
+  async abandonInactive(before: Date, excludedModes: PracticeMode[], batchSize: number): Promise<number> {
+    let total = 0;
+    for (;;) {
+      const result = await this.sessionRepository
+        .createQueryBuilder()
+        .update(PracticeSessionEntity)
+        .set({ status: PracticeSessionStatus.ABANDONED })
+        .where(
+          `id IN (
+            SELECT s."id" FROM "practice_session" AS s
+            WHERE s."status" = :inProgress AND s."lastActiveAt" < :before AND s."mode" <> ALL(:excludedModes)
+            LIMIT :batchSize FOR UPDATE SKIP LOCKED
+          )`,
+        )
+        .andWhere('status = :inProgress')
+        .setParameters({ inProgress: PracticeSessionStatus.IN_PROGRESS, before, excludedModes, batchSize })
+        .execute();
+      const affected = result.affected ?? 0;
+      total += affected;
+      if (affected < batchSize) {
+        return total;
+      }
+    }
+  }
+
+  async transaction<T>(work: (tx: PracticeTransaction) => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await this.sessionRepository.manager.transaction((manager) =>
+          work(new RelationalPracticeTransaction(manager)),
+        );
+      } catch (error) {
+        if (!isDeadlock(error) || attempt >= MAX_TRANSACTION_ATTEMPTS) {
+          throw error;
+        }
+        await sleep(RETRY_BACKOFF_MS * attempt + Math.floor(Math.random() * RETRY_BACKOFF_MS));
+      }
+    }
+  }
+}

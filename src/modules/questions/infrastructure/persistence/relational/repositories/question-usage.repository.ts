@@ -4,7 +4,6 @@ import { DataSource } from 'typeorm';
 import { QuestionUsageRepository } from '../../question-usage.repository';
 import { Question } from '../../../../domain/question';
 
-/** 仅检查试卷引用，不含作答记录 */
 @Injectable()
 export class QuestionUsageRelationalRepository implements QuestionUsageRepository {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
@@ -14,7 +13,8 @@ export class QuestionUsageRelationalRepository implements QuestionUsageRepositor
       return false;
     }
     const rows: unknown[] = await this.dataSource.query(
-      `SELECT 1 FROM "paper_question" WHERE "questionId" = ANY($1::uuid[]) LIMIT 1`,
+      `SELECT 1 WHERE EXISTS (SELECT 1 FROM "paper_question" WHERE "questionId" = ANY($1::uuid[]))
+          OR EXISTS (SELECT 1 FROM "answer_record" WHERE "questionId" = ANY($1::uuid[]))`,
       [questionIds],
     );
     return rows.length > 0;

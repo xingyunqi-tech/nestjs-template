@@ -1,6 +1,6 @@
 import { Question } from './question';
 import { QuestionType } from './question-type';
-import { groupIntoUnits, packUnits, takeLeadingUnits } from './question-unit';
+import { groupIntoUnits, mergeUnits, packUnits, takeLeadingUnits } from './question-unit';
 
 const question = (id: string, parentId: string | null = null, type = QuestionType.SINGLE): Question =>
   Object.assign(new Question(), { id, parentId, type });
@@ -48,6 +48,35 @@ describe('groupIntoUnits', () => {
       ['q1', ['q1']],
       ['m1', ['s1', 's2']],
       ['q2', ['q2']],
+    ]);
+  });
+
+  it('should keep sub-questions of a material together at its first position', () => {
+    const material = question('m1', null, QuestionType.MATERIAL);
+    const units = groupIntoUnits(
+      [question('s1', 'm1'), question('q1'), question('s2', 'm1'), question('q2'), question('s3', 'm1')],
+      new Map([['m1', material]]),
+    );
+    expect(units.map((unit) => [unit.root.id, unit.questions.map((item) => item.id)])).toEqual([
+      ['m1', ['s1', 's2', 's3']],
+      ['q1', ['q1']],
+      ['q2', ['q2']],
+    ]);
+  });
+});
+
+describe('mergeUnits', () => {
+  it('should merge units of the same root at the first position without duplicates', () => {
+    const material = question('m1', null, QuestionType.MATERIAL);
+    const single = question('q1');
+    const units = mergeUnits([
+      { root: material, questions: [question('s1', 'm1')] },
+      { root: single, questions: [single] },
+      { root: material, questions: [question('s1', 'm1'), question('s2', 'm1')] },
+    ]);
+    expect(units.map((unit) => [unit.root.id, unit.questions.map((item) => item.id)])).toEqual([
+      ['m1', ['s1', 's2']],
+      ['q1', ['q1']],
     ]);
   });
 });

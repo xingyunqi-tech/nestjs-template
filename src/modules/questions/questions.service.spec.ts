@@ -186,6 +186,17 @@ describe('QuestionsService', () => {
       findDrawCandidates,
       findManyWithPaginationAndCount: vi.fn(),
       findVersions: vi.fn(),
+      findVersionsByKeys: (keys) =>
+        Promise.resolve(
+          store.versions
+            .filter((version) =>
+              keys.some((key) => key.questionId === version.questionId && key.version === version.version),
+            )
+            .map(
+              (version) =>
+                ({ ...structuredClone(version), id: `${version.questionId}@${version.version}` }) as QuestionVersion,
+            ),
+        ),
       transaction: (_subjectIds, work) => store.atomically(() => work(store)),
     };
     usage = { isUsed: vi.fn().mockResolvedValue(false) };
@@ -740,6 +751,52 @@ describe('QuestionsService', () => {
       expect(JSON.stringify(dto)).not.toMatch(/"answer"|blanks|"一"/);
       expect(fileUrlResolver.resolveUrls).toHaveBeenCalledTimes(1);
       expect(fileUrlResolver.resolveUrls).toHaveBeenCalledWith([PUBLIC_FILE, PUBLIC_FILE], null);
+    });
+  });
+
+  describe('renderUnits', () => {
+    const image = `![](file:${PUBLIC_FILE})`;
+
+    it('should render the requested versions and take the material version from the sub-question snapshot', async () => {
+      const material = await create(materialDto('资料 v1'));
+      const sub = await create(singleDto({ parentId: material.id, stem: '小题 v1', analysis: `解析 ${image}` }));
+      await publish(material.id);
+      await service.update(sub.id, { stem: '小题 v2' }, 1);
+      await service.update(material.id, { material: '资料 v2' }, 1);
+      const units = await service.findUnitsByQuestionIds([sub.id]);
+
+      const pinned = await service.renderUnits(units, null, { versions: { [sub.id]: 1 } });
+      const current = await service.renderUnits(units, null);
+
+      expect(pinned.units[0]).toMatchObject({ material: '资料 v1', version: 1 });
+      expect(pinned.units[0].children?.[0]).toMatchObject({ stem: '小题 v1', version: 1 });
+      expect(current.units[0]).toMatchObject({ material: '资料 v2', version: 2 });
+      expect(current.units[0].children?.[0]).toMatchObject({ stem: '小题 v2', version: 2 });
+      expect(pinned.solutions.size).toBe(0);
+    });
+
+    it('should attach the latest answer and the rendered analysis only to requested questions', async () => {
+      const shortAnswer = await create(
+        singleDto({
+          type: QuestionType.SHORT_ANSWER,
+          options: null,
+          answer: { reference: '参考', points: ['要点'], rubricId: 'r1' },
+          analysis: `解析 ${image}`,
+        }),
+      );
+      const other = await create(singleDto({ stem: '另一题' }));
+      const units = await service.findUnits([shortAnswer.id, other.id]);
+
+      const { units: rendered, solutions } = await service.renderUnits(units, null, {
+        solutionIds: new Set([shortAnswer.id]),
+      });
+
+      expect(solutions.get(shortAnswer.id)).toEqual({
+        answer: { reference: '参考', points: ['要点'] },
+        analysis: `解析 ![](${PUBLIC_URL})`,
+      });
+      expect(solutions.has(other.id)).toBe(false);
+      expect(JSON.stringify(rendered)).not.toMatch(/"answer"|"analysis"|参考/);
     });
   });
 

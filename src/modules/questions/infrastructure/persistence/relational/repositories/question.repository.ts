@@ -13,6 +13,7 @@ import {
   QuestionChanges,
   QuestionRepository,
   QuestionTransaction,
+  QuestionVersionKey,
   TaggableKnowledgePoint,
 } from '../../question.repository';
 import { Question, QuestionSummary } from '../../../../domain/question';
@@ -302,6 +303,23 @@ export class QuestionRelationalRepository implements QuestionRepository {
       where: { questionId },
       order: { version: 'DESC' },
     });
+    return entities.map((entity) => QuestionVersionMapper.toDomain(entity));
+  }
+
+  async findVersionsByKeys(keys: QuestionVersionKey[]): Promise<QuestionVersion[]> {
+    if (keys.length === 0) {
+      return [];
+    }
+    const entities = await this.questionVersionRepository
+      .createQueryBuilder('v')
+      .where(
+        '("v"."questionId", "v"."version") IN (SELECT * FROM unnest(CAST(:questionIds AS uuid[]), CAST(:versions AS int[])))',
+        {
+          questionIds: keys.map((key) => key.questionId),
+          versions: keys.map((key) => key.version),
+        },
+      )
+      .getMany();
     return entities.map((entity) => QuestionVersionMapper.toDomain(entity));
   }
 

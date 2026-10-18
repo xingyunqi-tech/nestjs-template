@@ -171,5 +171,22 @@
   "importSubjectMismatch": "Sub-question exam and subject must match the material",
   "importAssetNotFound": "File not found in assets",
   "importAssetTypeNotAllowed": "Unsupported asset type: only jpg, png, gif, webp images and mp3, m4a audio",
-  "importInterrupted": "Import job was interrupted (timed out), please resubmit"
+  "importInterrupted": "Import job was interrupted (timed out), please resubmit",
+  "practiceSessionNotFound": "Practice session not found",
+  "practiceModeNotSupported": "This practice mode is not supported yet",
+  "memorizeNotAnswerable": "Memorize mode does not accept answers",
+  "duplicateAnswerQuestion": "Each question can only be submitted once per request",
+  "questionNotInSession": "The question is not in this session",
+  "invalidAnswer": "The answer does not match the question type",
+  "answerImageNotOwned": "Only images uploaded by yourself can be referenced",
+  "selfAssessmentSubjectiveOnly": "Only subjective questions can be self-assessed",
+  "paperNotAllowed": "This practice mode does not accept a paper",
+  "knowledgePointRequired": "Knowledge point is required",
+  "questionTypeRequired": "Question type is required",
+  "memorizeScopeRequired": "Memorize mode requires a knowledge point or question type",
+  "invalidFromSession": "The source session is not available for wrong question practice",
+  "dailySessionCannotFinish": "Daily practice cannot be finished",
+  "dailySessionCannotAbandon": "Daily practice cannot be abandoned",
+  "invalidLastIndex": "The position is out of range",
+  "answerNotMatchQuestion": "The answer does not match the question options or blanks"
 }

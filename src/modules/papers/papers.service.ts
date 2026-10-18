@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { PaperContent, PaperQuestionData, PaperRepository } from './infrastructure/persistence/paper.repository';
 import { Paper } from './domain/paper';
+import { PaperQuestion } from './domain/paper-question';
 import { PaperType } from './domain/paper-type';
 import { MultiScoringRule } from './domain/multi-scoring-rule';
 import { sumPaperScores } from './domain/paper-score';
@@ -74,6 +75,11 @@ export class PapersService {
       throw notFound();
     }
     return paper;
+  }
+
+  /** 按 sort 排序 */
+  findQuestions(id: Paper['id']): Promise<PaperQuestion[]> {
+    return this.paperRepository.findQuestions(id);
   }
 
   async getAdminDetail(id: Paper['id'], viewerUserId: UserId): Promise<AdminPaperDto> {

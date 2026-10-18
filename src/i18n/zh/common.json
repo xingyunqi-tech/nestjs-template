@@ -171,5 +171,22 @@
   "importSubjectMismatch": "小题的考试与科目须与材料一致",
   "importAssetNotFound": "assets 目录中找不到该文件",
   "importAssetTypeNotAllowed": "资源类型不支持，仅限 jpg、png、gif、webp 图片与 mp3、m4a 音频",
-  "importInterrupted": "导入任务执行中断（超时未完成），请重新提交"
+  "importInterrupted": "导入任务执行中断（超时未完成），请重新提交",
+  "practiceSessionNotFound": "练习会话不存在",
+  "practiceModeNotSupported": "暂不支持该练习模式",
+  "memorizeNotAnswerable": "背题模式不需要作答",
+  "duplicateAnswerQuestion": "同一题目不能重复提交",
+  "questionNotInSession": "题目不在该会话中",
+  "invalidAnswer": "作答格式与题型不符",
+  "answerImageNotOwned": "只能引用本人上传的图片",
+  "selfAssessmentSubjectiveOnly": "只有主观题可以自评",
+  "paperNotAllowed": "该练习模式不能指定试卷",
+  "knowledgePointRequired": "请选择知识点",
+  "questionTypeRequired": "请选择题型",
+  "memorizeScopeRequired": "背题模式请选择知识点或题型",
+  "invalidFromSession": "指定的会话不存在或不可用于错题重做",
+  "dailySessionCannotFinish": "每日一练不能结束",
+  "dailySessionCannotAbandon": "每日一练不能放弃",
+  "invalidLastIndex": "浏览位置超出题目范围",
+  "answerNotMatchQuestion": "作答与题目不符：选项不存在、单选只能选一项或填空数量不符"
 }

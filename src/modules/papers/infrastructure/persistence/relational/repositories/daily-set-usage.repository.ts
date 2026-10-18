@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { DailySetUsageRepository } from '../../daily-set-usage.repository';
+import { DailySessionProgress, DailySetUsageRepository } from '../../daily-set-usage.repository';
 import { lockDailyQuestionSet } from '../../../../../../infrastructure/database/utils/daily-question-set-lock';
 
 @Injectable()
@@ -21,6 +21,17 @@ export class DailySetUsageRelationalRepository implements DailySetUsageRepositor
       await lockDailyQuestionSet(manager, subjectId, date);
       return work();
     });
+  }
+
+  async findSessionProgress(userId: number, subjectId: string, date: string): Promise<DailySessionProgress | null> {
+    const [row]: DailySessionProgress[] = await this.dataSource.query(
+      `SELECT "id" AS "sessionId", cardinality("questionIds") AS "questionCount",
+              "answeredCount" AS "answeredCount", "correctCount" AS "correctCount"
+       FROM "practice_session"
+       WHERE "mode" = 'DAILY' AND "userId" = $1 AND "subjectId" = $2 AND "dailyDate" = $3`,
+      [userId, subjectId, date],
+    );
+    return row ?? null;
   }
 
   async findInProgressMockQuestionIds(userId: number, questionIds: string[]): Promise<string[]> {

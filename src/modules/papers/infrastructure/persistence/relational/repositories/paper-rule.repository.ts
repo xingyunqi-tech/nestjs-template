@@ -7,6 +7,7 @@ import { PaperRuleMapper } from '../mappers/paper-rule.mapper';
 import { CreatePaperRuleData, PaperRuleChanges, PaperRuleRepository } from '../../paper-rule.repository';
 import { PaperRule } from '../../../../domain/paper-rule';
 import { PaperRuleFilterOptions } from '../../../../dto/query-admin-paper-rule.dto';
+import { ContentStatus } from '../../../../../exams/domain/content-status';
 import { NullableType } from '../../../../../../common/types/nullable.type';
 import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
 
@@ -33,6 +34,14 @@ export class PaperRuleRelationalRepository implements PaperRuleRepository {
   async findById(id: PaperRule['id']): Promise<NullableType<PaperRule>> {
     const entity = await this.paperRuleRepository.findOne({ where: { id } });
     return entity ? PaperRuleMapper.toDomain(entity) : null;
+  }
+
+  async findPublishedBySubject(subjectId: PaperRule['subjectId']): Promise<PaperRule[]> {
+    const entities = await this.paperRuleRepository.find({
+      where: { subjectId, status: ContentStatus.PUBLISHED },
+      order: { name: 'ASC', id: 'ASC' },
+    });
+    return entities.map((entity) => PaperRuleMapper.toDomain(entity));
   }
 
   async findManyWithPaginationAndCount({

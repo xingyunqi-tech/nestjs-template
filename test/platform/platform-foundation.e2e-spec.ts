@@ -314,6 +314,7 @@ describe('Platform foundation', () => {
         'mail',
         'notification',
         'content-import',
+        'mock-submit',
       ]);
 
       await api(app).get('/api/v1/admin/monitor/queues').set('Authorization', `Bearer ${user.token}`).expect(403);

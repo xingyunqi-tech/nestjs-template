@@ -15,6 +15,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { PracticeSessionsService } from './practice-sessions.service';
 import { PracticeAnswersService } from './practice-answers.service';
+import { PracticeReportService } from './practice-report.service';
 import { CreatePracticeSessionDto } from './dto/create-practice-session.dto';
 import {
   CreatePracticeSessionResultDto,
@@ -24,6 +25,7 @@ import {
   QueryPracticeSessionsDto,
 } from './dto/practice-session.dto';
 import { QuerySessionQuestionsDto, SessionQuestionsDto } from './dto/practice-question.dto';
+import { PracticeReportDto } from './dto/practice-report.dto';
 import { AnswerResultDto, SaveAnswersDto, SaveAnswersResultDto, SelfAssessmentDto } from './dto/save-answers.dto';
 import { PermissionsGuard } from '../../core/permissions/permissions.guard';
 import { RequirePermissions } from '../../core/permissions/permissions.decorator';
@@ -41,9 +43,13 @@ export class PracticeSessionsController {
   constructor(
     private readonly practiceSessionsService: PracticeSessionsService,
     private readonly practiceAnswersService: PracticeAnswersService,
+    private readonly practiceReportService: PracticeReportService,
   ) {}
 
-  @ApiOperation({ operationId: 'createPracticeSession', summary: '创建练习会话；每日一练重复进入返回同一会话' })
+  @ApiOperation({
+    operationId: 'createPracticeSession',
+    summary: '创建练习会话；每日一练与模拟考试重复进入返回同一会话，模考以新设备进入时在截止前接管',
+  })
   @ApiOkResponse({ type: CreatePracticeSessionResultDto })
   @RequirePermissions(Permission.PRACTICE_WRITE)
   @UseGuards(PermissionsGuard)
@@ -149,7 +155,16 @@ export class PracticeSessionsController {
     return this.practiceSessionsService.updateProgress(Number(request.user.id), id, dto.lastIndex);
   }
 
-  @ApiOperation({ operationId: 'submitPracticeSession', summary: '结束练习（每日一练不可结束）' })
+  @ApiOperation({ operationId: 'getPracticeSessionReport', summary: '成绩报告（会话结束后）' })
+  @ApiOkResponse({ type: PracticeReportDto })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Get(':id/report')
+  @HttpCode(HttpStatus.OK)
+  getReport(@Request() request: RequestWithUser, @Param('id', ParseUuidPipe) id: string): Promise<PracticeReportDto> {
+    return this.practiceReportService.getReport(Number(request.user.id), id);
+  }
+
+  @ApiOperation({ operationId: 'submitPracticeSession', summary: '交卷或结束练习（每日一练不可结束）' })
   @ApiOkResponse({ type: PracticeSessionDetailDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @RequirePermissions(Permission.PRACTICE_WRITE)

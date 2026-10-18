@@ -8,10 +8,12 @@ import { PaperRepository } from '../paper.repository';
 import { PaperRuleRepository } from '../paper-rule.repository';
 import { DailyQuestionSetRepository } from '../daily-question-set.repository';
 import { DailySetUsageRepository } from '../daily-set-usage.repository';
+import { PaperAttemptRepository } from '../paper-attempt.repository';
 import { PaperRelationalRepository } from './repositories/paper.repository';
 import { PaperRuleRelationalRepository } from './repositories/paper-rule.repository';
 import { DailyQuestionSetRelationalRepository } from './repositories/daily-question-set.repository';
 import { DailySetUsageRelationalRepository } from './repositories/daily-set-usage.repository';
+import { PaperAttemptRelationalRepository } from './repositories/paper-attempt.repository';
 
 @Module({
   imports: [TypeOrmModule.forFeature([PaperEntity, PaperQuestionEntity, PaperRuleEntity, DailyQuestionSetEntity])],
@@ -20,7 +22,14 @@ import { DailySetUsageRelationalRepository } from './repositories/daily-set-usag
     { provide: PaperRuleRepository, useClass: PaperRuleRelationalRepository },
     { provide: DailyQuestionSetRepository, useClass: DailyQuestionSetRelationalRepository },
     { provide: DailySetUsageRepository, useClass: DailySetUsageRelationalRepository },
+    { provide: PaperAttemptRepository, useClass: PaperAttemptRelationalRepository },
   ],
-  exports: [PaperRepository, PaperRuleRepository, DailyQuestionSetRepository, DailySetUsageRepository],
+  exports: [
+    PaperRepository,
+    PaperRuleRepository,
+    DailyQuestionSetRepository,
+    DailySetUsageRepository,
+    PaperAttemptRepository,
+  ],
 })
 export class RelationalPaperPersistenceModule {}

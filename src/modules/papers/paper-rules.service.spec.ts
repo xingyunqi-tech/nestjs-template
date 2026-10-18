@@ -34,23 +34,46 @@ describe('PaperRulesService', () => {
   let knowledgePointsService: Mocked<Pick<KnowledgePointsService, 'findByIds'>>;
   let questionsService: Mocked<Pick<QuestionsService, 'drawUnits' | 'resolveFileUrls'>>;
   let service: PaperRulesService;
+  let subjectsService: Mocked<Pick<SubjectsService, 'findById' | 'getPublishedSubject'>>;
 
   beforeEach(() => {
+    subjectsService = {
+      findById: vi.fn().mockResolvedValue({ id: SUBJECT }),
+      getPublishedSubject: vi.fn().mockResolvedValue({ id: SUBJECT }),
+    };
     repository = {
       create: vi.fn((data) => Promise.resolve(Object.assign(new PaperRule(), data))),
       findById: vi.fn(),
       findManyWithPaginationAndCount: vi.fn(),
       update: vi.fn(),
       remove: vi.fn(),
+      findPublishedBySubject: vi.fn().mockResolvedValue([]),
     };
     knowledgePointsService = { findByIds: vi.fn().mockResolvedValue([]) };
     questionsService = { drawUnits: vi.fn(), resolveFileUrls: vi.fn() };
     service = new PaperRulesService(
       repository,
-      { findById: vi.fn().mockResolvedValue({ id: SUBJECT }) } as unknown as SubjectsService,
+      subjectsService as unknown as SubjectsService,
       knowledgePointsService as unknown as KnowledgePointsService,
       questionsService as unknown as QuestionsService,
     );
+  });
+
+  describe('findPublishedSummaries', () => {
+    it('should summarize published rules of a published subject', async () => {
+      repository.findPublishedBySubject.mockResolvedValue([
+        rule([
+          { sectionTitle: '单选', questionType: QuestionType.SINGLE, count: 3, scorePerQuestion: 1.5 },
+          { sectionTitle: '判断', questionType: QuestionType.JUDGE, count: 2, scorePerQuestion: 0.35 },
+        ]),
+      ]);
+
+      await expect(service.findPublishedSummaries(SUBJECT)).resolves.toEqual([
+        { id: 'r1', name: '规则', durationMin: 60, questionCount: 5, totalScore: 5.2 },
+      ]);
+      expect(subjectsService.getPublishedSubject).toHaveBeenCalledWith(SUBJECT);
+      expect(repository.findPublishedBySubject).toHaveBeenCalledWith(SUBJECT);
+    });
   });
 
   describe('draw', () => {
@@ -105,6 +128,26 @@ describe('PaperRulesService', () => {
         knowledgePointIds: ['k1'],
         excludeRootIds: ['q1', 'q2', 'm1'],
       });
+    });
+
+    it('should prefer excluding the given roots and relax when the item is short', async () => {
+      questionsService.drawUnits
+        .mockResolvedValueOnce([unit(question('q1'))])
+        .mockResolvedValueOnce([unit(question('old'))]);
+
+      const draft = await service.draw(
+        rule([{ sectionTitle: '单选', questionType: QuestionType.SINGLE, count: 2, scorePerQuestion: 1 }]),
+        ['old'],
+      );
+
+      expect(draft.questions.map((item) => item.questionId)).toEqual(['q1', 'old']);
+      expect(draft.insufficient).toEqual([]);
+      expect(
+        questionsService.drawUnits.mock.calls.map(([criteria, count]) => [criteria.excludeRootIds, count]),
+      ).toEqual([
+        [['old'], 2],
+        [['q1'], 1],
+      ]);
     });
   });
 

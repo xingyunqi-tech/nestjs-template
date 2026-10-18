@@ -78,9 +78,21 @@ export class DailyQuestionSetsService {
     return this.dailyQuestionSetRepository.insertIfAbsent(subjectId, date, questionIds);
   }
 
-  async getSummary(subjectId: string): Promise<DailySummaryDto> {
+  async getSummary(subjectId: string, viewerUserId: number | null = null): Promise<DailySummaryDto> {
     const { date, set } = await this.today(subjectId);
-    return { subjectId, date, questionCount: set?.questionIds.length ?? 0, completion: null };
+    const questionCount = set?.questionIds.length ?? 0;
+    if (viewerUserId === null) {
+      return { subjectId, date, questionCount, completion: null };
+    }
+    const progress = await this.dailySetUsageRepository.findSessionProgress(viewerUserId, subjectId, date);
+    return {
+      subjectId,
+      date,
+      questionCount,
+      completion: progress
+        ? { ...progress, completed: progress.questionCount > 0 && progress.answeredCount >= progress.questionCount }
+        : { sessionId: null, questionCount, answeredCount: 0, correctCount: 0, completed: false },
+    };
   }
 
   async getTrial(subjectId: string): Promise<DailyTrialDto> {

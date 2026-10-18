@@ -121,6 +121,12 @@ export class PracticeSessionDetailDto extends PracticeSessionDto {
 export class CreatePracticeSessionResultDto extends PracticeSessionDetailDto {
   @ApiProperty({ type: Boolean, description: '可出题数少于请求题量' })
   insufficient: boolean;
+
+  @ApiProperty({
+    type: Boolean,
+    description: '请求设备是否为当前作答设备；模考已结束或截止后以新设备进入时为 false',
+  })
+  isActiveDevice: boolean;
 }
 
 export class QueryPracticeSessionsDto {

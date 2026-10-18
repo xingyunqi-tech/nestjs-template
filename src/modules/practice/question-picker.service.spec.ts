@@ -43,8 +43,8 @@ const material = (id: string, childIds: string[], status = QuestionStatus.PUBLIS
 describe('QuestionPickerService', () => {
   let questionsService: Mocked<Pick<QuestionsService, 'drawUnits' | 'findUnitsByQuestionIds' | 'findSummariesByIds'>>;
   let dailyService: Mocked<Pick<DailyQuestionSetsService, 'ensure'>>;
-  let papersService: Mocked<Pick<PapersService, 'findQuestions'>>;
-  let repository: Mocked<Pick<PracticeSessionRepository, 'findAnsweredRootIds' | 'findById' | 'findWrongQuestionIds'>>;
+  let papersService: Mocked<Pick<PapersService, 'findQuestions' | 'findAnsweredRootIds'>>;
+  let repository: Mocked<Pick<PracticeSessionRepository, 'findById' | 'findWrongQuestionIds'>>;
   let mockQuestions: Mocked<Pick<InProgressMockQuestionsService, 'findQuestionIds'>>;
   let wrongBook: Mocked<WrongBookReader>;
   let weakPoints: Mocked<WeakPointReader>;
@@ -66,9 +66,11 @@ describe('QuestionPickerService', () => {
       findSummariesByIds: vi.fn().mockResolvedValue([]),
     };
     dailyService = { ensure: vi.fn().mockResolvedValue(null) };
-    papersService = { findQuestions: vi.fn().mockResolvedValue([]) };
-    repository = {
+    papersService = {
+      findQuestions: vi.fn().mockResolvedValue([]),
       findAnsweredRootIds: vi.fn().mockResolvedValue([]),
+    };
+    repository = {
       findById: vi.fn().mockResolvedValue(null),
       findWrongQuestionIds: vi.fn().mockResolvedValue([]),
     };
@@ -87,7 +89,7 @@ describe('QuestionPickerService', () => {
   });
 
   it('should prefer unanswered questions in chapter practice and fill up with answered ones', async () => {
-    repository.findAnsweredRootIds.mockResolvedValue(['done']);
+    papersService.findAnsweredRootIds.mockResolvedValue(['done']);
     questionsService.drawUnits
       .mockResolvedValueOnce([single('a'), material('m', ['m1'])])
       .mockResolvedValueOnce([single('done')]);
@@ -131,7 +133,7 @@ describe('QuestionPickerService', () => {
   });
 
   it('should fall back to unanswered questions in smart practice without weak points or wrong questions', async () => {
-    repository.findAnsweredRootIds.mockResolvedValue(['done']);
+    papersService.findAnsweredRootIds.mockResolvedValue(['done']);
     questionsService.drawUnits.mockResolvedValueOnce([single('a'), single('b'), single('c')]);
 
     const result = await service.pick(request({ mode: PracticeMode.SMART }));

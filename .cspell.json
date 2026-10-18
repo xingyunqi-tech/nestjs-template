@@ -128,7 +128,10 @@
     "wxa",
     "unstub",
     "isv",
-    "ACQ"
+    "ACQ",
+    "SAVEPOINT",
+    "recordset",
+    "AGG"
   ],
   "patterns": [
     {

@@ -52,7 +52,7 @@ export class CreatePracticeSessionDto {
   @IsUUID()
   subjectId: string;
 
-  @ApiPropertyOptional({ type: String, format: 'uuid', description: '仅模拟考试' })
+  @ApiPropertyOptional({ type: String, format: 'uuid', description: '模拟考试必填，其他模式不能指定' })
   @IsOptional()
   @Transform(lowercase)
   @IsUUID()

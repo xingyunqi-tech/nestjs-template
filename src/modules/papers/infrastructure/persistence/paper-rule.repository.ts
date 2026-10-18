@@ -19,6 +19,9 @@ export abstract class PaperRuleRepository {
     paginationOptions: IPaginationOptions;
   }): Promise<{ data: PaperRule[]; total: number }>;
 
+  /** 按名称排序 */
+  abstract findPublishedBySubject(subjectId: PaperRule['subjectId']): Promise<PaperRule[]>;
+
   abstract update(id: PaperRule['id'], changes: PaperRuleChanges): Promise<NullableType<PaperRule>>;
 
   /** 返回是否删除 */

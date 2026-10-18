@@ -65,6 +65,7 @@ describe('DailyQuestionSetsService', () => {
       hasSessions: vi.fn().mockResolvedValue(false),
       runLocked: vi.fn((_subjectId, _date, work: () => Promise<unknown>) => work()) as never,
       findInProgressMockQuestionIds: vi.fn().mockResolvedValue([]),
+      findSessionProgress: vi.fn().mockResolvedValue(null),
     };
     subjectsService = {
       findById: vi.fn(),
@@ -216,6 +217,25 @@ describe('DailyQuestionSetsService', () => {
 
       await expect(service.getTrial(SUBJECT)).resolves.toMatchObject({ questionCount: 0 });
       await expect(service.getSummary(SUBJECT)).resolves.toMatchObject({ questionCount: 0, completion: null });
+    });
+
+    it('should report the completion of the signed-in user', async () => {
+      repository.findOne.mockResolvedValue(set(['q1', 'q2', 'q3']));
+
+      await expect(service.getSummary(SUBJECT, 7)).resolves.toMatchObject({
+        questionCount: 3,
+        completion: { sessionId: null, questionCount: 3, answeredCount: 0, completed: false },
+      });
+      usage.findSessionProgress.mockResolvedValue({
+        sessionId: 's1',
+        questionCount: 3,
+        answeredCount: 3,
+        correctCount: 2,
+      });
+      await expect(service.getSummary(SUBJECT, 7)).resolves.toMatchObject({
+        completion: { sessionId: 's1', answeredCount: 3, correctCount: 2, completed: true },
+      });
+      expect(usage.findSessionProgress).toHaveBeenCalledWith(7, SUBJECT, businessDate());
     });
   });
 

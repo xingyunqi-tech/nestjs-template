@@ -9,6 +9,7 @@ import { UpdatePaperRuleDto } from './dto/update-paper-rule.dto';
 import { PaperRuleItemDto } from './dto/paper-rule-item.dto';
 import { PaperRuleFilterOptions } from './dto/query-admin-paper-rule.dto';
 import { PaperDraftDto, PaperDraftQuestionDto, PaperRuleShortageDto } from './dto/paper-draft.dto';
+import { PaperRuleSummaryDto } from './dto/paper-rule-summary.dto';
 import { PAPER_QUESTION_LIMITS } from './dto/set-paper-questions.dto';
 import { ContentStatus } from '../exams/domain/content-status';
 import { SubjectsService } from '../exams/subjects.service';
@@ -57,6 +58,19 @@ export class PaperRulesService {
       throw notFound();
     }
     return rule;
+  }
+
+  /** 已发布科目下已发布的组卷规则 */
+  async findPublishedSummaries(subjectId: string): Promise<PaperRuleSummaryDto[]> {
+    await this.subjectsService.getPublishedSubject(subjectId);
+    const rules = await this.paperRuleRepository.findPublishedBySubject(subjectId);
+    return rules.map((rule) => ({
+      id: rule.id,
+      name: rule.name,
+      durationMin: rule.durationMin,
+      questionCount: rule.items.reduce((sum, item) => sum + item.count, 0),
+      totalScore: rule.items.reduce((sum, item) => sum + item.count * Math.round(item.scorePerQuestion * 100), 0) / 100,
+    }));
   }
 
   async create(dto: CreatePaperRuleDto): Promise<PaperRule> {
@@ -108,8 +122,8 @@ export class PaperRulesService {
     return draft;
   }
 
-  /** 按规则项依次抽题，跨规则项不重复；同名分区合并 */
-  async draw(rule: PaperRule): Promise<PaperDraftDto> {
+  /** 按规则项依次抽题，跨规则项不重复；同名分区合并；优先排除 preferExcludedRootIds，题量不足时放宽 */
+  async draw(rule: PaperRule, preferExcludedRootIds: string[] = []): Promise<PaperDraftDto> {
     const sections: PaperSection[] = [];
     const questions: PaperDraftQuestionDto[] = [];
     const insufficient: PaperRuleShortageDto[] = [];
@@ -120,16 +134,25 @@ export class PaperRulesService {
       if (sectionIndex < 0) {
         sectionIndex = sections.push({ title: item.sectionTitle, questionType: item.questionType }) - 1;
       }
+      const criteria = {
+        subjectId: rule.subjectId,
+        type: item.questionType,
+        knowledgePointIds: item.knowledgePointIds,
+        difficultyRange: item.difficultyRange,
+      };
       const units = await this.questionsService.drawUnits(
-        {
-          subjectId: rule.subjectId,
-          type: item.questionType,
-          knowledgePointIds: item.knowledgePointIds,
-          difficultyRange: item.difficultyRange,
-          excludeRootIds: [...usedRootIds],
-        },
+        { ...criteria, excludeRootIds: [...usedRootIds, ...preferExcludedRootIds] },
         item.count,
       );
+      const preferred = units.reduce((sum, unit) => sum + unit.questions.length, 0);
+      if (preferExcludedRootIds.length > 0 && preferred < item.count) {
+        units.push(
+          ...(await this.questionsService.drawUnits(
+            { ...criteria, excludeRootIds: [...usedRootIds, ...units.map((unit) => unit.root.id)] },
+            item.count - preferred,
+          )),
+        );
+      }
       let drawn = 0;
       for (const unit of units) {
         usedRootIds.push(unit.root.id);

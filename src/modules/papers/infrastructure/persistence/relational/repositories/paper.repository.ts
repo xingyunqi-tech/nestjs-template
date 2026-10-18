@@ -8,6 +8,7 @@ import { PaperMapper } from '../mappers/paper.mapper';
 import { PaperQuestionMapper } from '../mappers/paper-question.mapper';
 import {
   CreatePaperData,
+  GenerateQuota,
   PaperCatalogOptions,
   PaperChanges,
   PaperContent,
@@ -188,6 +189,57 @@ export class PaperRelationalRepository implements PaperRepository {
       );
       return PaperMapper.toDomain(entity, questions.length);
     });
+  }
+
+  createGenerated(
+    data: CreatePaperData,
+    questions: PaperQuestionData[],
+    quota: GenerateQuota,
+  ): Promise<NullableType<Paper['id']>> {
+    return this.paperRepository.manager.transaction(async (manager) => {
+      await manager.query(`SELECT pg_advisory_xact_lock(hashtext('paper_generate'), $1)`, [data.ownerUserId]);
+      const [{ count }]: { count: number }[] = await manager.query(
+        `SELECT COUNT(*)::int AS "count" FROM "paper"
+         WHERE "ownerUserId" = $1 AND "type" = $2
+           AND "createdAt" >= ($3::timestamptz AT TIME ZONE current_setting('TimeZone'))`,
+        [data.ownerUserId, PaperType.GENERATED, quota.since],
+      );
+      if (count >= quota.limit) {
+        return null;
+      }
+      const paperId = (await manager.save(manager.create(PaperEntity, PaperMapper.toPersistence(data)))).id;
+      await this.insertQuestions(
+        manager,
+        questions.map((question) => ({ ...question, paperId })),
+      );
+      return paperId;
+    });
+  }
+
+  async removeStaleGenerated(before: Date, batchSize: number): Promise<number> {
+    let total = 0;
+    for (;;) {
+      const result = await this.paperRepository
+        .createQueryBuilder()
+        .delete()
+        .from(PaperEntity)
+        .where(
+          `id IN (
+            SELECT p."id" FROM "paper" AS p
+            WHERE p."type" = :generated
+              AND p."createdAt" < (CAST(:before AS timestamptz) AT TIME ZONE current_setting('TimeZone'))
+              AND NOT EXISTS (SELECT 1 FROM "practice_session" AS s WHERE s."paperId" = p."id")
+            LIMIT :batchSize FOR UPDATE SKIP LOCKED
+          )`,
+          { generated: PaperType.GENERATED, before, batchSize },
+        )
+        .execute();
+      const affected = result.affected ?? 0;
+      total += affected;
+      if (affected < batchSize) {
+        return total;
+      }
+    }
   }
 
   async removeDraft(id: Paper['id']): Promise<boolean> {

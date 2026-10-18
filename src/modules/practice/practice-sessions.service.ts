@@ -5,6 +5,7 @@ import {
 } from './infrastructure/persistence/practice-session.repository';
 import { PickResult, QuestionPickerService } from './question-picker.service';
 import { AnswerVisibilityService } from './answer-visibility.service';
+import { MockExamService } from './mock-exam.service';
 import { PracticeMode } from './domain/practice-mode';
 import { PracticeScope, PracticeSession, PracticeSessionStatus, SubmitType } from './domain/practice-session';
 import { AnswerRecord } from './domain/answer-record';
@@ -52,19 +53,30 @@ export class PracticeSessionsService {
     private readonly subjectsService: SubjectsService,
     private readonly knowledgePointsService: KnowledgePointsService,
     private readonly questionsService: QuestionsService,
+    private readonly mockExamService: MockExamService,
   ) {}
 
-  /** 非模考会话；每日一练每用户每科目每天一个，重复进入返回同一会话 */
+  /** 每日一练每用户每科目每天一个、模考每用户每试卷一个进行中，重复进入返回同一会话 */
   async create(userId: number, dto: CreatePracticeSessionDto): Promise<CreatePracticeSessionResultDto> {
-    if (dto.mode === PracticeMode.MOCK || dto.mode === PracticeMode.FAVORITE) {
+    if (dto.mode === PracticeMode.FAVORITE) {
       throw unprocessable('mode', 'practiceModeNotSupported');
     }
-    if (dto.paperId) {
+    if (dto.mode === PracticeMode.MOCK && !dto.paperId) {
+      throw unprocessable('paperId', 'paperRequired');
+    }
+    if (dto.mode !== PracticeMode.MOCK && dto.paperId) {
       throw unprocessable('paperId', 'paperNotAllowed');
     }
     await this.subjectsService.getPublishedSubject(dto.subjectId).catch((error: unknown) => {
       throw error instanceof NotFoundException ? unprocessable('subjectId', 'subjectNotFound') : error;
     });
+    if (dto.mode === PracticeMode.MOCK) {
+      const entry = await this.mockExamService.enter(userId, dto.subjectId, dto.paperId!, dto.deviceId);
+      const detail = await this.toDetail(userId, entry.session, new CreatePracticeSessionResultDto());
+      detail.insufficient = false;
+      detail.isActiveDevice = entry.isActiveDevice;
+      return detail;
+    }
     const scope = await this.resolveScope(dto);
     const count = dto.count ?? PRACTICE_SESSION_LIMITS.defaultCount;
     if (dto.mode === PracticeMode.DAILY) {
@@ -86,6 +98,7 @@ export class PracticeSessionsService {
     );
     const detail = await this.toDetail(userId, session, new CreatePracticeSessionResultDto());
     detail.insufficient = picked.insufficient;
+    detail.isActiveDevice = true;
     return detail;
   }
 
@@ -112,6 +125,7 @@ export class PracticeSessionsService {
     }
     const detail = await this.toDetail(userId, session, new CreatePracticeSessionResultDto());
     detail.insufficient = false;
+    detail.isActiveDevice = true;
     return detail;
   }
 
@@ -214,9 +228,14 @@ export class PracticeSessionsService {
       throw new ConflictException({ error: 'dailySessionCannotFinish' });
     }
     if (session.mode === PracticeMode.MOCK) {
-      throw unprocessable('mode', 'practiceModeNotSupported');
+      await this.mockExamService.submit(sessionId, true);
+    } else {
+      await this.practiceSessionRepository.closeInProgress(
+        sessionId,
+        PracticeSessionStatus.SUBMITTED,
+        SubmitType.MANUAL,
+      );
     }
-    await this.practiceSessionRepository.closeInProgress(sessionId, PracticeSessionStatus.SUBMITTED, SubmitType.MANUAL);
     return this.getDetail(userId, sessionId);
   }
 

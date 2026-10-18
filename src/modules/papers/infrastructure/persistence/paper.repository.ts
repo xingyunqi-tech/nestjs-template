@@ -22,6 +22,11 @@ export interface PaperCatalogOptions {
   viewerUserId: number | null;
 }
 
+export interface GenerateQuota {
+  since: Date;
+  limit: number;
+}
+
 export abstract class PaperRepository {
   abstract create(data: CreatePaperData): Promise<Paper>;
 
@@ -60,6 +65,16 @@ export abstract class PaperRepository {
   ): Promise<NullableType<Paper['id']>>;
 
   abstract copy(sourceId: Paper['id'], derive: (source: Paper) => CreatePaperData): Promise<NullableType<Paper>>;
+
+  /** 按所属用户互斥：since 之后该用户生成的试卷数已达 limit 时不创建并返回 null */
+  abstract createGenerated(
+    data: CreatePaperData,
+    questions: PaperQuestionData[],
+    quota: GenerateQuota,
+  ): Promise<NullableType<Paper['id']>>;
+
+  /** 删除 before 之前创建且从未开考的按规则生成的试卷，返回删除数 */
+  abstract removeStaleGenerated(before: Date, batchSize: number): Promise<number>;
 
   /** 仅删除草稿，返回是否删除 */
   abstract removeDraft(id: Paper['id']): Promise<boolean>;

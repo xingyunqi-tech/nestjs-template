@@ -3,6 +3,7 @@ import { NotFoundException, UnprocessableEntityException } from '@nestjs/common'
 import { PracticeAnswersService } from './practice-answers.service';
 import {
   InsertAnswerRecordData,
+  MockSubmission,
   PracticeSessionRepository,
   PracticeTransaction,
   SessionCounterDelta,
@@ -81,6 +82,20 @@ class FakeTransaction implements PracticeTransaction {
   adjustSessionCounters(_id: string, delta: SessionCounterDelta): Promise<void> {
     this.deltas.push(delta);
     return Promise.resolve();
+  }
+
+  readonly markFirstAttempt = vi.fn((_session: Pick<PracticeSession, 'id'>) => Promise.resolve(true));
+
+  setActiveDevice(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  gradeRecords(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  closeMock(_id: string, _submission: MockSubmission): Promise<boolean> {
+    return Promise.resolve(true);
   }
 
   totals(): SessionCounterDelta {
@@ -335,6 +350,98 @@ describe('PracticeAnswersService', () => {
       expect(errorKey(await assess(SelfAssessment.KNOWN).catch((caught: unknown) => caught))).toBe(
         'questionInMockInProgress',
       );
+    });
+  });
+  describe('mock exam', () => {
+    const MINUTE = 60_000;
+    const saveFrom = (deviceId: string, answers: SaveAnswersDto['answers'], offline?: boolean) =>
+      service.save(USER, session.id, { deviceId, offline, answers });
+    const failure = (promise: Promise<unknown>) => promise.catch((caught: unknown) => errorKey(caught));
+
+    beforeEach(() => {
+      Object.assign(session, {
+        mode: PracticeMode.MOCK,
+        paperId: 'p1',
+        activeDeviceId: 'd1',
+        isFirstAttempt: false,
+        deadlineAt: new Date(Date.now() + 30 * MINUTE),
+        autoSubmitAt: new Date(Date.now() + 35 * MINUTE),
+      });
+    });
+
+    it('should save answers without grading, allow overwriting and mark the first attempt', async () => {
+      const first = await save([patch('single', { keys: ['A'] }, { clientSeq: 1 })]);
+      expect(first.results[0]).toMatchObject({ answerState: { answer: { keys: ['A'] }, isCorrect: null } });
+      expect(tx.records.get('single')).toMatchObject({ isCorrect: null, score: null, gradedAt: null });
+
+      await save([patch('single', { keys: ['B'] }, { clientSeq: 2 })]);
+      expect(tx.records.get('single')).toMatchObject({ answer: { keys: ['B'] }, clientSeq: 2 });
+      expect(tx.totals()).toEqual({ answered: 1, correct: 0, durationSec: 0 });
+      expect(tx.markFirstAttempt).toHaveBeenCalledTimes(1);
+      expect(publisher.publishRecord).not.toHaveBeenCalled();
+    });
+
+    it('should ignore stale writes of the same device and keep a soft cleared record', async () => {
+      await save([patch('single', { keys: ['A'] }, { clientSeq: 5 })]);
+      await save([patch('single', null, { clientSeq: 6 })]);
+      await save([patch('single', { keys: ['A'] }, { clientSeq: 5 })]);
+
+      expect(tx.records.get('single')).toMatchObject({ answer: null, clientSeq: 6 });
+      expect(tx.totals().answered).toBe(0);
+    });
+
+    it('should keep the answer when only the mark changes', async () => {
+      await save([patch('single', { keys: ['A'] }, { clientSeq: 1 })]);
+      await save([{ questionId: 'single', markedForReview: true, clientSeq: 2, clientAnsweredAt: new Date() }]);
+
+      expect(tx.records.get('single')).toMatchObject({ answer: { keys: ['A'] }, markedForReview: true });
+      expect(tx.totals().answered).toBe(1);
+    });
+
+    it('should let the active device overwrite records of the previous device', async () => {
+      await save([patch('single', { keys: ['A'] }, { clientSeq: 10 })]);
+      session.activeDeviceId = 'd2';
+
+      await saveFrom('d2', [patch('single', { keys: ['C'] }, { clientSeq: 1 })]);
+
+      expect(tx.records.get('single')).toMatchObject({ answer: { keys: ['C'] }, deviceId: 'd2', clientSeq: 1 });
+      expect(await failure(save([patch('single', { keys: ['B'] }, { clientSeq: 11 })]))).toBe('sessionTakenOver');
+    });
+
+    it('should accept only offline answers made before the deadline during the sync window', async () => {
+      const deadline = new Date(Date.now() - MINUTE);
+      Object.assign(session, { deadlineAt: deadline, autoSubmitAt: new Date(Date.now() + 4 * MINUTE) });
+
+      expect(await failure(save([patch('single', { keys: ['A'] })]))).toBe('sessionClosed');
+      const result = await saveFrom(
+        'd1',
+        [
+          patch('single', { keys: ['A'] }, { clientAnsweredAt: new Date(deadline.getTime() - 1000) }),
+          patch('multi', { keys: ['A'] }, { clientAnsweredAt: new Date(deadline.getTime() + 1000) }),
+        ],
+        true,
+      );
+
+      expect(result.skippedQuestionIds).toEqual(['multi']);
+      expect(tx.records.get('single')?.answer).toEqual({ keys: ['A'] });
+      expect(tx.records.has('multi')).toBe(false);
+    });
+
+    it('should reject writes after the auto submit time', async () => {
+      Object.assign(session, {
+        deadlineAt: new Date(Date.now() - 6 * MINUTE),
+        autoSubmitAt: new Date(Date.now() - MINUTE),
+      });
+      expect(await failure(saveFrom('d1', [patch('single', { keys: ['A'] })], true))).toBe('sessionClosed');
+    });
+
+    it('should not mark the first attempt for clears, marks or an already marked session', async () => {
+      await save([{ questionId: 'single', markedForReview: true, clientSeq: 1, clientAnsweredAt: new Date() }]);
+      expect(tx.markFirstAttempt).not.toHaveBeenCalled();
+
+      session.isFirstAttempt = true;
+      await save([patch('multi', { keys: ['A'] }, { clientSeq: 2 })]);
+      expect(tx.markFirstAttempt).not.toHaveBeenCalled();
     });
   });
 });

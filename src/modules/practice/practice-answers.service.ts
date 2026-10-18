@@ -12,6 +12,7 @@ import { PracticeSession, PracticeSessionStatus } from './domain/practice-sessio
 import { AnswerRecord, GradingStatus, MAX_ANSWER_DURATION_SEC } from './domain/answer-record';
 import { InspectedAnswer, inspectAnswer, isSubjectiveType } from './domain/answer-content';
 import { gradeAnswer, gradeSelfAssessment } from './domain/answer-grading';
+import { acceptsMockOverwrite, checkMockWrite } from './domain/mock-exam';
 import {
   AnswerPatchDto,
   AnswerResultDto,
@@ -26,14 +27,16 @@ import { FilesService } from '../files/files.service';
 import { businessDate } from '../papers/domain/business-date';
 import { BusinessException } from '../../common/exceptions/business.exception';
 
+/** answered 为写入后 answeredCount 的变化量 */
 type RecordAction =
   | { kind: 'none' }
-  | { kind: 'update'; changes: AnswerRecordChanges; answered: boolean }
-  | { kind: 'insert'; data: InsertAnswerRecordData; answered: boolean };
+  | { kind: 'update'; changes: AnswerRecordChanges; answered: number }
+  | { kind: 'insert'; data: InsertAnswerRecordData; answered: number };
 
 interface WriteOutcome {
   records: Map<string, AnswerRecord>;
   gradedRecordIds: string[];
+  skippedQuestionIds: string[];
 }
 
 function unprocessable(field: string, error: string): UnprocessableEntityException {
@@ -54,7 +57,7 @@ function canSelfAssess(session: Pick<PracticeSession, 'mode' | 'status'>): boole
   return session.status !== PracticeSessionStatus.ABANDONED;
 }
 
-/** 答完即判模式的作答写入与主观题自评 */
+/** 作答写入与主观题自评：答完即判模式判分并锁定，模考只落库并允许覆盖 */
 @Injectable()
 export class PracticeAnswersService {
   private readonly logger = new Logger(PracticeAnswersService.name);
@@ -69,9 +72,6 @@ export class PracticeAnswersService {
 
   async save(userId: number, sessionId: string, dto: SaveAnswersDto): Promise<SaveAnswersResultDto> {
     const session = await this.findOwned(userId, sessionId);
-    if (session.mode === PracticeMode.MOCK) {
-      throw unprocessable('mode', 'practiceModeNotSupported');
-    }
     if (session.mode === PracticeMode.MEMORIZE) {
       throw unprocessable('mode', 'memorizeNotAnswerable');
     }
@@ -97,16 +97,27 @@ export class PracticeAnswersService {
     }
     await this.assertOwnImages(userId, [...inspected.values()]);
 
-    const now = new Date();
+    const isMock = session.mode === PracticeMode.MOCK;
     const patches = [...dto.answers].sort((a, b) => a.questionId.localeCompare(b.questionId));
     const outcome = await this.practiceSessionRepository.transaction(async (tx) => {
-      await this.lockWritable(
+      const locked = await this.lockWritable(
         tx,
         userId,
         sessionId,
         ids,
-        (locked) => locked.status === PracticeSessionStatus.IN_PROGRESS,
+        (current) => current.status === PracticeSessionStatus.IN_PROGRESS,
       );
+      const now = new Date();
+      let accepts = (_patch: AnswerPatchDto): boolean => true;
+      if (isMock) {
+        const check = checkMockWrite(locked, dto.deviceId, dto.offline === true, now);
+        if ('rejection' in check) {
+          throw new BusinessException(check.rejection);
+        }
+        if (check.phase === 'offlineSync') {
+          accepts = (patch) => patch.clientAnsweredAt.getTime() <= locked.deadlineAt!.getTime();
+        }
+      }
       const existing = new Map(
         (
           await tx.findRecordsForUpdate(
@@ -116,43 +127,41 @@ export class PracticeAnswersService {
         ).map((record) => [record.questionId, record]),
       );
       const delta = { answered: 0, correct: 0, durationSec: 0 };
-      const result: WriteOutcome = { records: new Map(), gradedRecordIds: [] };
+      const result: WriteOutcome = { records: new Map(), gradedRecordIds: [], skippedQuestionIds: [] };
+      let filled = false;
       for (const patch of patches) {
+        const current = existing.get(patch.questionId);
+        if (!accepts(patch)) {
+          result.skippedQuestionIds.push(patch.questionId);
+          if (current) {
+            result.records.set(patch.questionId, current);
+          }
+          continue;
+        }
         const question = questions.get(patch.questionId)!;
+        const decideFor = isMock ? this.decideMock.bind(this) : this.decideImmediate.bind(this);
         const decide = (record: AnswerRecord | undefined): RecordAction =>
-          this.decideImmediate(
-            session,
-            userId,
-            question,
-            patch,
-            inspected.get(patch.questionId)!,
-            dto.deviceId,
-            now,
-            record,
-          );
-        const record = await this.applyAction(
-          tx,
-          sessionId,
-          patch.questionId,
-          existing.get(patch.questionId),
-          decide,
-          (written, action) => {
-            if (!action.answered) {
-              return;
-            }
-            delta.answered += 1;
-            delta.correct += written.isCorrect ? 1 : 0;
-            delta.durationSec += written.durationSec;
-            if (written.isCorrect !== null) {
-              result.gradedRecordIds.push(written.id);
-            }
-          },
-        );
+          decideFor(session, userId, question, patch, inspected.get(patch.questionId)!, dto.deviceId, now, record);
+        const record = await this.applyAction(tx, sessionId, patch.questionId, current, decide, (written, action) => {
+          delta.answered += action.answered;
+          filled ||= action.answered > 0;
+          if (isMock || action.answered === 0) {
+            return;
+          }
+          delta.correct += written.isCorrect ? 1 : 0;
+          delta.durationSec += written.durationSec;
+          if (written.isCorrect !== null) {
+            result.gradedRecordIds.push(written.id);
+          }
+        });
         if (record) {
           result.records.set(patch.questionId, record);
         }
       }
       await tx.adjustSessionCounters(sessionId, delta);
+      if (isMock && filled && !locked.isFirstAttempt) {
+        await tx.markFirstAttempt(locked);
+      }
       return result;
     });
 
@@ -160,6 +169,7 @@ export class PracticeAnswersService {
     return {
       serverNow: new Date(),
       results: await this.toResults(userId, session, ids, questions, outcome.records),
+      skippedQuestionIds: outcome.skippedQuestionIds,
     };
   }
 
@@ -176,7 +186,6 @@ export class PracticeAnswersService {
       throw unprocessable('questionId', 'selfAssessmentSubjectiveOnly');
     }
 
-    const now = new Date();
     const outcome = await this.practiceSessionRepository.transaction(async (tx) => {
       const locked = await this.lockWritable(
         tx,
@@ -186,6 +195,7 @@ export class PracticeAnswersService {
         canSelfAssess,
         'selfAssessmentNotAllowed',
       );
+      const now = new Date();
       const [record] = await tx.findRecordsForUpdate(sessionId, [dto.questionId]);
       if ((record?.answer ?? null) === null || record.gradingStatus === GradingStatus.PENDING) {
         throw new BusinessException('selfAssessmentNotAllowed');
@@ -260,14 +270,14 @@ export class PracticeAnswersService {
         return { kind: 'none' };
       }
       if (record) {
-        return { kind: 'update', changes: { markedForReview: mark }, answered: false };
+        return { kind: 'update', changes: { markedForReview: mark }, answered: 0 };
       }
       if (!mark) {
         return { kind: 'none' };
       }
       return {
         kind: 'insert',
-        answered: false,
+        answered: 0,
         data: {
           ...client,
           sessionId: session.id,
@@ -303,8 +313,62 @@ export class PracticeAnswersService {
       statDate: graded ? businessDate(now) : null,
     };
     return record
-      ? { kind: 'update', changes: fields, answered: true }
-      : { kind: 'insert', data: { ...fields, sessionId: session.id, userId, questionId: question.id }, answered: true };
+      ? { kind: 'update', changes: fields, answered: 1 }
+      : { kind: 'insert', data: { ...fields, sessionId: session.id, userId, questionId: question.id }, answered: 1 };
+  }
+
+  /** 模考只落库不判分；省略答案时保留原答案，空答案为软清空 */
+  private decideMock(
+    session: PracticeSession,
+    userId: number,
+    question: Question,
+    patch: AnswerPatchDto,
+    inspected: InspectedAnswer,
+    deviceId: string,
+    now: Date,
+    record: AnswerRecord | undefined,
+  ): RecordAction {
+    if (!acceptsMockOverwrite(record, deviceId, patch.clientSeq)) {
+      return { kind: 'none' };
+    }
+    const previous = record?.answer ?? null;
+    const answer = patch.answer === undefined ? previous : inspected.kind === 'filled' ? inspected.answer : null;
+    const mark = patch.markedForReview ?? record?.markedForReview ?? false;
+    const answered = (answer !== null ? 1 : 0) - (previous !== null ? 1 : 0);
+    const fields = {
+      deviceId,
+      clientSeq: patch.clientSeq,
+      clientAnsweredAt: patch.clientAnsweredAt,
+      answer,
+      markedForReview: mark,
+      durationSec:
+        patch.durationSec === undefined
+          ? (record?.durationSec ?? 0)
+          : Math.min(patch.durationSec, MAX_ANSWER_DURATION_SEC),
+      answeredAt: now,
+    };
+    if (record) {
+      return { kind: 'update', changes: fields, answered };
+    }
+    if (answer === null && !mark) {
+      return { kind: 'none' };
+    }
+    return {
+      kind: 'insert',
+      answered,
+      data: {
+        ...fields,
+        sessionId: session.id,
+        userId,
+        questionId: question.id,
+        questionVersion: session.questionVersions[question.id] ?? question.currentVersion,
+        isCorrect: null,
+        isPartial: false,
+        score: null,
+        gradedAt: null,
+        statDate: null,
+      },
+    };
   }
 
   /** 并发插入冲突时重读记录后重新决策 */

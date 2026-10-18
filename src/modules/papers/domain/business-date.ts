@@ -12,6 +12,11 @@ export function businessDate(at: Date = new Date()): string {
   return formatter.format(at);
 }
 
+/** Asia/Shanghai 当日零点 */
+export function businessDayStart(at: Date = new Date()): Date {
+  return new Date(`${businessDate(at)}T00:00:00+08:00`);
+}
+
 export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }

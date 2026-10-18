@@ -40,6 +40,23 @@ export class AdminDailyQuestionSetDto extends DailyQuestionSet {
   questions: DailySetQuestionDto[];
 }
 
+export class DailyCompletionDto {
+  @ApiProperty({ type: String, format: 'uuid', nullable: true, description: '当日每日一练会话，未开始时为空' })
+  sessionId: string | null;
+
+  @ApiProperty({ type: Number, description: '会话题数，未开始时为当日题量' })
+  questionCount: number;
+
+  @ApiProperty({ type: Number })
+  answeredCount: number;
+
+  @ApiProperty({ type: Number })
+  correctCount: number;
+
+  @ApiProperty({ type: Boolean, description: '全部题目已作答' })
+  completed: boolean;
+}
+
 export class DailySummaryDto {
   @ApiProperty({ type: String, format: 'uuid' })
   subjectId: string;
@@ -50,8 +67,8 @@ export class DailySummaryDto {
   @ApiProperty({ type: Number, description: '当日题量，题库为空时为 0' })
   questionCount: number;
 
-  @ApiProperty({ type: Object, nullable: true, description: '登录用户的完成情况' })
-  completion: null;
+  @ApiProperty({ type: DailyCompletionDto, nullable: true, description: '登录用户的完成情况，未登录时为空' })
+  completion: DailyCompletionDto | null;
 }
 
 export class DailyTrialDto {

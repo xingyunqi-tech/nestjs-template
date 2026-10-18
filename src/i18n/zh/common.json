@@ -188,5 +188,8 @@
   "dailySessionCannotFinish": "每日一练不能结束",
   "dailySessionCannotAbandon": "每日一练不能放弃",
   "invalidLastIndex": "浏览位置超出题目范围",
-  "answerNotMatchQuestion": "作答与题目不符：选项不存在、单选只能选一项或填空数量不符"
+  "answerNotMatchQuestion": "作答与题目不符：选项不存在、单选只能选一项或填空数量不符",
+  "paperRequired": "模拟考试请选择试卷",
+  "mockSessionBusy": "考试状态变化中，请稍后重试",
+  "reportNotAvailable": "会话结束后才能查看成绩报告"
 }

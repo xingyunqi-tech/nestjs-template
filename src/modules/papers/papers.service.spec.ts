@@ -2,6 +2,7 @@ import type { Mocked } from 'vitest';
 import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { PapersService } from './papers.service';
 import { PaperRepository } from './infrastructure/persistence/paper.repository';
+import { PaperAttemptRepository } from './infrastructure/persistence/paper-attempt.repository';
 import { Paper } from './domain/paper';
 import { PaperType } from './domain/paper-type';
 import { MultiScoringRule } from './domain/multi-scoring-rule';
@@ -70,6 +71,7 @@ const sections = [
 
 describe('PapersService', () => {
   let repository: Mocked<PaperRepository>;
+  let attempts: Mocked<Pick<PaperAttemptRepository, 'findUserScores'>>;
   let subjectsService: Mocked<Pick<SubjectsService, 'findById' | 'getPublishedSubject'>>;
   let questionsService: Mocked<Pick<QuestionsService, 'findUnits' | 'findByIds' | 'resolveFileUrls'>>;
   let service: PapersService;
@@ -87,7 +89,10 @@ describe('PapersService', () => {
       saveWithQuestions: vi.fn().mockResolvedValue('p9'),
       copy: vi.fn(),
       removeDraft: vi.fn().mockResolvedValue(true),
+      createGenerated: vi.fn(),
+      removeStaleGenerated: vi.fn(),
     };
+    attempts = { findUserScores: vi.fn().mockResolvedValue(new Map()) };
     subjectsService = { findById: vi.fn(), getPublishedSubject: vi.fn().mockResolvedValue({ id: SUBJECT }) };
     questionsService = {
       findUnits: vi.fn((ids: string[]) => Promise.resolve(ids.flatMap((id) => UNITS[id] ?? []))),
@@ -100,6 +105,7 @@ describe('PapersService', () => {
     };
     service = new PapersService(
       repository,
+      attempts as unknown as PaperAttemptRepository,
       subjectsService as unknown as SubjectsService,
       questionsService as unknown as QuestionsService,
     );
@@ -379,6 +385,19 @@ describe('PapersService', () => {
         { page: 2, limit: 5 },
       );
       expect(result.data[0]).not.toHaveProperty('ownerUserId');
+    });
+
+    it('should attach the latest and best scores of the signed-in viewer only', async () => {
+      repository.findCatalog.mockResolvedValue({ data: [paper()], total: 1 });
+      attempts.findUserScores.mockResolvedValue(new Map([['p1', { lastScore: 3, bestScore: 8.5 }]]));
+
+      const signedIn = await service.findCatalog(SUBJECT, {}, 9);
+      const anonymous = await service.findCatalog(SUBJECT, {}, null);
+
+      expect(attempts.findUserScores).toHaveBeenCalledTimes(1);
+      expect(attempts.findUserScores).toHaveBeenCalledWith(9, ['p1']);
+      expect(signedIn.data[0]).toMatchObject({ lastScore: 3, bestScore: 8.5 });
+      expect(anonymous.data[0]).toMatchObject({ lastScore: null, bestScore: null });
     });
   });
 

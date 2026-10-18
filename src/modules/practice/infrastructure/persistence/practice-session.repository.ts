@@ -1,7 +1,7 @@
 import { NullableType } from '../../../../common/types/nullable.type';
 import { IPaginationOptions } from '../../../../common/types/pagination-options';
 import { PracticeMode } from '../../domain/practice-mode';
-import { PracticeSession, PracticeSessionStatus, SubmitType } from '../../domain/practice-session';
+import { PracticeSession, PracticeSessionStatus, ScoringScheme, SubmitType } from '../../domain/practice-session';
 import { AnswerRecord } from '../../domain/answer-record';
 
 export type CreatePracticeSessionData = Pick<
@@ -42,6 +42,37 @@ export type InsertAnswerRecordData = AnswerRecordFields & Pick<AnswerRecord, 'se
 
 export type AnswerRecordChanges = Partial<AnswerRecordFields & Pick<AnswerRecord, 'selfAssessment'>>;
 
+/** 创建模考时试卷已不存在 */
+export class MockPaperMissingError extends Error {}
+
+export type CreateMockSessionData = CreatePracticeSessionData & Pick<PracticeSession, 'startedAt'>;
+
+export interface RecordGrade {
+  id: AnswerRecord['id'];
+  isCorrect: boolean;
+  isPartial: boolean;
+  score: number;
+}
+
+export type MockSubmission =
+  | {
+      status: PracticeSessionStatus.SUBMITTED;
+      submitType: SubmitType;
+      submittedAt: Date;
+      durationSec: number;
+      score: number;
+      correctCount: number;
+      scoringScheme: ScoringScheme;
+      totalScore: number;
+    }
+  | { status: PracticeSessionStatus.ABANDONED };
+
+export interface PercentileSample {
+  /** 得分低于给定分数的样本数 */
+  below: number;
+  total: number;
+}
+
 export type DailySessionKey = { userId: number; subjectId: string; dailyDate: string };
 
 export interface SessionCounterDelta {
@@ -73,10 +104,35 @@ export interface PracticeTransaction {
 
   /** 原子增减计数并刷新 lastActiveAt */
   adjustSessionCounters(id: PracticeSession['id'], delta: SessionCounterDelta): Promise<void>;
+
+  /** 该用户在该试卷上没有首次作答会话时标记本会话并自增试卷参考人数，返回是否标记；并发冲突视为未标记 */
+  markFirstAttempt(session: Pick<PracticeSession, 'id' | 'userId' | 'paperId'>): Promise<boolean>;
+
+  /** 写入判分结果；gradedAt 与 statDate 取交卷时间 */
+  gradeRecords(grades: RecordGrade[], gradedAt: Date, statDate: string): Promise<void>;
+
+  setActiveDevice(id: PracticeSession['id'], deviceId: string): Promise<void>;
+
+  /** 仅当状态为 IN_PROGRESS 时写入交卷结果，返回是否更新 */
+  closeMock(id: PracticeSession['id'], submission: MockSubmission): Promise<boolean>;
 }
 
 export abstract class PracticeSessionRepository {
   abstract create(data: CreatePracticeSessionData): Promise<PracticeSession>;
+
+  /** 同一用户同一试卷已有进行中的模考时不插入并返回 null；试卷不存在时抛出 MockPaperMissingError */
+  abstract insertMockIfAbsent(data: CreateMockSessionData): Promise<NullableType<PracticeSession>>;
+
+  abstract findInProgressMock(userId: number, paperId: string): Promise<NullableType<PracticeSession>>;
+
+  /** autoSubmitAt 不晚于 now 的进行中模考 */
+  abstract findDueMockIds(now: Date, limit: number): Promise<string[]>;
+
+  /** 相同计分口径下其他用户首次作答且已交卷的成绩 */
+  abstract findPercentileSample(
+    session: Pick<PracticeSession, 'userId' | 'paperId' | 'scoringScheme'>,
+    score: number,
+  ): Promise<PercentileSample>;
 
   abstract findDaily(key: DailySessionKey): Promise<NullableType<PracticeSession>>;
 
@@ -100,9 +156,6 @@ export abstract class PracticeSessionRepository {
   abstract findOngoing(userId: number, limit: number): Promise<PracticeSession[]>;
 
   abstract findInProgressMockQuestionIds(userId: number): Promise<string[]>;
-
-  /** 用户在科目内作答过（答案非空）的题目所属出题单位 id */
-  abstract findAnsweredRootIds(userId: number, subjectId: string): Promise<string[]>;
 
   /** 会话中判错的题目（含部分正确与自评不会），按会话出题顺序 */
   abstract findWrongQuestionIds(session: PracticeSession): Promise<string[]>;

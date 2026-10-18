@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { PaperContent, PaperQuestionData, PaperRepository } from './infrastructure/persistence/paper.repository';
+import { PaperAttemptRepository, PaperScores } from './infrastructure/persistence/paper-attempt.repository';
 import { Paper } from './domain/paper';
 import { PaperQuestion } from './domain/paper-question';
 import { PaperType } from './domain/paper-type';
@@ -33,7 +34,7 @@ function unprocessable(field: string, error: string): UnprocessableEntityExcepti
   return new UnprocessableEntityException({ errors: { [field]: error } });
 }
 
-function toPublic(paper: Paper): PublicPaperDto {
+function toPublic(paper: Paper, scores?: PaperScores): PublicPaperDto {
   const dto = new PublicPaperDto();
   dto.id = paper.id;
   dto.subjectId = paper.subjectId;
@@ -45,8 +46,8 @@ function toPublic(paper: Paper): PublicPaperDto {
   dto.totalScore = paper.totalScore;
   dto.isFree = paper.isFree;
   dto.attemptCount = paper.attemptCount;
-  dto.lastScore = null;
-  dto.bestScore = null;
+  dto.lastScore = scores?.lastScore ?? null;
+  dto.bestScore = scores?.bestScore ?? null;
   return dto;
 }
 
@@ -58,6 +59,7 @@ function viewerNumber(viewerUserId: ViewerId): number | null {
 export class PapersService {
   constructor(
     private readonly paperRepository: PaperRepository,
+    private readonly paperAttemptRepository: PaperAttemptRepository,
     private readonly subjectsService: SubjectsService,
     private readonly questionsService: QuestionsService,
   ) {}
@@ -75,6 +77,11 @@ export class PapersService {
       throw notFound();
     }
     return paper;
+  }
+
+  /** 用户在科目内作答过（答案非空）的题目所属出题单位 id；since 为空时不限时间 */
+  findAnsweredRootIds(userId: number, subjectId: string, since: Date | null = null): Promise<string[]> {
+    return this.paperAttemptRepository.findAnsweredRootIds(userId, subjectId, since);
   }
 
   /** 按 sort 排序 */
@@ -257,11 +264,16 @@ export class PapersService {
   ): Promise<{ data: PublicPaperDto[]; total: number; paginationOptions: IPaginationOptions }> {
     await this.subjectsService.getPublishedSubject(subjectId);
     const paginationOptions = { page: query.page ?? 1, limit: query.limit ?? 20 };
+    const viewer = viewerNumber(viewerUserId);
     const { data, total } = await this.paperRepository.findCatalog(
-      { subjectId, type: query.type, viewerUserId: viewerNumber(viewerUserId) },
+      { subjectId, type: query.type, viewerUserId: viewer },
       paginationOptions,
     );
-    return { data: data.map(toPublic), total, paginationOptions };
+    const scores = await this.findViewerScores(
+      viewer,
+      data.map((paper) => paper.id),
+    );
+    return { data: data.map((paper) => toPublic(paper, scores.get(paper.id))), total, paginationOptions };
   }
 
   async getPublicDetail(id: Paper['id'], viewerUserId: ViewerId): Promise<PublicPaperDetailDto> {
@@ -277,8 +289,11 @@ export class PapersService {
         throw error instanceof NotFoundException ? notFound() : error;
       });
     }
-    const rows = await this.paperRepository.findQuestions(id);
-    const dto = Object.assign(new PublicPaperDetailDto(), toPublic(paper));
+    const [rows, scores] = await Promise.all([
+      this.paperRepository.findQuestions(id),
+      this.findViewerScores(viewerNumber(viewerUserId), [id]),
+    ]);
+    const dto = Object.assign(new PublicPaperDetailDto(), toPublic(paper, scores.get(id)));
     dto.sections = paper.sections.map((section, index) => ({
       title: section.title,
       questionType: section.questionType,
@@ -287,6 +302,10 @@ export class PapersService {
     dto.objectiveScore = paper.objectiveScore;
     dto.multiScoringRule = paper.multiScoringRule;
     return dto;
+  }
+
+  private findViewerScores(viewer: number | null, paperIds: Paper['id'][]): Promise<Map<Paper['id'], PaperScores>> {
+    return viewer === null ? Promise.resolve(new Map()) : this.paperAttemptRepository.findUserScores(viewer, paperIds);
   }
 
   private async transition(

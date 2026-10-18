@@ -115,7 +115,7 @@ export class QuestionPickerService {
     const mockRootIds = await this.findMockRootIds(request.userId);
     const units: QuestionUnit[] = [];
     if (preferUnanswered) {
-      const answered = await this.practiceSessionRepository.findAnsweredRootIds(request.userId, request.subjectId);
+      const answered = await this.papersService.findAnsweredRootIds(request.userId, request.subjectId);
       await this.drawInto(units, request, criteria, [...mockRootIds, ...answered]);
     }
     await this.drawInto(units, request, criteria, mockRootIds);
@@ -127,7 +127,7 @@ export class QuestionPickerService {
     const { userId, subjectId, count } = request;
     const [mockRootIds, answered, weakPointIds, wrongIds] = await Promise.all([
       this.findMockRootIds(userId),
-      this.practiceSessionRepository.findAnsweredRootIds(userId, subjectId),
+      this.papersService.findAnsweredRootIds(userId, subjectId),
       this.weakPointReader.findWeakKnowledgePointIds(userId, subjectId),
       this.wrongBookReader.findActiveQuestionIds(userId, subjectId),
     ]);

@@ -8,12 +8,17 @@ import { PracticeSessionMapper } from '../mappers/practice-session.mapper';
 import { AnswerRecordMapper } from '../mappers/answer-record.mapper';
 import {
   AnswerRecordChanges,
+  CreateMockSessionData,
   CreatePracticeSessionData,
   DailySessionKey,
   InsertAnswerRecordData,
+  MockPaperMissingError,
+  MockSubmission,
+  PercentileSample,
   PracticeSessionFilter,
   PracticeSessionRepository,
   PracticeTransaction,
+  RecordGrade,
   SessionCounterDelta,
 } from '../../practice-session.repository';
 import { PracticeMode } from '../../../../domain/practice-mode';
@@ -24,13 +29,19 @@ import { lockDailyQuestionSet } from '../../../../../../infrastructure/database/
 import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
 
 const DEADLOCK_DETECTED = '40P01';
+const UNIQUE_VIOLATION = '23505';
+const FOREIGN_KEY_VIOLATION = '23503';
 const MAX_TRANSACTION_ATTEMPTS = 3;
 const RETRY_BACKOFF_MS = 20;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+function hasErrorCode(error: unknown, code: string): boolean {
+  return error instanceof QueryFailedError && (error.driverError as { code?: string })?.code === code;
+}
+
 function isDeadlock(error: unknown): boolean {
-  return error instanceof QueryFailedError && (error.driverError as { code?: string })?.code === DEADLOCK_DETECTED;
+  return hasErrorCode(error, DEADLOCK_DETECTED);
 }
 
 function recordColumns(changes: AnswerRecordChanges): QueryDeepPartialEntity<AnswerRecordEntity> {
@@ -123,6 +134,88 @@ class RelationalPracticeTransaction implements PracticeTransaction {
       .where('id = :id', { id })
       .execute();
   }
+
+  async markFirstAttempt(session: Pick<PracticeSession, 'id' | 'userId' | 'paperId'>): Promise<boolean> {
+    if (!session.paperId) {
+      return false;
+    }
+    await this.manager.query('SAVEPOINT "first_attempt"');
+    try {
+      const result = await this.manager
+        .createQueryBuilder()
+        .update(PracticeSessionEntity)
+        .set({ isFirstAttempt: true })
+        .where('id = :id AND NOT "isFirstAttempt"', { id: session.id })
+        .andWhere(
+          `NOT EXISTS (
+            SELECT 1 FROM "practice_session" AS first
+            WHERE first."userId" = :userId AND first."paperId" = :paperId AND first."isFirstAttempt"
+          )`,
+          { userId: session.userId, paperId: session.paperId },
+        )
+        .execute();
+      const marked = (result.affected ?? 0) > 0;
+      if (marked) {
+        await this.manager.query(`UPDATE "paper" SET "attemptCount" = "attemptCount" + 1 WHERE "id" = $1`, [
+          session.paperId,
+        ]);
+      }
+      await this.manager.query('RELEASE SAVEPOINT "first_attempt"');
+      return marked;
+    } catch (error) {
+      if (!hasErrorCode(error, UNIQUE_VIOLATION)) {
+        throw error;
+      }
+      await this.manager.query('ROLLBACK TO SAVEPOINT "first_attempt"');
+      return false;
+    }
+  }
+
+  async gradeRecords(grades: RecordGrade[], gradedAt: Date, statDate: string): Promise<void> {
+    if (grades.length === 0) {
+      return;
+    }
+    await this.manager.query(
+      `UPDATE "answer_record" AS r
+       SET "isCorrect" = g."isCorrect", "isPartial" = g."isPartial", "score" = g."score",
+           "gradedAt" = $2, "statDate" = $3, "updatedAt" = now()
+       FROM jsonb_to_recordset($1::jsonb) AS g("id" uuid, "isCorrect" boolean, "isPartial" boolean, "score" numeric)
+       WHERE r."id" = g."id"`,
+      [JSON.stringify(grades), gradedAt, statDate],
+    );
+  }
+
+  async setActiveDevice(id: string, deviceId: string): Promise<void> {
+    await this.manager
+      .createQueryBuilder()
+      .update(PracticeSessionEntity)
+      .set({ activeDeviceId: deviceId, lastActiveAt: () => 'now()' })
+      .where('id = :id', { id })
+      .execute();
+  }
+
+  async closeMock(id: string, submission: MockSubmission): Promise<boolean> {
+    const values: QueryDeepPartialEntity<PracticeSessionEntity> =
+      submission.status === PracticeSessionStatus.ABANDONED
+        ? { status: submission.status }
+        : {
+            status: submission.status,
+            submitType: submission.submitType,
+            submittedAt: submission.submittedAt,
+            durationSec: submission.durationSec,
+            score: submission.score.toFixed(2),
+            correctCount: submission.correctCount,
+            scoringScheme: submission.scoringScheme,
+            totalScore: submission.totalScore.toFixed(2),
+          };
+    const result = await this.manager
+      .createQueryBuilder()
+      .update(PracticeSessionEntity)
+      .set(values)
+      .where('id = :id AND status = :inProgress', { id, inProgress: PracticeSessionStatus.IN_PROGRESS })
+      .execute();
+    return (result.affected ?? 0) > 0;
+  }
 }
 
 @Injectable()
@@ -139,6 +232,67 @@ export class PracticeSessionRelationalRepository implements PracticeSessionRepos
       this.sessionRepository.create(PracticeSessionMapper.toPersistence(data)),
     );
     return (await this.findById(entity.id))!;
+  }
+
+  async insertMockIfAbsent(data: CreateMockSessionData): Promise<NullableType<PracticeSession>> {
+    const values = PracticeSessionMapper.toPersistence(data);
+    values.startedAt = data.startedAt;
+    values.lastActiveAt = data.startedAt;
+    const result = await this.sessionRepository
+      .createQueryBuilder()
+      .insert()
+      .into(PracticeSessionEntity)
+      .values(values)
+      .orIgnore()
+      .returning(['id'])
+      .execute()
+      .catch((error: unknown) => {
+        throw hasErrorCode(error, FOREIGN_KEY_VIOLATION) ? new MockPaperMissingError() : error;
+      });
+    const [row] = result.raw as { id: string }[];
+    return row ? this.findById(row.id) : null;
+  }
+
+  async findInProgressMock(userId: number, paperId: string): Promise<NullableType<PracticeSession>> {
+    const entity = await this.sessionRepository.findOneBy({
+      userId,
+      paperId,
+      mode: PracticeMode.MOCK,
+      status: PracticeSessionStatus.IN_PROGRESS,
+    });
+    return entity ? PracticeSessionMapper.toDomain(entity) : null;
+  }
+
+  async findDueMockIds(now: Date, limit: number): Promise<string[]> {
+    const rows = await this.sessionRepository
+      .createQueryBuilder('s')
+      .select('s.id', 'id')
+      .where('s.status = :inProgress AND s.mode = :mock AND s."autoSubmitAt" <= :now', {
+        inProgress: PracticeSessionStatus.IN_PROGRESS,
+        mock: PracticeMode.MOCK,
+        now,
+      })
+      .orderBy('s.autoSubmitAt', 'ASC')
+      .limit(limit)
+      .getRawMany<{ id: string }>();
+    return rows.map((row) => row.id);
+  }
+
+  async findPercentileSample(
+    session: Pick<PracticeSession, 'userId' | 'paperId' | 'scoringScheme'>,
+    score: number,
+  ): Promise<PercentileSample> {
+    if (!session.paperId || !session.scoringScheme) {
+      return { below: 0, total: 0 };
+    }
+    const [row]: { below: number; total: number }[] = await this.sessionRepository.query(
+      `SELECT COUNT(*) FILTER (WHERE s."score" < $4)::int AS "below", COUNT(*)::int AS "total"
+       FROM "practice_session" AS s
+       WHERE s."paperId" = $1 AND s."scoringScheme" = $2 AND s."isFirstAttempt" AND s."status" = $5
+         AND s."score" IS NOT NULL AND NOT s."pendingGrading" AND s."userId" <> $3`,
+      [session.paperId, session.scoringScheme, session.userId, score, PracticeSessionStatus.SUBMITTED],
+    );
+    return row;
   }
 
   async findDaily(key: DailySessionKey): Promise<NullableType<PracticeSession>> {
@@ -210,17 +364,6 @@ export class PracticeSessionRelationalRepository implements PracticeSessionRepos
 
   findInProgressMockQuestionIds(userId: number): Promise<string[]> {
     return inProgressMockQuestionIds(this.sessionRepository.manager, userId, null);
-  }
-
-  async findAnsweredRootIds(userId: number, subjectId: string): Promise<string[]> {
-    const rows: { rootId: string }[] = await this.recordRepository.query(
-      `SELECT DISTINCT COALESCE(q."parentId", q."id") AS "rootId"
-       FROM "answer_record" AS r
-       INNER JOIN "question" AS q ON q."id" = r."questionId"
-       WHERE r."userId" = $1 AND q."subjectId" = $2 AND r."answer" IS NOT NULL`,
-      [userId, subjectId],
-    );
-    return rows.map((row) => row.rootId);
   }
 
   async findWrongQuestionIds(session: PracticeSession): Promise<string[]> {

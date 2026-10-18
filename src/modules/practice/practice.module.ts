@@ -1,12 +1,21 @@
 import { Module } from '@nestjs/common';
+import { ConditionalModule } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import { RelationalPracticePersistenceModule } from './infrastructure/persistence/relational/relational-persistence.module';
 import { ExamsModule } from '../exams/exams.module';
 import { QuestionsModule } from '../questions/questions.module';
 import { PapersModule } from '../papers/papers.module';
 import { FilesModule } from '../files/files.module';
+import { AppConfigModule } from '../config/config.module';
 import { SchedulerModule } from '../../infrastructure/scheduler/scheduler.module';
+import { isRedisEnabled } from '../../infrastructure/redis/config/redis.config';
+import { MOCK_SUBMIT_QUEUE } from '../../infrastructure/queue/mock-submit-queue/mock-submit-queue.constants';
 import { PracticeSessionsService } from './practice-sessions.service';
 import { PracticeAnswersService } from './practice-answers.service';
+import { PracticeReportService } from './practice-report.service';
+import { MockExamService } from './mock-exam.service';
+import { MockSubmitScheduler } from './mock-submit.scheduler';
+import { AutoSubmitMockSessionsTask } from './auto-submit-mock-sessions.task';
 import { QuestionPickerService } from './question-picker.service';
 import { AnswerVisibilityService } from './answer-visibility.service';
 import { InProgressMockQuestionsService } from './in-progress-mock-questions.service';
@@ -26,12 +35,18 @@ import { EmptyQuestionAssociationReader, QuestionAssociationReader } from './por
     QuestionsModule,
     PapersModule,
     FilesModule,
+    AppConfigModule,
     SchedulerModule,
+    ConditionalModule.registerWhen(BullModule.registerQueue({ name: MOCK_SUBMIT_QUEUE }), isRedisEnabled),
   ],
   controllers: [PracticeSessionsController, QuestionAccessController],
   providers: [
     PracticeSessionsService,
     PracticeAnswersService,
+    PracticeReportService,
+    MockExamService,
+    MockSubmitScheduler,
+    AutoSubmitMockSessionsTask,
     QuestionPickerService,
     AnswerVisibilityService,
     InProgressMockQuestionsService,
@@ -42,6 +57,6 @@ import { EmptyQuestionAssociationReader, QuestionAssociationReader } from './por
     { provide: WeakPointReader, useClass: EmptyWeakPointReader },
     { provide: QuestionAssociationReader, useClass: EmptyQuestionAssociationReader },
   ],
-  exports: [PracticeSessionsService, AnswerVisibilityService, InProgressMockQuestionsService],
+  exports: [PracticeSessionsService, MockExamService, AnswerVisibilityService, InProgressMockQuestionsService],
 })
 export class PracticeModule {}

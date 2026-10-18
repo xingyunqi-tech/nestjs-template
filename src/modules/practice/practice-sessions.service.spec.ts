@@ -4,6 +4,7 @@ import { PracticeSessionsService } from './practice-sessions.service';
 import { PracticeSessionRepository } from './infrastructure/persistence/practice-session.repository';
 import { QuestionPickerService } from './question-picker.service';
 import { AnswerVisibilityService } from './answer-visibility.service';
+import { MockExamService } from './mock-exam.service';
 import { PracticeMode } from './domain/practice-mode';
 import { PracticeSession, PracticeSessionStatus, SubmitType } from './domain/practice-session';
 import { CreatePracticeSessionDto } from './dto/create-practice-session.dto';
@@ -44,6 +45,7 @@ describe('PracticeSessionsService', () => {
   let subjectsService: Mocked<Pick<SubjectsService, 'getPublishedSubject'>>;
   let knowledgePointsService: Mocked<Pick<KnowledgePointsService, 'findById'>>;
   let questionsService: Mocked<Pick<QuestionsService, 'findSummariesByIds' | 'findUnitsByQuestionIds' | 'renderUnits'>>;
+  let mockExamService: Mocked<Pick<MockExamService, 'enter' | 'submit'>>;
   let service: PracticeSessionsService;
 
   const dto = (overrides: Partial<CreatePracticeSessionDto>): CreatePracticeSessionDto =>
@@ -89,6 +91,7 @@ describe('PracticeSessionsService', () => {
       findUnitsByQuestionIds: vi.fn().mockResolvedValue([]),
       renderUnits: vi.fn().mockResolvedValue({ units: [], solutions: new Map() }),
     };
+    mockExamService = { enter: vi.fn(), submit: vi.fn().mockResolvedValue(undefined) };
     service = new PracticeSessionsService(
       repository as unknown as PracticeSessionRepository,
       picker as unknown as QuestionPickerService,
@@ -96,6 +99,7 @@ describe('PracticeSessionsService', () => {
       subjectsService as unknown as SubjectsService,
       knowledgePointsService as unknown as KnowledgePointsService,
       questionsService as unknown as QuestionsService,
+      mockExamService as unknown as MockExamService,
     );
   });
 
@@ -174,6 +178,19 @@ describe('PracticeSessionsService', () => {
       expect(picker.pick).not.toHaveBeenCalled();
     });
 
+    it('should enter a mock exam of the paper and report whether the device is active', async () => {
+      mockExamService.enter.mockResolvedValue({
+        session: sessionOf({ mode: PracticeMode.MOCK, paperId: 'p1' }),
+        isActiveDevice: false,
+      });
+
+      const result = await service.create(USER, dto({ mode: PracticeMode.MOCK, paperId: 'p1', deviceId: 'd2' }));
+
+      expect(mockExamService.enter).toHaveBeenCalledWith(USER, SUBJECT, 'p1', 'd2');
+      expect(result).toMatchObject({ mode: PracticeMode.MOCK, insufficient: false, isActiveDevice: false });
+      expect(picker.pick).not.toHaveBeenCalled();
+    });
+
     it('should keep only the scope fields of the mode', async () => {
       await service.create(
         USER,
@@ -206,6 +223,13 @@ describe('PracticeSessionsService', () => {
       PracticeSessionStatus.SUBMITTED,
       SubmitType.MANUAL,
     );
+  });
+
+  it('should submit a mock exam through the mock exam service', async () => {
+    session.mode = PracticeMode.MOCK;
+    await service.submit(USER, session.id);
+    expect(mockExamService.submit).toHaveBeenCalledWith(session.id, true);
+    expect(repository.closeInProgress).not.toHaveBeenCalled();
   });
 
   it('should not finish or abandon daily practice', async () => {

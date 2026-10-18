@@ -8,6 +8,8 @@ import { PapersService } from './papers.service';
 import { PaperRulesService } from './paper-rules.service';
 import { DailyQuestionSetsService } from './daily-question-sets.service';
 import { GenerateDailyQuestionSetsTask } from './generate-daily-question-sets.task';
+import { PaperGenerationService } from './paper-generation.service';
+import { CleanupGeneratedPapersTask } from './cleanup-generated-papers.task';
 import { PapersController } from './papers.controller';
 import { AdminPapersController } from './admin-papers.controller';
 import { AdminPaperRulesController } from './admin-paper-rules.controller';
@@ -16,7 +18,14 @@ import { AdminDailyQuestionSetsController } from './admin-daily-question-sets.co
 @Module({
   imports: [RelationalPaperPersistenceModule, ExamsModule, QuestionsModule, AppConfigModule, SchedulerModule],
   controllers: [PapersController, AdminPapersController, AdminPaperRulesController, AdminDailyQuestionSetsController],
-  providers: [PapersService, PaperRulesService, DailyQuestionSetsService, GenerateDailyQuestionSetsTask],
+  providers: [
+    PapersService,
+    PaperRulesService,
+    PaperGenerationService,
+    DailyQuestionSetsService,
+    GenerateDailyQuestionSetsTask,
+    CleanupGeneratedPapersTask,
+  ],
   exports: [PapersService, PaperRulesService, DailyQuestionSetsService, RelationalPaperPersistenceModule],
 })
 export class PapersModule {}

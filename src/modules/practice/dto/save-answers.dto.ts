@@ -37,7 +37,7 @@ export class AnswerPatchDto {
     type: Object,
     nullable: true,
     example: { keys: ['B'] },
-    description: '省略时只更新标记；为空视为未作答',
+    description: '省略时只更新标记；为空视为未作答，模拟考试中为清空已有答案',
   })
   @IsOptional()
   answer?: unknown;
@@ -107,6 +107,14 @@ export class SaveAnswersResultDto {
 
   @ApiProperty({ type: [AnswerResultDto], description: '按提交顺序' })
   results: AnswerResultDto[];
+
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    isArray: true,
+    description: '模考离线补交中作答时间晚于截止时间而未写入的题目，其余照常写入',
+  })
+  skippedQuestionIds: string[];
 }
 
 export class SelfAssessmentDto {

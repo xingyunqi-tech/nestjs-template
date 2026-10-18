@@ -35,7 +35,7 @@ import { MetricsModule } from './infrastructure/metrics/metrics.module';
 import { SmsModule } from './integrations/sms/sms.module';
 import { AddressesModule } from './modules/addresses/addresses.module';
 import { RegionsModule } from './modules/regions/regions.module';
-import { FavoritesModule } from './modules/favorites/favorites.module';
+import { FavoritesApiModule } from './modules/favorites/favorites-api.module';
 import { FeedbacksModule } from './modules/feedbacks/feedbacks.module';
 import { PermissionsModule } from './core/permissions/permissions.module';
 import { AuditModule } from './infrastructure/audit/audit.module';
@@ -59,6 +59,7 @@ import { MockSubmitQueueModule } from './infrastructure/queue/mock-submit-queue/
 import { StudyStatsModule } from './modules/study-stats/study-stats.module';
 import { WrongBookApiModule } from './modules/wrong-book/wrong-book-api.module';
 import { StudyStatsApiModule } from './modules/study-stats/study-stats-api.module';
+import { QuestionNotesApiModule } from './modules/question-notes/question-notes-api.module';
 import { StudyStatsQueueModule } from './infrastructure/queue/study-stats-queue/study-stats-queue.module';
 
 const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
@@ -185,7 +186,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     SmsModule,
     AddressesModule,
     RegionsModule,
-    FavoritesModule,
+    FavoritesApiModule,
     FeedbacksModule,
     PermissionsModule,
     WechatModule,
@@ -207,6 +208,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     StudyStatsModule,
     WrongBookApiModule,
     StudyStatsApiModule,
+    QuestionNotesApiModule,
     ConditionalModule.registerWhen(ImportQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(MockSubmitQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(StudyStatsQueueModule, isRedisEnabled),

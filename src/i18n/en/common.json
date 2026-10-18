@@ -21,6 +21,7 @@
   "maxAddressesReached": "Maximum addresses limit reached",
   "favoriteNotFound": "Favorite not found",
   "alreadyFavorited": "Already in favorites",
+  "questionNoteNotFound": "Note not found",
   "feedbackNotFound": "Feedback not found",
   "invalidCredentials": "Invalid credentials",
   "invalidCode": "Invalid verification code",

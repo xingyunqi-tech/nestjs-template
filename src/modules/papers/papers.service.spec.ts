@@ -80,6 +80,7 @@ describe('PapersService', () => {
     repository = {
       create: vi.fn(),
       findById: vi.fn().mockResolvedValue(paper()),
+      findByIds: vi.fn(),
       findManyWithPaginationAndCount: vi.fn(),
       findCatalog: vi.fn(),
       update: vi.fn(),

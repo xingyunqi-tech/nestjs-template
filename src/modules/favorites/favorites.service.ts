@@ -1,9 +1,11 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { CreateFavoriteDto } from './dto/create-favorite.dto';
-import { FavoriteRepository } from './infrastructure/persistence/favorite.repository';
-import { Favorite, FavoriteTargetType } from './domain/favorite';
+import { FavoriteFilter, FavoriteRepository } from './infrastructure/persistence/favorite.repository';
+import { Favorite, FavoriteTargetType, normalizeTargetId } from './domain/favorite';
 import { IPaginationOptions } from '../../common/types/pagination-options';
+import { NullableType } from '../../common/types/nullable.type';
 import { CheckFavoriteResponseDto } from './dto/check-favorite.dto';
+
+export type FavoriteInput = Omit<Favorite, 'id' | 'createdAt' | 'userId'>;
 
 @Injectable()
 export class FavoritesService {
@@ -11,32 +13,22 @@ export class FavoritesService {
 
   constructor(private readonly favoriteRepository: FavoriteRepository) {}
 
-  async create(userId: number, createFavoriteDto: CreateFavoriteDto): Promise<Favorite> {
-    this.logger.log(
-      `Creating favorite for user: ${userId}, target: ${createFavoriteDto.targetType}:${createFavoriteDto.targetId}`,
-    );
+  async create(userId: number, input: FavoriteInput): Promise<Favorite> {
+    this.logger.log(`Creating favorite for user: ${userId}, target: ${input.targetType}:${input.targetId}`);
 
-    // Check if already favorited
-    const existing = await this.favoriteRepository.findByUserAndTarget(
-      userId,
-      createFavoriteDto.targetType,
-      createFavoriteDto.targetId,
-    );
+    const existing = await this.findByTarget(userId, input.targetType, input.targetId);
 
     if (existing) {
-      this.logger.warn(`Already favorited: ${createFavoriteDto.targetType}:${createFavoriteDto.targetId}`);
+      this.logger.warn(`Already favorited: ${input.targetType}:${input.targetId}`);
       throw new ConflictException({
         error: 'alreadyFavorited',
       });
     }
 
     const favorite = await this.favoriteRepository.create({
+      ...input,
+      targetId: normalizeTargetId(input.targetType, input.targetId),
       userId,
-      targetType: createFavoriteDto.targetType,
-      targetId: createFavoriteDto.targetId,
-      title: createFavoriteDto.title,
-      image: createFavoriteDto.image,
-      extra: createFavoriteDto.extra,
     });
 
     this.logger.log(`Favorite created: ${favorite.id}`);
@@ -44,47 +36,37 @@ export class FavoritesService {
   }
 
   async findManyWithPagination({
-    userId,
-    targetType,
     paginationOptions,
-  }: {
-    userId: Favorite['userId'];
-    targetType?: FavoriteTargetType;
-    paginationOptions: IPaginationOptions;
-  }): Promise<Favorite[]> {
-    return this.favoriteRepository.findManyWithPagination({
-      userId,
-      targetType,
-      paginationOptions,
-    });
+    ...filter
+  }: FavoriteFilter & { paginationOptions: IPaginationOptions }): Promise<Favorite[]> {
+    return this.favoriteRepository.findManyWithPagination({ ...filter, paginationOptions });
   }
 
   async findManyWithPaginationAndCount({
-    userId,
-    targetType,
     paginationOptions,
-  }: {
-    userId: Favorite['userId'];
-    targetType?: FavoriteTargetType;
-    paginationOptions: IPaginationOptions;
-  }): Promise<{ data: Favorite[]; total: number }> {
+    ...filter
+  }: FavoriteFilter & { paginationOptions: IPaginationOptions }): Promise<{ data: Favorite[]; total: number }> {
     const [data, total] = await Promise.all([
-      this.favoriteRepository.findManyWithPagination({
-        userId,
-        targetType,
-        paginationOptions,
-      }),
-      this.favoriteRepository.countByUserId(userId, targetType),
+      this.favoriteRepository.findManyWithPagination({ ...filter, paginationOptions }),
+      this.favoriteRepository.count(filter),
     ]);
     return { data, total };
   }
 
+  findByTarget(userId: number, targetType: FavoriteTargetType, targetId: string): Promise<NullableType<Favorite>> {
+    return this.favoriteRepository.findByUserAndTarget(userId, targetType, normalizeTargetId(targetType, targetId));
+  }
+
   async check(userId: number, targetType: FavoriteTargetType, targetId: string): Promise<CheckFavoriteResponseDto> {
-    const favorite = await this.favoriteRepository.findByUserAndTarget(userId, targetType, targetId);
+    const favorite = await this.findByTarget(userId, targetType, targetId);
     return {
       isFavorited: !!favorite,
       favoriteId: favorite?.id,
     };
+  }
+
+  findFavoritedQuestionIds(userId: number, questionIds: string[]): Promise<string[]> {
+    return this.favoriteRepository.findFavoritedTargetIds(userId, FavoriteTargetType.QUESTION, questionIds);
   }
 
   async remove(id: Favorite['id'], userId: Favorite['userId']): Promise<void> {
@@ -102,35 +84,7 @@ export class FavoritesService {
     this.logger.log(`Favorite removed: ${id}`);
   }
 
-  async toggle(
-    userId: number,
-    createFavoriteDto: CreateFavoriteDto,
-  ): Promise<{ isFavorited: boolean; favorite?: Favorite }> {
-    const existing = await this.favoriteRepository.findByUserAndTarget(
-      userId,
-      createFavoriteDto.targetType,
-      createFavoriteDto.targetId,
-    );
-
-    if (existing) {
-      await this.favoriteRepository.remove(existing.id);
-      this.logger.log(`Favorite toggled off: ${createFavoriteDto.targetType}:${createFavoriteDto.targetId}`);
-      return { isFavorited: false };
-    } else {
-      const favorite = await this.favoriteRepository.create({
-        userId,
-        targetType: createFavoriteDto.targetType,
-        targetId: createFavoriteDto.targetId,
-        title: createFavoriteDto.title,
-        image: createFavoriteDto.image,
-        extra: createFavoriteDto.extra,
-      });
-      this.logger.log(`Favorite toggled on: ${favorite.id}`);
-      return { isFavorited: true, favorite };
-    }
-  }
-
   async countByUserId(userId: Favorite['userId'], targetType?: FavoriteTargetType): Promise<number> {
-    return this.favoriteRepository.countByUserId(userId, targetType);
+    return this.favoriteRepository.count({ userId, targetType });
   }
 }

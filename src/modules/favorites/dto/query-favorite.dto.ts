@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsInt, Min } from 'class-validator';
+import { IsEnum, IsOptional, IsInt, IsUUID, Min } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { FavoriteTargetType } from '../domain/favorite';
 
@@ -8,6 +8,12 @@ export class QueryFavoriteDto {
   @IsOptional()
   @IsEnum(FavoriteTargetType)
   targetType?: FavoriteTargetType;
+
+  @ApiPropertyOptional({ type: String, format: 'uuid', description: '题目、试卷所属科目' })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
+  @IsUUID()
+  subjectId?: string;
 
   @ApiPropertyOptional()
   @Transform(({ value }) => (value ? Number(value) : 1))

@@ -15,10 +15,12 @@ import { ParseIdPipe } from '../../common/pipes/parse-id.pipe';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { FavoritesService } from './favorites.service';
+import { FavoriteTargetsService } from './favorite-targets.service';
 import { CreateFavoriteDto } from './dto/create-favorite.dto';
 import { QueryFavoriteDto } from './dto/query-favorite.dto';
 import { CheckFavoriteDto, CheckFavoriteResponseDto } from './dto/check-favorite.dto';
 import { Favorite } from './domain/favorite';
+import { FavoriteItemDto } from './dto/favorite-item.dto';
 import { PaginationResponse, PaginationResponseDto } from '../../common/dto/pagination-response.dto';
 import { pagination } from '../../common/pagination';
 import type { RequestWithUser } from '../../common/types/request-with-user.type';
@@ -31,37 +33,35 @@ import type { RequestWithUser } from '../../common/types/request-with-user.type'
   version: '1',
 })
 export class FavoritesController {
-  constructor(private readonly favoritesService: FavoritesService) {}
+  constructor(
+    private readonly favoritesService: FavoritesService,
+    private readonly favoriteTargetsService: FavoriteTargetsService,
+  ) {}
 
   @ApiCreatedResponse({ type: Favorite })
-  @ApiOperation({ operationId: 'createFavorite', summary: '添加收藏' })
+  @ApiOperation({
+    operationId: 'createFavorite',
+    summary: '添加收藏；题目、试卷由服务端校验并写入标题快照与科目，忽略传入的 title、image',
+  })
   @Post()
   @HttpCode(HttpStatus.OK)
   create(@Request() request: RequestWithUser, @Body() createFavoriteDto: CreateFavoriteDto): Promise<Favorite> {
-    return this.favoritesService.create(request.user.id, createFavoriteDto);
+    return this.favoriteTargetsService.create(Number(request.user.id), createFavoriteDto);
   }
 
-  @ApiOkResponse({ type: PaginationResponse(Favorite) })
-  @ApiOperation({ operationId: 'getFavorites', summary: '获取收藏列表' })
+  @ApiOkResponse({ type: PaginationResponse(FavoriteItemDto) })
+  @ApiOperation({ operationId: 'getFavorites', summary: '获取收藏列表，可按类型与科目筛选；题目、试卷附带下架状态' })
   @Get()
   @HttpCode(HttpStatus.OK)
   async findAll(
     @Request() request: RequestWithUser,
     @Query() query: QueryFavoriteDto,
-  ): Promise<PaginationResponseDto<Favorite>> {
-    const page = query?.page ?? 1;
-    let limit = query?.limit ?? 10;
-    if (limit > 50) {
-      limit = 50;
-    }
-
-    const { data, total } = await this.favoritesService.findManyWithPaginationAndCount({
-      userId: request.user.id,
-      targetType: query?.targetType,
-      paginationOptions: { page, limit },
-    });
-
-    return pagination(data, total, { page, limit });
+  ): Promise<PaginationResponseDto<FavoriteItemDto>> {
+    const { data, total, paginationOptions } = await this.favoriteTargetsService.findPage(
+      Number(request.user.id),
+      query,
+    );
+    return pagination(data, total, paginationOptions);
   }
 
   @ApiOkResponse({ type: CheckFavoriteResponseDto })
@@ -91,7 +91,7 @@ export class FavoritesController {
     @Request() request: RequestWithUser,
     @Body() createFavoriteDto: CreateFavoriteDto,
   ): Promise<{ isFavorited: boolean; favorite?: Favorite }> {
-    return this.favoritesService.toggle(request.user.id, createFavoriteDto);
+    return this.favoriteTargetsService.toggle(Number(request.user.id), createFavoriteDto);
   }
 
   @ApiOperation({ operationId: 'deleteFavorite', summary: '取消收藏' })

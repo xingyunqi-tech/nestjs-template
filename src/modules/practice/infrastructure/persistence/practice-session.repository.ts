@@ -3,6 +3,7 @@ import { IPaginationOptions } from '../../../../common/types/pagination-options'
 import { PracticeMode } from '../../domain/practice-mode';
 import { PracticeSession, PracticeSessionStatus, ScoringScheme, SubmitType } from '../../domain/practice-session';
 import { AnswerRecord } from '../../domain/answer-record';
+import { SessionAnswerContext } from '../../domain/answer-visibility';
 
 export type CreatePracticeSessionData = Pick<
   PracticeSession,
@@ -162,6 +163,12 @@ export abstract class PracticeSessionRepository {
 
   /** questionIds 中出现在该用户任一会话里的题目 */
   abstract findQuestionIdsInUserSessions(userId: number, questionIds: string[]): Promise<string[]>;
+
+  /** 该用户含此题的会话中背题、已交卷模考或已作答的会话状态与作答 */
+  abstract findSessionAnswerContexts(
+    userId: number,
+    questionId: string,
+  ): Promise<Required<Pick<SessionAnswerContext, 'session' | 'record'>>[]>;
 
   abstract updateProgress(id: PracticeSession['id'], lastIndex: number): Promise<void>;
 

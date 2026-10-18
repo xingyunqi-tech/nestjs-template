@@ -15,6 +15,7 @@ import { FavoriteTargetType } from '../../../../domain/favorite';
 @Entity({ name: 'favorite' })
 @Unique('UQ_favorite_user_target', ['userId', 'targetType', 'targetId'])
 @Index('IDX_favorite_userId_targetType', ['userId', 'targetType'])
+@Index('IDX_favorite_userId_subjectId', ['userId', 'subjectId'])
 export class FavoriteEntity extends EntityRelationalHelper {
   @PrimaryGeneratedColumn()
   id: number;
@@ -43,6 +44,9 @@ export class FavoriteEntity extends EntityRelationalHelper {
 
   @Column({ type: 'text', nullable: true })
   extra?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  subjectId: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -13,7 +13,10 @@ import type { RequestWithUser } from '../../common/types/request-with-user.type'
 export class QuestionAccessController {
   constructor(private readonly questionAccessService: QuestionAccessService) {}
 
-  @ApiOperation({ operationId: 'getQuestion', summary: '题目内容（不含答案），需与用户存在关联' })
+  @ApiOperation({
+    operationId: 'getQuestion',
+    summary: '题目内容，需与用户存在关联；题目在错题本、收藏或笔记中且不在进行中的模考时附带答案与解析',
+  })
   @ApiOkResponse({ type: QuestionContentDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @Get(':id')

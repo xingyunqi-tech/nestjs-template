@@ -32,6 +32,8 @@ export abstract class PaperRepository {
 
   abstract findById(id: Paper['id']): Promise<NullableType<Paper>>;
 
+  abstract findByIds(ids: Paper['id'][]): Promise<Paper[]>;
+
   abstract findManyWithPaginationAndCount(options: {
     filterOptions?: PaperFilterOptions | null;
     paginationOptions: IPaginationOptions;

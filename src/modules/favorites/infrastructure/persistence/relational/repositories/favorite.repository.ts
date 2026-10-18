@@ -1,12 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { FindOptionsWhere, In, Repository } from 'typeorm';
 import { FavoriteEntity } from '../entities/favorite.entity';
-import { FavoriteRepository } from '../../favorite.repository';
+import { FavoriteFilter, FavoriteRepository } from '../../favorite.repository';
 import { FavoriteMapper } from '../mappers/favorite.mapper';
 import { Favorite, FavoriteTargetType } from '../../../../domain/favorite';
 import { NullableType } from '../../../../../../common/types/nullable.type';
 import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
+
+function whereOf({ userId, targetType, subjectId }: FavoriteFilter): FindOptionsWhere<FavoriteEntity> {
+  return {
+    userId: Number(userId),
+    ...(targetType && { targetType }),
+    ...(subjectId && { subjectId }),
+  };
+}
 
 @Injectable()
 export class FavoriteRelationalRepository implements FavoriteRepository {
@@ -22,26 +30,13 @@ export class FavoriteRelationalRepository implements FavoriteRepository {
   }
 
   async findManyWithPagination({
-    userId,
-    targetType,
     paginationOptions,
-  }: {
-    userId: Favorite['userId'];
-    targetType?: FavoriteTargetType;
-    paginationOptions: IPaginationOptions;
-  }): Promise<Favorite[]> {
-    const where: FindOptionsWhere<FavoriteEntity> = {
-      userId: Number(userId),
-    };
-
-    if (targetType) {
-      where.targetType = targetType;
-    }
-
+    ...filter
+  }: FavoriteFilter & { paginationOptions: IPaginationOptions }): Promise<Favorite[]> {
     const entities = await this.favoriteRepository.find({
       skip: (paginationOptions.page - 1) * paginationOptions.limit,
       take: paginationOptions.limit,
-      where,
+      where: whereOf(filter),
       order: { createdAt: 'DESC' },
     });
 
@@ -70,6 +65,21 @@ export class FavoriteRelationalRepository implements FavoriteRepository {
     return entity ? FavoriteMapper.toDomain(entity) : null;
   }
 
+  async findFavoritedTargetIds(
+    userId: Favorite['userId'],
+    targetType: FavoriteTargetType,
+    targetIds: string[],
+  ): Promise<string[]> {
+    if (targetIds.length === 0) {
+      return [];
+    }
+    const entities = await this.favoriteRepository.find({
+      select: { targetId: true },
+      where: { userId: Number(userId), targetType, targetId: In(targetIds) },
+    });
+    return entities.map((entity) => entity.targetId);
+  }
+
   async remove(id: Favorite['id']): Promise<void> {
     await this.favoriteRepository.delete(id);
   }
@@ -86,13 +96,7 @@ export class FavoriteRelationalRepository implements FavoriteRepository {
     });
   }
 
-  async countByUserId(userId: Favorite['userId'], targetType?: FavoriteTargetType): Promise<number> {
-    const where: FindOptionsWhere<FavoriteEntity> = {
-      userId: Number(userId),
-    };
-    if (targetType) {
-      where.targetType = targetType;
-    }
-    return this.favoriteRepository.count({ where });
+  async count(filter: FavoriteFilter): Promise<number> {
+    return this.favoriteRepository.count({ where: whereOf(filter) });
   }
 }

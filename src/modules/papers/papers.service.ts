@@ -79,6 +79,12 @@ export class PapersService {
     return paper;
   }
 
+  /** 按传入顺序返回，不存在的忽略 */
+  async findByIds(ids: Paper['id'][]): Promise<Paper[]> {
+    const found = new Map((await this.paperRepository.findByIds([...new Set(ids)])).map((paper) => [paper.id, paper]));
+    return ids.flatMap((id) => found.get(id) ?? []);
+  }
+
   /** 用户在科目内作答过（答案非空）的题目所属出题单位 id；since 为空时不限时间 */
   findAnsweredRootIds(userId: number, subjectId: string, since: Date | null = null): Promise<string[]> {
     return this.paperAttemptRepository.findAnsweredRootIds(userId, subjectId, since);
@@ -276,7 +282,8 @@ export class PapersService {
     return { data: data.map((paper) => toPublic(paper, scores.get(paper.id))), total, paginationOptions };
   }
 
-  async getPublicDetail(id: Paper['id'], viewerUserId: ViewerId): Promise<PublicPaperDetailDto> {
+  /** 对查看者可见的已发布试卷 */
+  async findVisible(id: Paper['id'], viewerUserId: ViewerId): Promise<Paper> {
     const paper = await this.paperRepository.findById(id);
     const visible =
       paper?.status === ContentStatus.PUBLISHED &&
@@ -289,6 +296,11 @@ export class PapersService {
         throw error instanceof NotFoundException ? notFound() : error;
       });
     }
+    return paper;
+  }
+
+  async getPublicDetail(id: Paper['id'], viewerUserId: ViewerId): Promise<PublicPaperDetailDto> {
+    const paper = await this.findVisible(id, viewerUserId);
     const [rows, scores] = await Promise.all([
       this.paperRepository.findQuestions(id),
       this.findViewerScores(viewerNumber(viewerUserId), [id]),

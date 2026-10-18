@@ -653,9 +653,23 @@ describe('Practice sessions', () => {
 
   describe('single question access', () => {
     it('should return related questions without answers', async () => {
-      const { body } = await as(user).get(`/questions/${singles[0]}`).expect(200);
-      expect(body.data).toMatchObject({ id: singles[0], type: 'SINGLE', hiddenReason: null });
+      const { body } = await as(user).get(`/questions/${singles[1]}`).expect(200);
+      expect(body.data).toMatchObject({ id: singles[1], type: 'SINGLE', hiddenReason: null, solution: null });
       expect(JSON.stringify(body.data)).not.toMatch(/"answer"|"analysis"/);
+
+      const inWrongBook = (): Promise<{ id: string }[]> =>
+        app
+          .get(DataSource)
+          .query(`SELECT "id" FROM "wrong_question" WHERE "userId" = $1 AND "questionId" = $2`, [user.id, singles[0]]);
+      for (let attempt = 0; attempt < 150 && (await inWrongBook()).length === 0; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const wrong = await as(user).get(`/questions/${singles[0]}`).expect(200);
+      expect(wrong.body.data).toMatchObject({
+        id: singles[0],
+        hiddenReason: null,
+        solution: { answer: { keys: ['B'] } },
+      });
 
       const material = await as(user).get(`/questions/${materialId}`).expect(200);
       expect(material.body.data.children.map((child: { id: string }) => child.id)).toEqual(subIds);

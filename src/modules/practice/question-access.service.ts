@@ -1,20 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { PracticeSessionRepository } from './infrastructure/persistence/practice-session.repository';
-import { InProgressMockQuestionsService } from './in-progress-mock-questions.service';
 import { QuestionAssociationReader } from './ports/question-association.reader';
-import { HiddenReason } from './domain/hidden-reason';
-import { QuestionContentDto } from './dto/question-content.dto';
+import { AnswerVisibilityService } from './answer-visibility.service';
+import { QuestionContentDto, QuestionContentItemDto } from './dto/question-content.dto';
 import { QuestionsService } from '../questions/questions.service';
 import { QuestionType } from '../questions/domain/question-type';
+import { PublicQuestionDto } from '../questions/dto/public-question.dto';
 import { BusinessException } from '../../common/exceptions/business.exception';
 
-/** 用户按 id 获取题目：须与会话、错题本、收藏或笔记存在关联 */
+/** 用户按 id 获取题目：须与会话、错题本、收藏或笔记存在关联；答案按会话外可见性判定 */
 @Injectable()
 export class QuestionAccessService {
   constructor(
     private readonly practiceSessionRepository: PracticeSessionRepository,
     private readonly questionAssociationReader: QuestionAssociationReader,
-    private readonly inProgressMockQuestionsService: InProgressMockQuestionsService,
+    private readonly answerVisibilityService: AnswerVisibilityService,
     private readonly questionsService: QuestionsService,
   ) {}
 
@@ -39,10 +39,23 @@ export class QuestionAccessService {
     if (related.length === 0) {
       throw new BusinessException('questionNotAccessible');
     }
-    const [dto] = await this.questionsService.toPublicUnits([{ root: unit.root, questions: related }], userId);
-    const inMock = await this.inProgressMockQuestionsService.findQuestionIds(userId);
-    return Object.assign(new QuestionContentDto(), dto, {
-      hiddenReason: related.some((item) => inMock.has(item.id)) ? HiddenReason.MOCK_IN_PROGRESS : null,
+    const visibility = await this.answerVisibilityService.evaluate(
+      userId,
+      related.map((item) => ({ questionId: item.id, questionType: item.type })),
+      'standalone',
+    );
+    const {
+      units: [dto],
+      solutions,
+    } = await this.questionsService.renderUnits([{ root: unit.root, questions: related }], userId, {
+      solutionIds: new Set(related.filter((_, index) => visibility[index].visible).map((item) => item.id)),
+    });
+    const withSolution = (item: PublicQuestionDto): QuestionContentItemDto =>
+      Object.assign(new QuestionContentItemDto(), item, { solution: solutions.get(item.id) ?? null });
+    const { children, ...root } = dto;
+    return Object.assign(new QuestionContentDto(), withSolution(root), {
+      ...(children && { children: children.map(withSolution) }),
+      hiddenReason: visibility.find((item) => item.hiddenReason !== null)?.hiddenReason ?? null,
     });
   }
 }

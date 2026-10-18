@@ -11,6 +11,7 @@ export class FavoriteMapper {
     domainEntity.title = raw.title;
     domainEntity.image = raw.image;
     domainEntity.extra = raw.extra;
+    domainEntity.subjectId = raw.subjectId;
     domainEntity.createdAt = raw.createdAt;
     return domainEntity;
   }
@@ -23,6 +24,7 @@ export class FavoriteMapper {
     persistenceEntity.title = domainEntity.title;
     persistenceEntity.image = domainEntity.image;
     persistenceEntity.extra = domainEntity.extra;
+    persistenceEntity.subjectId = domainEntity.subjectId;
     return persistenceEntity;
   }
 }

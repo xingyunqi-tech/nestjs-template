@@ -24,6 +24,7 @@ import {
 import { PracticeMode } from '../../../../domain/practice-mode';
 import { PracticeSession, PracticeSessionStatus, SubmitType } from '../../../../domain/practice-session';
 import { AnswerRecord } from '../../../../domain/answer-record';
+import { SessionAnswerContext } from '../../../../domain/answer-visibility';
 import { NullableType } from '../../../../../../common/types/nullable.type';
 import { lockDailyQuestionSet } from '../../../../../../infrastructure/database/utils/daily-question-set-lock';
 import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
@@ -393,6 +394,25 @@ export class PracticeSessionRelationalRepository implements PracticeSessionRepos
       [userId, questionIds],
     );
     return rows.map((row) => row.id);
+  }
+
+  async findSessionAnswerContexts(
+    userId: number,
+    questionId: string,
+  ): Promise<Required<Pick<SessionAnswerContext, 'session' | 'record'>>[]> {
+    const rows: (Pick<PracticeSession, 'mode' | 'status'> & Pick<AnswerRecord, 'answer' | 'isCorrect'>)[] =
+      await this.sessionRepository.query(
+        `SELECT s."mode" AS "mode", s."status" AS "status", r."answer" AS "answer", r."isCorrect" AS "isCorrect"
+         FROM "practice_session" AS s
+         LEFT JOIN "answer_record" AS r ON r."sessionId" = s."id" AND r."questionId" = $2
+         WHERE s."userId" = $1 AND s."questionIds" @> ARRAY[$2::uuid]
+           AND (s."mode" = $3 OR (s."mode" = $4 AND s."status" = $5) OR r."answer" IS NOT NULL)`,
+        [userId, questionId, PracticeMode.MEMORIZE, PracticeMode.MOCK, PracticeSessionStatus.SUBMITTED],
+      );
+    return rows.map((row) => ({
+      session: { mode: row.mode, status: row.status },
+      record: { answer: row.answer, isCorrect: row.isCorrect },
+    }));
   }
 
   async updateProgress(id: string, lastIndex: number): Promise<void> {

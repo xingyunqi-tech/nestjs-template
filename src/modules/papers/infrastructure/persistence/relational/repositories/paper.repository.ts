@@ -52,6 +52,14 @@ export class PaperRelationalRepository implements PaperRepository {
     return paper;
   }
 
+  async findByIds(ids: Paper['id'][]): Promise<Paper[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const entities = await this.paperRepository.find({ where: { id: In(ids) } });
+    return this.withQuestionCounts(this.paperRepository.manager, entities);
+  }
+
   findManyWithPaginationAndCount({
     filterOptions,
     paginationOptions,

@@ -37,6 +37,11 @@ import {
 } from './ports/question-association.reader';
 import { WrongBookModule } from '../wrong-book/wrong-book.module';
 import { WrongBookService } from '../wrong-book/wrong-book.service';
+import { FavoritesModule } from '../favorites/favorites.module';
+import { FavoritesService } from '../favorites/favorites.service';
+import { QuestionNotesModule } from '../question-notes/question-notes.module';
+import { QuestionNotesService } from '../question-notes/question-notes.service';
+import { QuestionAssociationPrerequisiteService } from './question-association-prerequisite.service';
 
 @Module({
   imports: [
@@ -49,6 +54,8 @@ import { WrongBookService } from '../wrong-book/wrong-book.service';
     SchedulerModule,
     StudyStatsModule,
     WrongBookModule,
+    FavoritesModule,
+    QuestionNotesModule,
     ConditionalModule.registerWhen(BullModule.registerQueue({ name: MOCK_SUBMIT_QUEUE }), isRedisEnabled),
   ],
   controllers: [PracticeSessionsController, QuestionAccessController],
@@ -63,6 +70,7 @@ import { WrongBookService } from '../wrong-book/wrong-book.service';
     AnswerVisibilityService,
     InProgressMockQuestionsService,
     QuestionAccessService,
+    QuestionAssociationPrerequisiteService,
     AbandonInactiveSessionsTask,
     {
       provide: StatsEventPublisher,
@@ -81,16 +89,34 @@ import { WrongBookService } from '../wrong-book/wrong-book.service';
     },
     {
       provide: QUESTION_ASSOCIATION_SOURCES,
-      inject: [WrongBookService],
-      useFactory: (wrongBookService: WrongBookService): QuestionAssociationSource[] => [
+      inject: [WrongBookService, FavoritesService, QuestionNotesService],
+      useFactory: (
+        wrongBookService: WrongBookService,
+        favoritesService: FavoritesService,
+        questionNotesService: QuestionNotesService,
+      ): QuestionAssociationSource[] => [
         {
           findAssociatedQuestionIds: (userId, questionIds) =>
             wrongBookService.findQuestionIdsInBook(userId, questionIds),
+        },
+        {
+          findAssociatedQuestionIds: (userId, questionIds) =>
+            favoritesService.findFavoritedQuestionIds(userId, questionIds),
+        },
+        {
+          findAssociatedQuestionIds: (userId, questionIds) =>
+            questionNotesService.findQuestionIdsWithNote(userId, questionIds),
         },
       ],
     },
     { provide: QuestionAssociationReader, useClass: CompositeQuestionAssociationReader },
   ],
-  exports: [PracticeSessionsService, MockExamService, AnswerVisibilityService, InProgressMockQuestionsService],
+  exports: [
+    PracticeSessionsService,
+    MockExamService,
+    AnswerVisibilityService,
+    InProgressMockQuestionsService,
+    QuestionAssociationPrerequisiteService,
+  ],
 })
 export class PracticeModule {}

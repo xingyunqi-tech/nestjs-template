@@ -21,6 +21,7 @@
   "maxAddressesReached": "已达到地址数量上限",
   "favoriteNotFound": "收藏不存在",
   "alreadyFavorited": "已收藏",
+  "questionNoteNotFound": "笔记不存在",
   "feedbackNotFound": "反馈不存在",
   "invalidCredentials": "凭证无效",
   "invalidCode": "验证码无效",

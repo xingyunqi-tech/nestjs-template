@@ -130,3 +130,10 @@ ALIPAY_NOTIFY_URL=
 # 网页支付完成后的跳转地址，指向 H5 支付结果页（会追加 orderId 参数），如 https://h5.example.com/pages-sub/order/payment-result/index
 ALIPAY_RETURN_URL=
 ALIPAY_SANDBOX=false
+
+# LLM（OpenAI 兼容协议），默认 DeepSeek
+LLM_BASE_URL=https://api.deepseek.com
+LLM_API_KEY=
+LLM_MODEL=deepseek-chat
+# 单次请求总时长上限（毫秒），1000–240000
+LLM_TIMEOUT_MS=120000

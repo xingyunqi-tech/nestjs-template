@@ -2,7 +2,7 @@ import { UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Cache } from 'cache-manager';
 import { AllConfigType } from '../../config/config.type';
-import { WechatApiError, WechatService } from './wechat.service';
+import { WechatApiError, WechatMsgSecCheckScene, WechatService } from './wechat.service';
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -209,6 +209,79 @@ describe('WechatService', () => {
 
       expect(error).toBeInstanceOf(WechatApiError);
       expect((error as WechatApiError).errcode).toBe(43101);
+    });
+  });
+
+  describe('msgSecCheck', () => {
+    const params = { openId: 'OPEN1', scene: WechatMsgSecCheckScene.FORUM, content: '这道题怎么做' };
+
+    it('should send a v2 check request and return pass for suggest pass', async () => {
+      const { service, store } = createService();
+      store.set('wechat:mini_app:access_token', 'T1');
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ errcode: 0, errmsg: 'ok', trace_id: 'TR1', result: { suggest: 'pass', label: 100 } }),
+      );
+
+      await expect(service.msgSecCheck(params)).resolves.toEqual({
+        pass: true,
+        suggest: 'pass',
+        label: 100,
+        traceId: 'TR1',
+      });
+      expect(fetchMock.mock.calls[0][0]).toBe('https://api.weixin.qq.com/wxa/msg_sec_check?access_token=T1');
+      expect(requestBody(0)).toEqual({ content: '这道题怎么做', version: 2, scene: 3, openid: 'OPEN1' });
+    });
+
+    it.each(['risky', 'review'])('should not pass when suggest is %s', async (suggest) => {
+      const { service, store } = createService();
+      store.set('wechat:mini_app:access_token', 'T1');
+      fetchMock.mockResolvedValueOnce(jsonResponse({ errcode: 0, trace_id: 'TR2', result: { suggest, label: 20001 } }));
+
+      await expect(service.msgSecCheck(params)).resolves.toEqual({
+        pass: false,
+        suggest,
+        label: 20001,
+        traceId: 'TR2',
+      });
+    });
+
+    it('should refresh the token and retry once when the token is invalid', async () => {
+      const { service, store } = createService();
+      store.set('wechat:mini_app:access_token', 'EXPIRED');
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse({ errcode: 42001, errmsg: 'access_token expired' }))
+        .mockResolvedValueOnce(jsonResponse({ access_token: 'T2', expires_in: 7200 }))
+        .mockResolvedValueOnce(jsonResponse({ errcode: 0, trace_id: 'TR3', result: { suggest: 'pass', label: 100 } }));
+
+      await expect(service.msgSecCheck(params)).resolves.toMatchObject({ pass: true });
+      expect(fetchMock.mock.calls[2][0]).toBe('https://api.weixin.qq.com/wxa/msg_sec_check?access_token=T2');
+    });
+
+    it('should throw WechatApiError when WeChat returns an errcode', async () => {
+      const { service, store } = createService();
+      store.set('wechat:mini_app:access_token', 'T1');
+      fetchMock.mockResolvedValueOnce(jsonResponse({ errcode: 40003, errmsg: 'invalid openid' }));
+
+      const error = await service.msgSecCheck(params).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(WechatApiError);
+      expect((error as WechatApiError).errcode).toBe(40003);
+    });
+
+    it('should throw UnprocessableEntityException when WeChat responds with a non-2xx status', async () => {
+      const { service, store } = createService();
+      store.set('wechat:mini_app:access_token', 'T1');
+      fetchMock.mockResolvedValueOnce(new Response('Bad Gateway', { status: 502 }));
+
+      await expect(service.msgSecCheck(params)).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('should throw WechatApiError when the result is missing', async () => {
+      const { service, store } = createService();
+      store.set('wechat:mini_app:access_token', 'T1');
+      fetchMock.mockResolvedValueOnce(jsonResponse({ errcode: 0, errmsg: 'ok' }));
+
+      await expect(service.msgSecCheck(params)).rejects.toBeInstanceOf(WechatApiError);
     });
   });
 });

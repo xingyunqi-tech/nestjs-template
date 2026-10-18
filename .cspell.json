@@ -134,7 +134,9 @@
     "AGG",
     "checkin",
     "checkins",
-    "ORDINALITY"
+    "ORDINALITY",
+    "llm",
+    "deepseek"
   ],
   "patterns": [
     {

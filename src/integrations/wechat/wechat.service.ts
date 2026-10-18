@@ -44,9 +44,43 @@ export interface WechatSubscribeMessage {
   data: Record<string, string>;
 }
 
+/** 内容安全检测场景值 */
+export enum WechatMsgSecCheckScene {
+  PROFILE = 1,
+  COMMENT = 2,
+  FORUM = 3,
+  SOCIAL_LOG = 4,
+}
+
+export type WechatMsgSecCheckSuggest = 'pass' | 'review' | 'risky';
+
+export interface WechatMsgSecCheckParams {
+  openId: string;
+  scene: WechatMsgSecCheckScene;
+  /** 不超过 2500 字 */
+  content: string;
+}
+
+export interface WechatMsgSecCheckResult {
+  /** suggest 为 pass */
+  pass: boolean;
+  suggest: WechatMsgSecCheckSuggest;
+  /** 命中标签，100 为正常 */
+  label: number;
+  traceId: string;
+}
+
 interface WechatApiResult {
   errcode?: number;
   errmsg?: string;
+}
+
+interface WechatMsgSecCheckApiResult extends WechatApiResult {
+  trace_id?: string;
+  result?: {
+    suggest: WechatMsgSecCheckSuggest;
+    label: number;
+  };
 }
 
 interface WechatPhoneNumberResult extends WechatApiResult {
@@ -473,6 +507,32 @@ export class WechatService {
       },
       'Send subscribe message',
     );
+  }
+
+  /**
+   * 文本内容安全检测（msgSecCheck v2）
+   * @throws WechatApiError 微信返回非 0 errcode 或缺少检测结果
+   * @throws UnprocessableEntityException 小程序凭证未配置（notConfigured）或微信返回非 2xx（requestFailed）
+   * @throws DOMException 请求超时（TimeoutError）
+   * @throws TypeError 网络错误
+   */
+  async msgSecCheck({ openId, scene, content }: WechatMsgSecCheckParams): Promise<WechatMsgSecCheckResult> {
+    const data = await this.callMiniAppApi<WechatMsgSecCheckApiResult>(
+      '/wxa/msg_sec_check',
+      { content, version: 2, scene, openid: openId },
+      'Message security check',
+    );
+
+    if (!data.result) {
+      throw new WechatApiError(-1, 'result missing');
+    }
+
+    return {
+      pass: data.result.suggest === 'pass',
+      suggest: data.result.suggest,
+      label: data.result.label,
+      traceId: data.trace_id ?? '',
+    };
   }
 
   /**

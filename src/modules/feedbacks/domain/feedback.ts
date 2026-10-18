@@ -17,6 +17,9 @@ export const GENERAL_FEEDBACK_TYPES = [
   FeedbackType.OTHER,
 ];
 
+/** 用户可通过反馈接口查询的类型 */
+export const USER_QUERYABLE_FEEDBACK_TYPES = [...GENERAL_FEEDBACK_TYPES, FeedbackType.QUESTION_ERROR];
+
 /** 后台纠错与举报列表处理的类型 */
 export const QUESTION_REPORT_TYPES = [FeedbackType.QUESTION_ERROR, FeedbackType.AI_CONTENT];
 
@@ -32,6 +35,20 @@ export enum QuestionReportReason {
   ANALYSIS_WRONG = 'analysis_wrong',
   STEM_TYPO = 'stem_typo',
   OTHER = 'other',
+}
+
+export class AiMessageSnapshot {
+  @ApiProperty({ type: String, description: 'Markdown' })
+  content: string;
+
+  @ApiProperty({ type: String, nullable: true, description: '深度思考内容' })
+  reasoning: string | null;
+
+  @ApiProperty({ type: String, description: '举报时的消息状态' })
+  status: string;
+
+  @ApiProperty({ type: String, format: 'date-time', description: '消息生成时间' })
+  createdAt: string;
 }
 
 export class Feedback {
@@ -73,6 +90,13 @@ export class Feedback {
 
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true, description: '被举报的 AI 消息' })
   messageId?: string | null;
+
+  @ApiPropertyOptional({
+    type: () => AiMessageSnapshot,
+    nullable: true,
+    description: '举报时的 AI 消息内容，消息删除后仍保留',
+  })
+  messageSnapshot?: AiMessageSnapshot | null;
 
   @ApiProperty()
   createdAt: Date;

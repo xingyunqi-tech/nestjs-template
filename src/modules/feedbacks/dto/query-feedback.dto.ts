@@ -1,12 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsEnum, IsIn, IsNumber, IsOptional, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { FeedbackType, FeedbackStatus } from '../domain/feedback';
+import { FeedbackType, FeedbackStatus, USER_QUERYABLE_FEEDBACK_TYPES } from '../domain/feedback';
 
 export class QueryFeedbackDto {
-  @ApiPropertyOptional({ enum: FeedbackType })
+  @ApiPropertyOptional({ enum: USER_QUERYABLE_FEEDBACK_TYPES })
   @IsOptional()
-  @IsEnum(FeedbackType)
+  @IsIn(USER_QUERYABLE_FEEDBACK_TYPES)
   type?: FeedbackType;
 
   @ApiPropertyOptional({ enum: FeedbackStatus })

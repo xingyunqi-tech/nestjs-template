@@ -22,6 +22,9 @@ export abstract class AiConversationRepository {
   /** 消息随会话级联删除 */
   abstract remove(id: AiConversation['id']): Promise<void>;
 
+  /** 删除该用户的全部会话与消息 */
+  abstract removeByUser(userId: number): Promise<void>;
+
   /** 仅当摘要位置仍为 expectedUpToMessageId 时更新，返回是否更新 */
   abstract updateSummary(
     id: AiConversation['id'],

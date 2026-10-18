@@ -6,7 +6,11 @@ import { ConfigKey } from '../config/config-definitions';
 import { businessDate } from '../papers/domain/business-date';
 import { BusinessException } from '../../common/exceptions/business.exception';
 
-const QUOTA_TTL_SECONDS = 48 * 60 * 60;
+const QUOTA_TTL_DAYS = 2;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const QUOTA_TTL_SECONDS = (QUOTA_TTL_DAYS * DAY_MS) / 1000;
 
 const LIMIT_KEYS: Record<AiUsageKind, ConfigKey> = {
   chat: 'ai.quota.chat',
@@ -51,8 +55,21 @@ export class AiQuotaService {
     await this.store.decrement(aiQuotaKey(userId, quotaDate, kind));
   }
 
+  /** 删除该用户仍可能存在的额度计数 */
+  async clear(userId: number, now: Date = new Date()): Promise<void> {
+    const dates = Array.from({ length: QUOTA_TTL_DAYS + 1 }, (_, days) =>
+      businessDate(new Date(now.getTime() - days * DAY_MS)),
+    );
+    const kinds = Object.keys(LIMIT_KEYS) as AiUsageKind[];
+    await this.store.remove(dates.flatMap((date) => kinds.map((kind) => aiQuotaKey(userId, date, kind))));
+  }
+
+  /** @throws BusinessException 计数存储不可用时 aiUnavailable */
   async getStatus(userId: number, kind: AiUsageKind, date: string = businessDate()): Promise<AiQuotaStatus> {
-    const [limit, used] = await Promise.all([this.limitOf(kind), this.store.getNumber(aiQuotaKey(userId, date, kind))]);
+    const [limit, used] = await Promise.all([
+      this.limitOf(kind),
+      this.guard(() => this.store.getNumber(aiQuotaKey(userId, date, kind))),
+    ]);
     return { date, limit, used, remaining: Math.max(limit - used, 0) };
   }
 

@@ -8,8 +8,9 @@ import {
   AiMessageRepository,
   AiMessageResult,
   CreateAiExchangeData,
+  StaleAiMessage,
 } from '../../ai-message.repository';
-import { AiMessage, AiMessageRole, AiMessageStatus } from '../../../../domain/ai-message';
+import { AiMessage, AiMessageFeedback, AiMessageRole, AiMessageStatus } from '../../../../domain/ai-message';
 import { NullableType } from '../../../../../../common/types/nullable.type';
 
 const POSITION_OF = `(SELECT p."createdAt", p."id" FROM "ai_message" AS p WHERE p."id" = :cursorId)`;
@@ -83,6 +84,32 @@ export class AiMessageRelationalRepository implements AiMessageRepository {
     return entities.map((entity) => entity.id);
   }
 
+  async findStreamingIdsByUser(userId: number): Promise<string[]> {
+    const rows: { id: string }[] = await this.repository
+      .createQueryBuilder('m')
+      .select('m."id"', 'id')
+      .innerJoin('ai_conversation', 'c', 'c."id" = m."conversationId"')
+      .where('c."userId" = :userId', { userId })
+      .andWhere('m."status" = :streaming', { streaming: AiMessageStatus.STREAMING })
+      .getRawMany();
+    return rows.map((row) => row.id);
+  }
+
+  async findStaleStreaming(createdBefore: Date, limit: number): Promise<StaleAiMessage[]> {
+    const rows: { id: string; userId: number; quotaDate: string | null }[] = await this.repository
+      .createQueryBuilder('m')
+      .select(['m."id" AS "id"', 'c."userId" AS "userId"', 'm."quotaDate"::text AS "quotaDate"'])
+      .innerJoin('ai_conversation', 'c', 'c."id" = m."conversationId"')
+      .where('m."status" = :streaming', { streaming: AiMessageStatus.STREAMING })
+      .andWhere(`m."createdAt" < (CAST(:createdBefore AS timestamptz) AT TIME ZONE current_setting('TimeZone'))`, {
+        createdBefore,
+      })
+      .orderBy('m."createdAt"', 'ASC')
+      .limit(limit)
+      .getRawMany();
+    return rows.map((row) => ({ id: row.id, userId: Number(row.userId), quotaDate: row.quotaDate }));
+  }
+
   createExchange(data: CreateAiExchangeData): Promise<NullableType<{ user: AiMessage; assistant: AiMessage }>> {
     return this.dataSource.transaction(async (manager) => {
       const locked: unknown[] = await manager.query(`SELECT "id" FROM "ai_conversation" WHERE "id" = $1 FOR UPDATE`, [
@@ -142,5 +169,9 @@ export class AiMessageRelationalRepository implements AiMessageRepository {
       .andWhere('status = :streaming', { streaming: AiMessageStatus.STREAMING })
       .execute();
     return (update.affected ?? 0) > 0;
+  }
+
+  async setFeedback(id: string, feedback: AiMessageFeedback | null): Promise<void> {
+    await this.repository.update({ id }, { feedback });
   }
 }

@@ -55,6 +55,12 @@ export class RedisAiRealtimeStore extends AiRealtimeStore implements OnModuleDes
     return Number((await this.client.get(key)) ?? 0);
   }
 
+  async remove(keys: string[]): Promise<void> {
+    if (keys.length > 0) {
+      await this.client.del(...keys);
+    }
+  }
+
   async append(
     key: string,
     event: AiStreamEventName,

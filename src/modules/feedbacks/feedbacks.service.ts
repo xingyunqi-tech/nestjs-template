@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { FeedbackChanges, FeedbackFilter, FeedbackRepository } from './infrastructure/persistence/feedback.repository';
 import {
+  AiMessageSnapshot,
   Feedback,
   FeedbackStatus,
   FeedbackType,
@@ -19,6 +20,14 @@ export interface QuestionReportInput {
   content: string;
   images?: string[];
   contact?: string;
+}
+
+export interface AiContentReportInput {
+  messageId: string;
+  questionId: string | null;
+  questionVersion: number | null;
+  content: string;
+  messageSnapshot: AiMessageSnapshot;
 }
 
 function feedbackNotFound(): NotFoundException {
@@ -56,6 +65,23 @@ export class FeedbacksService {
       questionId: input.questionId,
       questionVersion: input.questionVersion,
       reason: input.reason,
+    });
+  }
+
+  /** 该消息已有本人待处理或处理中的举报时返回该举报，不重复创建 */
+  async createAiContentReport(userId: number, input: AiContentReportInput): Promise<Feedback> {
+    const open = await this.feedbackRepository.findOpenAiContentReport(userId, input.messageId);
+    if (open) {
+      return open;
+    }
+    return this.feedbackRepository.create({
+      userId,
+      type: FeedbackType.AI_CONTENT,
+      content: input.content,
+      questionId: input.questionId,
+      questionVersion: input.questionVersion,
+      messageId: input.messageId,
+      messageSnapshot: input.messageSnapshot,
     });
   }
 

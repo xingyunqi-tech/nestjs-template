@@ -4,6 +4,10 @@ export const aiQuotaKey = (userId: number, date: string, kind: string): string =
 
 export const aiCostKey = (date: string): string => `ai:cost:${date}`;
 
+export const aiRateKey = (userId: number, minute: number): string => `ai:rate:${userId}:${minute}`;
+
+export const aiBudgetAlertKey = (date: string): string => `ai:budget-alert:${date}`;
+
 export const aiMessageStreamKey = (messageId: string): string => `ai:msg:${messageId}`;
 
 export const AI_STOP_CHANNEL = 'ai:stop';
@@ -21,6 +25,8 @@ export abstract class AiRealtimeStore {
 
   /** 不存在时为 0 */
   abstract getNumber(key: string): Promise<number>;
+
+  abstract remove(keys: string[]): Promise<void>;
 
   /** 追加事件并刷新过期时间，返回条目 id */
   abstract append(

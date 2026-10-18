@@ -17,7 +17,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { FeedbacksService } from './feedbacks.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { QueryFeedbackDto } from './dto/query-feedback.dto';
-import { Feedback } from './domain/feedback';
+import { Feedback, USER_QUERYABLE_FEEDBACK_TYPES } from './domain/feedback';
 import { PaginationResponse, PaginationResponseDto } from '../../common/dto/pagination-response.dto';
 import { pagination } from '../../common/pagination';
 import type { RequestWithUser } from '../../common/types/request-with-user.type';
@@ -72,7 +72,10 @@ export class FeedbacksController {
   async findOne(@Request() request: RequestWithUser, @Param('id', ParseIdPipe) id: number): Promise<Feedback> {
     const feedback = await this.feedbacksService.findById(id);
 
-    if (feedback?.userId?.toString() !== request.user.id.toString()) {
+    if (
+      feedback?.userId?.toString() !== request.user.id.toString() ||
+      !USER_QUERYABLE_FEEDBACK_TYPES.includes(feedback.type)
+    ) {
       throw new NotFoundException({
         error: 'feedbackNotFound',
       });

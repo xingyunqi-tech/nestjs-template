@@ -5,6 +5,7 @@ import { AiAccessService } from './ai-access.service';
 import { AiContentSafetyService } from './ai-content-safety.service';
 import { AiBudgetService } from './ai-budget.service';
 import { AiQuotaService } from './ai-quota.service';
+import { AiRateLimitService } from './ai-rate-limit.service';
 import { AiContextService } from './ai-context.service';
 import { AiGenerationService } from './ai-generation.service';
 import { AiMessageStreamService } from './ai-message-stream.service';
@@ -34,6 +35,7 @@ export class AiChatService {
     private readonly contextService: AiContextService,
     private readonly streamService: AiMessageStreamService,
     private readonly generationService: AiGenerationService,
+    private readonly rateLimitService: AiRateLimitService,
   ) {}
 
   /** 启动回答生成并返回回答消息 id；扣减额度后失败时退还额度 */
@@ -51,6 +53,7 @@ export class AiChatService {
     if ((await this.messageRepository.findStreamingIds(conversation.id)).length > 0) {
       throw messageInProgress();
     }
+    await this.rateLimitService.assertWithinRate(userId);
     await this.safetyService.assertInputSafe(openId, dto.content);
     await this.budgetService.assertWithinBudget();
     const quotaDate = await this.quotaService.consume(userId, 'chat');

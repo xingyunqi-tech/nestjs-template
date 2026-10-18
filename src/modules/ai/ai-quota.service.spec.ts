@@ -74,4 +74,28 @@ describe('AiQuotaService', () => {
 
     await expect(failingService.consume(1, 'chat')).rejects.toMatchObject({ errorKey: 'aiUnavailable' });
   });
+
+  it('should remove the quota counters of the user that may still exist', async () => {
+    await store.increment(aiQuotaKey(1, '2026-10-16', 'chat'), 60);
+    await store.increment(aiQuotaKey(1, '2026-10-17', 'grading'), 60);
+    await service.consume(1, 'chat');
+    await service.consume(2, 'chat');
+
+    await service.clear(1);
+
+    for (const key of [
+      aiQuotaKey(1, '2026-10-16', 'chat'),
+      aiQuotaKey(1, '2026-10-17', 'grading'),
+      aiQuotaKey(1, '2026-10-18', 'chat'),
+    ]) {
+      await expect(store.getNumber(key)).resolves.toBe(0);
+    }
+    await expect(store.getNumber(aiQuotaKey(2, '2026-10-18', 'chat'))).resolves.toBe(1);
+  });
+
+  it('should answer aiUnavailable when the quota cannot be read', async () => {
+    vi.spyOn(store, 'getNumber').mockRejectedValue(new Error('down'));
+
+    await expect(service.getStatus(1, 'chat')).rejects.toMatchObject({ errorKey: 'aiUnavailable' });
+  });
 });

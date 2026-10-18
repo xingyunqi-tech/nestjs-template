@@ -19,12 +19,17 @@ import { AiConversationsService } from './ai-conversations.service';
 import { AiChatService } from './ai-chat.service';
 import { AiMessageStreamService } from './ai-message-stream.service';
 import { AiSseResponder } from './ai-sse.responder';
+import { AiMessageFeedbackService } from './ai-message-feedback.service';
+import { AiUsageService } from './ai-usage.service';
 import { CreateAiConversationDto } from './dto/create-ai-conversation.dto';
 import { SendAiMessageDto } from './dto/send-ai-message.dto';
 import { QueryAiConversationsDto } from './dto/query-ai-conversations.dto';
 import { QueryAiMessageEventsDto, QueryAiMessagesDto } from './dto/query-ai-messages.dto';
 import { AiConversationDto } from './dto/ai-conversation.dto';
 import { AiMessageDto, AiMessagePageDto } from './dto/ai-message.dto';
+import { ReportAiMessageDto, SetAiMessageFeedbackDto } from './dto/ai-message-feedback.dto';
+import { AiQuotaDto } from './dto/ai-quota.dto';
+import { Feedback } from '../feedbacks/domain/feedback';
 import { PermissionsGuard } from '../../core/permissions/permissions.guard';
 import { RequirePermissions } from '../../core/permissions/permissions.decorator';
 import { Permission } from '../../core/permissions/permission.enum';
@@ -48,6 +53,8 @@ export class AiController {
     private readonly chatService: AiChatService,
     private readonly streamService: AiMessageStreamService,
     private readonly sseResponder: AiSseResponder,
+    private readonly feedbackService: AiMessageFeedbackService,
+    private readonly usageService: AiUsageService,
   ) {}
 
   @ApiOperation({
@@ -158,5 +165,41 @@ export class AiController {
   @HttpCode(HttpStatus.OK)
   stopMessage(@Request() request: RequestWithUser, @Param('id', ParseUuidPipe) id: string): Promise<void> {
     return this.chatService.stop(Number(request.user.id), id);
+  }
+
+  @ApiOperation({ operationId: 'setAiMessageFeedback', summary: '对回答点赞或点踩，可修改，传 null 撤销' })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Post('messages/:id/feedback')
+  @HttpCode(HttpStatus.OK)
+  setFeedback(
+    @Request() request: RequestWithUser,
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() dto: SetAiMessageFeedbackDto,
+  ): Promise<void> {
+    return this.feedbackService.rate(Number(request.user.id), id, dto.feedback);
+  }
+
+  @ApiOperation({
+    operationId: 'reportAiMessage',
+    summary: '投诉举报回答：创建 ai_content 类型的举报并记录消息内容，进入后台纠错与举报列表',
+  })
+  @ApiOkResponse({ type: Feedback })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Post('messages/:id/report')
+  @HttpCode(HttpStatus.OK)
+  report(
+    @Request() request: RequestWithUser,
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() dto: ReportAiMessageDto,
+  ): Promise<Feedback> {
+    return this.feedbackService.report(Number(request.user.id), id, dto);
+  }
+
+  @ApiOperation({ operationId: 'getAiQuota', summary: '今日讲题额度：上限、已用与剩余' })
+  @ApiOkResponse({ type: AiQuotaDto })
+  @Get('quota')
+  @HttpCode(HttpStatus.OK)
+  getQuota(@Request() request: RequestWithUser): Promise<AiQuotaDto> {
+    return this.usageService.getQuota(Number(request.user.id));
   }
 }

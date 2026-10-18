@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Between, Repository } from 'typeorm';
 import { AiUsageDailyEntity } from '../entities/ai-usage-daily.entity';
 import { AiUsageDailyRepository } from '../../ai-usage-daily.repository';
-import { AiUsageIncrement } from '../../../../domain/ai-usage-daily';
+import { AiUsageDailyMapper } from '../mappers/ai-usage-daily.mapper';
+import { AiUsageDaily, AiUsageIncrement } from '../../../../domain/ai-usage-daily';
 
 @Injectable()
 export class AiUsageDailyRelationalRepository implements AiUsageDailyRepository {
@@ -25,5 +26,13 @@ export class AiUsageDailyRelationalRepository implements AiUsageDailyRepository 
          "updatedAt" = now()`,
       [data.date, data.model, data.kind, data.requests, data.failures, data.inputTokens, data.outputTokens, data.cost],
     );
+  }
+
+  async findRange(from: string, to: string): Promise<AiUsageDaily[]> {
+    const entities = await this.repository.find({
+      where: { date: Between(from, to) },
+      order: { date: 'ASC', model: 'ASC', kind: 'ASC' },
+    });
+    return entities.map((entity) => AiUsageDailyMapper.toDomain(entity));
   }
 }

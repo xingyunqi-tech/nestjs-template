@@ -17,6 +17,7 @@ export class FeedbackMapper {
     domain.reason = entity.reason;
     domain.errataId = entity.errataId;
     domain.messageId = entity.messageId;
+    domain.messageSnapshot = entity.messageSnapshot;
     domain.createdAt = entity.createdAt;
     domain.updatedAt = entity.updatedAt;
     return domain;
@@ -63,6 +64,9 @@ export class FeedbackMapper {
     }
     if (domain.messageId !== undefined) {
       entity.messageId = domain.messageId;
+    }
+    if (domain.messageSnapshot !== undefined) {
+      entity.messageSnapshot = domain.messageSnapshot;
     }
 
     return entity;

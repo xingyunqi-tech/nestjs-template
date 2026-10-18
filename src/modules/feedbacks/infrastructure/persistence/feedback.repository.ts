@@ -52,6 +52,9 @@ export abstract class FeedbackRepository {
   /** 关联该勘误且待处理或处理中的纠错单置为已解决，回复为空时写入 reply，返回更新数 */
   abstract resolveByErrata(errataId: string, reply: string): Promise<number>;
 
+  /** 该用户对该 AI 消息待处理或处理中的举报 */
+  abstract findOpenAiContentReport(userId: number, messageId: string): Promise<NullableType<Feedback>>;
+
   /** 该用户的反馈与纠错单解除用户关联并清空联系方式与图片 */
   abstract anonymizeByUser(userId: number): Promise<void>;
 }

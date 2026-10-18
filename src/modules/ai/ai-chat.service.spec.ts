@@ -5,6 +5,7 @@ import { AiAccessService } from './ai-access.service';
 import { AiContentSafetyService } from './ai-content-safety.service';
 import { AiBudgetService } from './ai-budget.service';
 import { AiQuotaService } from './ai-quota.service';
+import { AiRateLimitService } from './ai-rate-limit.service';
 import { AiContextService } from './ai-context.service';
 import { AiMessageStreamService } from './ai-message-stream.service';
 import { AiGenerationService } from './ai-generation.service';
@@ -48,6 +49,7 @@ describe('AiChatService', () => {
   let context: { buildChatRequest: ReturnType<typeof vi.fn> };
   let stream: { append: ReturnType<typeof vi.fn> };
   let generation: { start: ReturnType<typeof vi.fn>; requestStop: ReturnType<typeof vi.fn> };
+  let rateLimit: { assertWithinRate: ReturnType<typeof vi.fn> };
   let service: AiChatService;
 
   const step = <T>(name: string, value?: T) =>
@@ -75,6 +77,7 @@ describe('AiChatService', () => {
     context = { buildChatRequest: step('buildChatRequest', request) };
     stream = { append: step('appendStart', '1-0') };
     generation = { start: vi.fn().mockResolvedValue(undefined), requestStop: vi.fn().mockResolvedValue(undefined) };
+    rateLimit = { assertWithinRate: step('assertWithinRate') };
     service = new AiChatService(
       conversations as unknown as AiConversationsService,
       messages as unknown as AiMessageRepository,
@@ -86,10 +89,11 @@ describe('AiChatService', () => {
       context as unknown as AiContextService,
       stream as unknown as AiMessageStreamService,
       generation as unknown as AiGenerationService,
+      rateLimit as unknown as AiRateLimitService,
     );
   });
 
-  it('should check prerequisites, visibility, input, budget and quota in order before starting generation', async () => {
+  it('should check prerequisites, visibility, rate, input, budget and quota in order before starting generation', async () => {
     await expect(service.send(7, 'c1', { content: '为什么', sessionId: 's1' })).resolves.toEqual({ messageId: 'm2' });
 
     expect(calls).toEqual([
@@ -97,6 +101,7 @@ describe('AiChatService', () => {
       'assertCanUse',
       'resolveVisibility',
       'findStreamingIds',
+      'assertWithinRate',
       'assertInputSafe',
       'assertWithinBudget',
       'consume',
@@ -147,6 +152,15 @@ describe('AiChatService', () => {
     await expect(service.send(7, 'c1', { content: '违规' })).rejects.toMatchObject({ errorKey: 'contentBlocked' });
     expect(quota.consume).not.toHaveBeenCalled();
     expect(messages.createExchange).not.toHaveBeenCalled();
+  });
+
+  it('should reject requests over the per-minute rate before the input check and quota consumption', async () => {
+    rateLimit.assertWithinRate.mockRejectedValue(new BusinessException('aiRateLimited'));
+
+    await expect(service.send(7, 'c1', { content: '为什么' })).rejects.toMatchObject({ errorKey: 'aiRateLimited' });
+    expect(rateLimit.assertWithinRate).toHaveBeenCalledWith(7);
+    expect(safety.assertInputSafe).not.toHaveBeenCalled();
+    expect(quota.consume).not.toHaveBeenCalled();
   });
 
   it('should not consume quota when the daily budget is exceeded', async () => {

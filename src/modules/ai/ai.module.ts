@@ -16,12 +16,20 @@ import { AiConversationsService } from './ai-conversations.service';
 import { AiChatService } from './ai-chat.service';
 import { AiSseResponder } from './ai-sse.responder';
 import { AiController } from './ai.controller';
+import { AdminAiController } from './admin-ai.controller';
+import { AiRateLimitService } from './ai-rate-limit.service';
+import { AiStaleMessageTask } from './ai-stale-message.task';
+import { AiMessageFeedbackService } from './ai-message-feedback.service';
+import { AiUsageService } from './ai-usage.service';
+import { AiAccountCleaner } from './ai-account.cleaner';
 import { LlmModule } from '../../integrations/llm/llm.module';
 import { WechatModule } from '../../integrations/wechat/wechat.module';
 import { UsersModule } from '../../core/users/users.module';
 import { ConsentsModule } from '../consents/consents.module';
 import { AppConfigModule } from '../config/config.module';
 import { PracticeModule } from '../practice/practice.module';
+import { FeedbacksModule } from '../feedbacks/feedbacks.module';
+import { SchedulerModule } from '../../infrastructure/scheduler/scheduler.module';
 import { AllConfigType } from '../../config/config.type';
 
 @Module({
@@ -34,8 +42,10 @@ import { AllConfigType } from '../../config/config.type';
     ConsentsModule,
     AppConfigModule,
     PracticeModule,
+    FeedbacksModule,
+    SchedulerModule,
   ],
-  controllers: [AiController],
+  controllers: [AiController, AdminAiController],
   providers: [
     {
       provide: AiRealtimeStore,
@@ -60,6 +70,11 @@ import { AllConfigType } from '../../config/config.type';
     AiConversationsService,
     AiChatService,
     AiSseResponder,
+    AiRateLimitService,
+    AiStaleMessageTask,
+    AiMessageFeedbackService,
+    AiUsageService,
+    AiAccountCleaner,
   ],
 })
 export class AiModule {}

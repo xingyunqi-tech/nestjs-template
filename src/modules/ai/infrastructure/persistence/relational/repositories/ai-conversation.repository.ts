@@ -56,6 +56,10 @@ export class AiConversationRelationalRepository implements AiConversationReposit
     await this.repository.delete({ id });
   }
 
+  async removeByUser(userId: number): Promise<void> {
+    await this.repository.delete({ userId });
+  }
+
   async updateSummary(
     id: string,
     expectedUpToMessageId: string | null,

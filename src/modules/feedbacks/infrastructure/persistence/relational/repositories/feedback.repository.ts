@@ -160,6 +160,19 @@ export class FeedbackRelationalRepository implements FeedbackRepository {
     return result.affected ?? 0;
   }
 
+  async findOpenAiContentReport(userId: number, messageId: string): Promise<NullableType<Feedback>> {
+    const entity = await this.feedbackRepository.findOne({
+      where: {
+        userId,
+        messageId,
+        type: FeedbackType.AI_CONTENT,
+        status: In([FeedbackStatus.PENDING, FeedbackStatus.PROCESSING]),
+      },
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
+    return entity ? FeedbackMapper.toDomain(entity) : null;
+  }
+
   async anonymizeByUser(userId: number): Promise<void> {
     await this.feedbackRepository.update({ userId }, { userId: null, contact: null, images: null });
   }

@@ -78,13 +78,21 @@ export class AiConversationsService {
 
   /** @throws BusinessException answerHidden 会话的题目在进行中的模考里 */
   async findReadableAssistantMessage(userId: number, messageId: string): Promise<AiMessage> {
+    return (await this.findReadableAssistant(userId, messageId)).message;
+  }
+
+  /** @throws BusinessException answerHidden 会话的题目在进行中的模考里 */
+  async findReadableAssistant(
+    userId: number,
+    messageId: string,
+  ): Promise<{ message: AiMessage; conversation: AiConversation }> {
     const message = await this.findOwnedAssistantMessage(userId, messageId);
     const conversation = await this.conversationRepository.findById(message.conversationId);
     if (!conversation) {
       throw messageNotFound();
     }
     await this.assertReadable(userId, conversation);
-    return message;
+    return { message, conversation };
   }
 
   /** 生成中的回答先广播停止，消息随会话删除 */
@@ -129,7 +137,8 @@ export class AiConversationsService {
     }
   }
 
-  private async present(message: AiMessage): Promise<AiMessageDto> {
+  /** 生成中的消息取事件流中已下发的内容 */
+  async present(message: AiMessage): Promise<AiMessageDto> {
     if (message.status !== AiMessageStatus.STREAMING) {
       return toMessageDto(message);
     }

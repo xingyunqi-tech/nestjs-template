@@ -52,6 +52,14 @@ export class MemoryAiRealtimeStore extends AiRealtimeStore {
     return Promise.resolve(this.live(this.counters, key)?.value ?? 0);
   }
 
+  remove(keys: string[]): Promise<void> {
+    keys.forEach((key) => {
+      this.counters.delete(key);
+      this.streams.delete(key);
+    });
+    return Promise.resolve();
+  }
+
   append(key: string, event: AiStreamEventName, data: Record<string, unknown>, ttlSeconds: number): Promise<string> {
     this.sweep();
     const stream = this.live(this.streams, key) ?? { sequence: 0, entries: [], expiresAt: 0 };

@@ -1,5 +1,5 @@
 import { NullableType } from '../../../../common/types/nullable.type';
-import { AiMessage } from '../../domain/ai-message';
+import { AiMessage, AiMessageFeedback } from '../../domain/ai-message';
 
 /** 会话已有生成中的回答 */
 export class AiMessageInProgressError extends Error {}
@@ -10,6 +10,12 @@ export interface CreateAiExchangeData {
   quotaDate: string;
   /** 会话尚无消息时写入的标题 */
   title: string;
+}
+
+export interface StaleAiMessage {
+  id: string;
+  userId: number;
+  quotaDate: string | null;
 }
 
 export type AiMessageResult = Pick<AiMessage, 'content' | 'reasoning' | 'suggestions' | 'status' | 'usage'>;
@@ -31,6 +37,11 @@ export abstract class AiMessageRepository {
 
   abstract findStreamingIds(conversationId: string): Promise<string[]>;
 
+  abstract findStreamingIdsByUser(userId: number): Promise<string[]>;
+
+  /** 创建时间早于 createdBefore 且仍为 STREAMING 的回答，按创建时间升序 */
+  abstract findStaleStreaming(createdBefore: Date, limit: number): Promise<StaleAiMessage[]>;
+
   /**
    * 锁定会话后写入用户消息与生成中的回答，会话尚无消息时写入标题；会话不存在时返回 null
    * @throws AiMessageInProgressError 会话已有生成中的回答
@@ -39,4 +50,6 @@ export abstract class AiMessageRepository {
 
   /** 仅当状态为 STREAMING 时写入结果，返回是否更新 */
   abstract finish(id: AiMessage['id'], result: AiMessageResult): Promise<boolean>;
+
+  abstract setFeedback(id: AiMessage['id'], feedback: AiMessageFeedback | null): Promise<void>;
 }

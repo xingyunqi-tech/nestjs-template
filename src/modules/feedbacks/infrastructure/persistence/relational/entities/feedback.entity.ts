@@ -11,7 +11,7 @@ import {
 import { UserEntity } from '../../../../../../core/users/infrastructure/persistence/relational/entities/user.entity';
 import { QuestionEntity } from '../../../../../questions/infrastructure/persistence/relational/entities/question.entity';
 import { ErrataEntity } from '../../../../../errata/infrastructure/persistence/relational/entities/errata.entity';
-import { FeedbackType, FeedbackStatus, QuestionReportReason } from '../../../../domain/feedback';
+import { AiMessageSnapshot, FeedbackType, FeedbackStatus, QuestionReportReason } from '../../../../domain/feedback';
 import { EntityRelationalHelper } from '../../../../../../common/relational-entity-helper';
 
 @Entity({ name: 'feedback' })
@@ -71,6 +71,9 @@ export class FeedbackEntity extends EntityRelationalHelper {
 
   @Column({ type: 'uuid', nullable: true })
   messageId: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  messageSnapshot: AiMessageSnapshot | null;
 
   @CreateDateColumn()
   createdAt: Date;

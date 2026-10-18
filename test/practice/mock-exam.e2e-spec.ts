@@ -274,7 +274,10 @@ describe('Mock exams', () => {
     let attemptsBefore: number;
 
     it('should require a paper of the subject', async () => {
-      await as(user).post('/practice/sessions', { mode: 'MOCK', subjectId, deviceId: 'a' }).expect(422);
+      await as(user)
+        .post('/practice/sessions', { mode: 'MOCK', subjectId, deviceId: 'a' })
+        .expect(422)
+        .expect(({ body }) => expect(body.data.errorKey).toBe('paperRequired'));
       await startMock(user, 'a', examId)
         .expect(422)
         .expect(({ body }) => expect(body.data.paperId).toBeDefined());
@@ -340,7 +343,10 @@ describe('Mock exams', () => {
         .expect(({ body: rejected }) => expect(rejected.data.errorKey).toBe('questionInMockInProgress'));
       const question = await as(user).get(`/questions/${singles[0]}`).expect(200);
       expect(question.body.data.hiddenReason).toBe('mockInProgress');
-      await as(user).get(`/practice/sessions/${sessionId}/report`).expect(409);
+      await as(user)
+        .get(`/practice/sessions/${sessionId}/report`)
+        .expect(409)
+        .expect(({ body: rejected }) => expect(rejected.data.errorKey).toBe('reportNotAvailable'));
     });
 
     it('should mark the first attempt once for concurrent first answers', async () => {

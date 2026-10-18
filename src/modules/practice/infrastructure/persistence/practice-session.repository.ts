@@ -153,7 +153,7 @@ export abstract class PracticeSessionRepository {
   ): Promise<{ data: PracticeSession[]; total: number }>;
 
   /** 进行中的会话，按最近活跃倒序 */
-  abstract findOngoing(userId: number, limit: number): Promise<PracticeSession[]>;
+  abstract findOngoing(userId: number, limit: number, excludeModes: PracticeMode[]): Promise<PracticeSession[]>;
 
   abstract findInProgressMockQuestionIds(userId: number): Promise<string[]>;
 

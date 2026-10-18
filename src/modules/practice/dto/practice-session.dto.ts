@@ -156,6 +156,25 @@ export class QueryPracticeSessionsDto {
   status?: PracticeSessionStatus;
 }
 
+export class QueryOngoingSessionsDto {
+  @ApiPropertyOptional({
+    enum: PracticeMode,
+    enumName: 'PracticeMode',
+    isArray: true,
+    description: '排除的模式，可重复传参或以逗号分隔',
+  })
+  @IsOptional()
+  @Transform(({ value }) =>
+    ([] as unknown[])
+      .concat(value)
+      .flatMap((item) => String(item).split(','))
+      .map((item) => item.trim())
+      .filter(Boolean),
+  )
+  @IsEnum(PracticeMode, { each: true })
+  excludeModes?: PracticeMode[];
+}
+
 export class ProgressDto {
   @ApiProperty({ type: Number, description: '最近浏览位置，从 0 开始' })
   @IsInt()

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PracticeSessionRepository } from './infrastructure/persistence/practice-session.repository';
 import { AnswerVisibilityService, Visibility } from './answer-visibility.service';
 import { PracticeMode } from './domain/practice-mode';
@@ -21,6 +21,7 @@ import { QuestionType } from '../questions/domain/question-type';
 import { KnowledgePointsService } from '../exams/knowledge-points.service';
 import { PapersService } from '../papers/papers.service';
 import { PaperType } from '../papers/domain/paper-type';
+import { BusinessException } from '../../common/exceptions/business.exception';
 
 interface Tally {
   total: number;
@@ -72,7 +73,7 @@ export class PracticeReportService {
       throw new NotFoundException({ error: 'practiceSessionNotFound' });
     }
     if (session.status !== PracticeSessionStatus.SUBMITTED || session.mode === PracticeMode.MEMORIZE) {
-      throw new ConflictException({ error: 'reportNotAvailable' });
+      throw new BusinessException('reportNotAvailable');
     }
 
     const [questions, records, fullScores, wrongIds] = await Promise.all([

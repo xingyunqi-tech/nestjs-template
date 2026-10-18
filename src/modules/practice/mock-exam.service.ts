@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import {
   MockPaperMissingError,
   PracticeSessionRepository,
@@ -68,7 +68,7 @@ export class MockExamService {
         return { session: created, isActiveDevice: true };
       }
     }
-    throw new ConflictException({ error: 'mockSessionBusy' });
+    throw new BusinessException('mockSessionBusy');
   }
 
   /** 行锁内校验状态，只生效一次；超时一题未答置为放弃；提交后按会话发布统计事件 */

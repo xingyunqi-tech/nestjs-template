@@ -515,12 +515,37 @@ describe('Practice sessions', () => {
         questionCount: 4,
       });
 
-      await as(user).post(`/practice/sessions/${first.body.data.id}/abandon`).expect(409);
-      await as(user).post(`/practice/sessions/${first.body.data.id}/submit`).expect(409);
+      await as(user)
+        .post(`/practice/sessions/${first.body.data.id}/abandon`)
+        .expect(409)
+        .expect(({ body }) => expect(body.data.errorKey).toBe('dailySessionCannotAbandon'));
+      await as(user)
+        .post(`/practice/sessions/${first.body.data.id}/submit`)
+        .expect(409)
+        .expect(({ body }) => expect(body.data.errorKey).toBe('dailySessionCannotFinish'));
       await as(admin).post(`/admin/subjects/${subjectId}/daily-sets/${businessDate()}/regenerate`).expect(409);
 
       const otherDaily = await createSession({ mode: 'DAILY' }, other).expect(200);
       expect(otherDaily.body.data.id).not.toBe(first.body.data.id);
+    });
+
+    it('should list the daily session as ongoing unless daily mode is excluded', async () => {
+      const daily = await createSession({ mode: 'DAILY' }).expect(200);
+      const ids = (body: { data: { id: string }[] }) => body.data.map((item) => item.id);
+
+      const all = await as(user).get('/practice/sessions/ongoing').expect(200);
+      expect(ids(all.body)).toContain(daily.body.data.id);
+
+      const excluded = await as(user).get('/practice/sessions/ongoing?excludeModes=DAILY').expect(200);
+      expect(ids(excluded.body)).not.toContain(daily.body.data.id);
+      expect(excluded.body.data.length).toBe(all.body.data.length - 1);
+
+      const several = await as(user).get('/practice/sessions/ongoing?excludeModes=DAILY,RANDOM').expect(200);
+      const modes = several.body.data.map((item: { mode: string }) => item.mode);
+      expect(modes).not.toContain('DAILY');
+      expect(modes).not.toContain('RANDOM');
+
+      await as(user).get('/practice/sessions/ongoing?excludeModes=UNKNOWN').expect(422);
     });
   });
 

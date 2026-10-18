@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, QueryFailedError, Repository } from 'typeorm';
+import { EntityManager, In, Not, QueryFailedError, Repository } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { PracticeSessionEntity } from '../entities/practice-session.entity';
 import { AnswerRecordEntity } from '../entities/answer-record.entity';
@@ -353,9 +353,13 @@ export class PracticeSessionRelationalRepository implements PracticeSessionRepos
     return { data: entities.map((entity) => PracticeSessionMapper.toDomain(entity)), total };
   }
 
-  async findOngoing(userId: number, limit: number): Promise<PracticeSession[]> {
+  async findOngoing(userId: number, limit: number, excludeModes: PracticeMode[]): Promise<PracticeSession[]> {
     const entities = await this.sessionRepository.find({
-      where: { userId, status: PracticeSessionStatus.IN_PROGRESS },
+      where: {
+        userId,
+        status: PracticeSessionStatus.IN_PROGRESS,
+        ...(excludeModes.length > 0 && { mode: Not(In(excludeModes)) }),
+      },
       order: { lastActiveAt: 'DESC', id: 'DESC' },
       take: limit,
     });

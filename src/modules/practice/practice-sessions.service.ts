@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import {
   CreatePracticeSessionData,
   PracticeSessionRepository,
@@ -62,7 +62,7 @@ export class PracticeSessionsService {
       throw unprocessable('mode', 'practiceModeNotSupported');
     }
     if (dto.mode === PracticeMode.MOCK && !dto.paperId) {
-      throw unprocessable('paperId', 'paperRequired');
+      throw new BusinessException('paperRequired');
     }
     if (dto.mode !== PracticeMode.MOCK && dto.paperId) {
       throw unprocessable('paperId', 'paperNotAllowed');
@@ -225,7 +225,7 @@ export class PracticeSessionsService {
   async submit(userId: number, sessionId: string): Promise<PracticeSessionDetailDto> {
     const session = await this.findOwned(userId, sessionId);
     if (session.mode === PracticeMode.DAILY) {
-      throw new ConflictException({ error: 'dailySessionCannotFinish' });
+      throw new BusinessException('dailySessionCannotFinish');
     }
     if (session.mode === PracticeMode.MOCK) {
       await this.mockExamService.submit(sessionId, true);
@@ -242,7 +242,7 @@ export class PracticeSessionsService {
   async abandon(userId: number, sessionId: string): Promise<PracticeSessionDetailDto> {
     const session = await this.findOwned(userId, sessionId);
     if (session.mode === PracticeMode.DAILY) {
-      throw new ConflictException({ error: 'dailySessionCannotAbandon' });
+      throw new BusinessException('dailySessionCannotAbandon');
     }
     await this.practiceSessionRepository.closeInProgress(sessionId, PracticeSessionStatus.ABANDONED, null);
     return this.getDetail(userId, sessionId);
@@ -260,8 +260,8 @@ export class PracticeSessionsService {
     return { data: data.map((session) => toPracticeSessionDto(session)), total, paginationOptions };
   }
 
-  async findOngoing(userId: number): Promise<PracticeSessionDto[]> {
-    const sessions = await this.practiceSessionRepository.findOngoing(userId, ONGOING_LIMIT);
+  async findOngoing(userId: number, excludeModes: PracticeMode[] = []): Promise<PracticeSessionDto[]> {
+    const sessions = await this.practiceSessionRepository.findOngoing(userId, ONGOING_LIMIT, excludeModes);
     return sessions.map((session) => toPracticeSessionDto(session));
   }
 

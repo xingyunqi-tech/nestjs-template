@@ -1,5 +1,5 @@
 import type { Mocked } from 'vitest';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { PracticeReportService } from './practice-report.service';
 import { PracticeSessionRepository } from './infrastructure/persistence/practice-session.repository';
 import { AnswerVisibilityService } from './answer-visibility.service';
@@ -169,7 +169,10 @@ describe('PracticeReportService', () => {
 
   it('should only report finished sessions of the owner', async () => {
     session.status = PracticeSessionStatus.IN_PROGRESS;
-    await expect(service.getReport(USER, session.id)).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.getReport(USER, session.id)).rejects.toMatchObject({
+      errorKey: 'reportNotAvailable',
+      status: 409,
+    });
     await expect(service.getReport(99, session.id)).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -1,5 +1,5 @@
 import type { Mocked } from 'vitest';
-import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { PracticeSessionsService } from './practice-sessions.service';
 import { PracticeSessionRepository } from './infrastructure/persistence/practice-session.repository';
 import { QuestionPickerService } from './question-picker.service';
@@ -37,7 +37,14 @@ describe('PracticeSessionsService', () => {
   let repository: Mocked<
     Pick<
       PracticeSessionRepository,
-      'create' | 'createDaily' | 'findDaily' | 'findById' | 'findRecords' | 'closeInProgress' | 'updateProgress'
+      | 'create'
+      | 'createDaily'
+      | 'findDaily'
+      | 'findById'
+      | 'findRecords'
+      | 'closeInProgress'
+      | 'updateProgress'
+      | 'findOngoing'
     >
   >;
   let picker: Mocked<Pick<QuestionPickerService, 'pick'>>;
@@ -68,6 +75,7 @@ describe('PracticeSessionsService', () => {
       findById: vi.fn(() => Promise.resolve(session)),
       findRecords: vi.fn().mockResolvedValue([]),
       closeInProgress: vi.fn().mockResolvedValue(true),
+      findOngoing: vi.fn().mockResolvedValue([]),
       updateProgress: vi.fn().mockResolvedValue(undefined),
     };
     picker = {
@@ -172,9 +180,10 @@ describe('PracticeSessionsService', () => {
       await expect(
         service.create(USER, dto({ mode: PracticeMode.CHAPTER, scope: { knowledgePointId: 'kp' } })),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
-      await expect(service.create(USER, dto({ mode: PracticeMode.MOCK }))).rejects.toBeInstanceOf(
-        UnprocessableEntityException,
-      );
+      await expect(service.create(USER, dto({ mode: PracticeMode.MOCK }))).rejects.toMatchObject({
+        errorKey: 'paperRequired',
+        status: 422,
+      });
       expect(picker.pick).not.toHaveBeenCalled();
     });
 
@@ -234,9 +243,25 @@ describe('PracticeSessionsService', () => {
 
   it('should not finish or abandon daily practice', async () => {
     session.mode = PracticeMode.DAILY;
-    await expect(service.submit(USER, session.id)).rejects.toBeInstanceOf(ConflictException);
-    await expect(service.abandon(USER, session.id)).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.submit(USER, session.id)).rejects.toMatchObject({
+      errorKey: 'dailySessionCannotFinish',
+      status: 409,
+    });
+    await expect(service.abandon(USER, session.id)).rejects.toMatchObject({
+      errorKey: 'dailySessionCannotAbandon',
+      status: 409,
+    });
     expect(repository.closeInProgress).not.toHaveBeenCalled();
+  });
+
+  it('should list ongoing sessions excluding the given modes', async () => {
+    repository.findOngoing.mockResolvedValue([session]);
+
+    await expect(service.findOngoing(USER)).resolves.toMatchObject([{ id: session.id }]);
+    expect(repository.findOngoing).toHaveBeenLastCalledWith(USER, 20, []);
+
+    await service.findOngoing(USER, [PracticeMode.DAILY]);
+    expect(repository.findOngoing).toHaveBeenLastCalledWith(USER, 20, [PracticeMode.DAILY]);
   });
 
   it('should abandon a session by a conditional update', async () => {

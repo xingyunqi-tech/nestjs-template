@@ -213,6 +213,16 @@ describe('MockExamService', () => {
       expect(repository.insertMockIfAbsent).not.toHaveBeenCalled();
     });
 
+    it('should reject as busy when the session keeps changing state', async () => {
+      repository.insertMockIfAbsent.mockResolvedValue(null);
+
+      await expect(service.enter(USER, 's1', 'p1', 'd1')).rejects.toMatchObject({
+        errorKey: 'mockSessionBusy',
+        status: 409,
+      });
+      expect(repository.insertMockIfAbsent).toHaveBeenCalledTimes(3);
+    });
+
     it('should report a paper removed while creating as not found', async () => {
       repository.insertMockIfAbsent.mockRejectedValue(new MockPaperMissingError());
       await expect(service.enter(USER, 's1', 'p1', 'd1')).rejects.toMatchObject({

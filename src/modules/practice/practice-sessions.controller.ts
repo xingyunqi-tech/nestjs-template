@@ -22,6 +22,7 @@ import {
   PracticeSessionDetailDto,
   PracticeSessionDto,
   ProgressDto,
+  QueryOngoingSessionsDto,
   QueryPracticeSessionsDto,
 } from './dto/practice-session.dto';
 import { QuerySessionQuestionsDto, SessionQuestionsDto } from './dto/practice-question.dto';
@@ -81,8 +82,11 @@ export class PracticeSessionsController {
   @ApiOkResponse({ type: [PracticeSessionDto] })
   @Get('ongoing')
   @HttpCode(HttpStatus.OK)
-  findOngoing(@Request() request: RequestWithUser): Promise<PracticeSessionDto[]> {
-    return this.practiceSessionsService.findOngoing(Number(request.user.id));
+  findOngoing(
+    @Request() request: RequestWithUser,
+    @Query() query: QueryOngoingSessionsDto,
+  ): Promise<PracticeSessionDto[]> {
+    return this.practiceSessionsService.findOngoing(Number(request.user.id), query.excludeModes);
   }
 
   @ApiOperation({ operationId: 'getPracticeSession', summary: '会话详情、答题卡与服务端时间' })

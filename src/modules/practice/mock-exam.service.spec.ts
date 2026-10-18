@@ -145,7 +145,11 @@ describe('MockExamService', () => {
       }),
     };
     scheduler = { schedule: vi.fn().mockResolvedValue(undefined) };
-    publisher = { publishRecord: vi.fn(), publishSession: vi.fn().mockResolvedValue(undefined) };
+    publisher = {
+      publishRecord: vi.fn(),
+      publishSession: vi.fn().mockResolvedValue(undefined),
+      publishCheckIn: vi.fn(),
+    };
     service = new MockExamService(
       repository as unknown as PracticeSessionRepository,
       picker as unknown as QuestionPickerService,

@@ -95,15 +95,27 @@ describe('StatsEventService', () => {
       apply: vi.fn(async (_handle: TransactionHandle, item: StatsRecord) => {
         calls.push(`${name}:${item.id}`);
       }),
+      afterCommit: vi.fn(async (item: StatsRecord) => {
+        calls.push(`${name}.afterCommit:${item.id}`);
+      }),
     });
-    steps = { wrongBook: step('wrongBook'), learning: step('learning'), checkIn: step('checkIn') };
+    steps = {
+      wrongBook: step('wrongBook'),
+      learning: step('learning'),
+      checkIn: {
+        ...step('checkIn'),
+        evaluate: vi.fn(async (_handle: TransactionHandle, userId: number, date: string) => {
+          calls.push(`checkIn.evaluate:${userId}:${date}`);
+        }),
+      },
+    };
     build([record()]);
   });
 
   it('should apply wrong book, learning stats, check-in and first answer in order under the user lock', async () => {
     await expect(service.processRecord('r1')).resolves.toBe('done');
 
-    expect(calls).toEqual(['wrongBook:r1', 'learning:r1', 'checkIn:r1', 'first:r1']);
+    expect(calls).toEqual(['wrongBook:r1', 'learning:r1', 'checkIn:r1', 'first:r1', 'learning.afterCommit:r1']);
     expect(store.tx.claimRecord).toHaveBeenCalledWith('r1');
     expect(store.tx.findRecord).toHaveBeenCalledWith('r1');
     expect(steps.wrongBook.apply).toHaveBeenCalledWith(store.handle, record());
@@ -132,6 +144,7 @@ describe('StatsEventService', () => {
     expect(store.applied.size).toBe(0);
     expect(store.tx.findRecord).not.toHaveBeenCalled();
     expect(calls).toEqual([]);
+    expect(steps.learning.afterCommit).not.toHaveBeenCalled();
   });
 
   it('should finish without locking when the record does not exist', async () => {
@@ -166,6 +179,25 @@ describe('StatsEventService', () => {
     expect(results).toEqual([true, true]);
     expect(store.tx.markFirstForQuestion).toHaveBeenCalledTimes(2);
     expect(store.firsts.size).toBe(1);
+  });
+
+  describe('processCheckIn', () => {
+    it('should evaluate the check-in in a transaction under the user lock', async () => {
+      await expect(service.processCheckIn(7, '2026-10-17')).resolves.toBe('done');
+
+      expect(calls).toEqual(['checkIn.evaluate:7:2026-10-17']);
+      expect(steps.checkIn.evaluate).toHaveBeenCalledWith(store.handle, 7, '2026-10-17');
+      expect(lockService.tryAcquire).toHaveBeenCalledWith(statsUserLockKey(7), expect.any(Number));
+      expect(lockService.release).toHaveBeenCalledWith('stats:user:7', 'token');
+    });
+
+    it('should return locked without evaluating when the user lock is taken', async () => {
+      lockService.tryAcquire.mockResolvedValue(null);
+
+      await expect(service.processCheckIn(7, '2026-10-17')).resolves.toBe('locked');
+
+      expect(repository.transaction).not.toHaveBeenCalled();
+    });
   });
 
   describe('processSession', () => {

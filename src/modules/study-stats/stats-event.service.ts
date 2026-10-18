@@ -57,22 +57,33 @@ export class StatsEventService {
     });
   }
 
+  async processCheckIn(userId: number, date: string): Promise<StatsJobResult> {
+    return this.withUserLock(userId, () =>
+      this.repository.transaction((tx) => this.checkInEvaluator.evaluate(tx.handle, userId, date)),
+    );
+  }
+
   /** 返回是否计入；已计入或未判分时跳过 */
-  applyRecord(recordId: string): Promise<boolean> {
-    return this.repository.transaction(async (tx) => {
+  async applyRecord(recordId: string): Promise<boolean> {
+    const applied = await this.repository.transaction(async (tx) => {
       if (!(await tx.claimRecord(recordId))) {
-        return false;
+        return null;
       }
       const record = await tx.findRecord(recordId);
       if (!record) {
-        return false;
+        return null;
       }
       await this.wrongBookUpdater.apply(tx.handle, record);
       await this.learningStatsUpdater.apply(tx.handle, record);
       await this.checkInEvaluator.apply(tx.handle, record);
       await tx.markFirstForQuestion(record);
-      return true;
+      return record;
     });
+    if (!applied) {
+      return false;
+    }
+    await this.learningStatsUpdater.afterCommit(applied);
+    return true;
   }
 
   private async withUserLock(userId: number, work: () => Promise<void>): Promise<StatsJobResult> {

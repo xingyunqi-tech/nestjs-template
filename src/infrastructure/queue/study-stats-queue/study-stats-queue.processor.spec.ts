@@ -10,6 +10,7 @@ describe('StudyStatsQueueProcessor', () => {
   const service = (result: 'done' | 'locked' = 'done') => ({
     processRecord: vi.fn().mockResolvedValue(result),
     processSession: vi.fn().mockResolvedValue(result),
+    processCheckIn: vi.fn().mockResolvedValue(result),
   });
 
   it('should process record jobs by record', async () => {
@@ -25,6 +26,18 @@ describe('StudyStatsQueueProcessor', () => {
     await new StudyStatsQueueProcessor(stats as unknown as StatsEventService).process(job({ sessionId: 's1' }), 't');
 
     expect(stats.processSession).toHaveBeenCalledWith('s1');
+  });
+
+  it('should process check-in jobs by user and date', async () => {
+    const stats = service();
+    await new StudyStatsQueueProcessor(stats as unknown as StatsEventService).process(
+      job({ userId: 7, date: '2026-10-17' }),
+      't',
+    );
+
+    expect(stats.processCheckIn).toHaveBeenCalledWith(7, '2026-10-17');
+    expect(stats.processRecord).not.toHaveBeenCalled();
+    expect(stats.processSession).not.toHaveBeenCalled();
   });
 
   it('should delay the same job when the user lock is taken', async () => {

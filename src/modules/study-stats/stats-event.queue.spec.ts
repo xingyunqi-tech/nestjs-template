@@ -35,6 +35,17 @@ describe('StatsEventQueue', () => {
     );
   });
 
+  it('should enqueue one check-in job per user and date', async () => {
+    const queue = createQueue();
+    await new StatsEventQueue(queue).publishCheckIn(7, '2026-10-17');
+
+    expect(queue.add).toHaveBeenCalledWith(
+      StudyStatsJobName.CHECK_IN,
+      { userId: 7, date: '2026-10-17' },
+      expect.objectContaining({ jobId: 'checkin-7-2026-10-17' }),
+    );
+  });
+
   it('should do nothing when the queue is not registered', async () => {
     const publisher = new StatsEventQueue();
 

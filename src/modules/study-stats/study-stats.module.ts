@@ -12,8 +12,11 @@ import { StatsCompensationTask } from './stats-compensation.task';
 import { WrongBookUpdater } from './ports/wrong-book.updater';
 import { WrongBookModule } from '../wrong-book/wrong-book.module';
 import { WrongBookService } from '../wrong-book/wrong-book.service';
-import { LearningStatsUpdater, NoopLearningStatsUpdater } from './ports/learning-stats.updater';
-import { CheckInEvaluator, NoopCheckInEvaluator } from './ports/check-in.evaluator';
+import { LearningStatsUpdater } from './ports/learning-stats.updater';
+import { CheckInEvaluator } from './ports/check-in.evaluator';
+import { LearningStatsService } from './learning-stats.service';
+import { CheckInService } from './check-in.service';
+import { KnowledgeMasteryService } from './knowledge-mastery.service';
 
 @Module({
   imports: [
@@ -34,9 +37,12 @@ import { CheckInEvaluator, NoopCheckInEvaluator } from './ports/check-in.evaluat
         apply: (handle, record) => wrongBookService.applyStatsRecord(handle, record),
       }),
     },
-    { provide: LearningStatsUpdater, useClass: NoopLearningStatsUpdater },
-    { provide: CheckInEvaluator, useClass: NoopCheckInEvaluator },
+    LearningStatsService,
+    CheckInService,
+    KnowledgeMasteryService,
+    { provide: LearningStatsUpdater, useExisting: LearningStatsService },
+    { provide: CheckInEvaluator, useExisting: CheckInService },
   ],
-  exports: [StatsEventQueue, StatsEventService],
+  exports: [StatsEventQueue, StatsEventService, LearningStatsService, CheckInService, KnowledgeMasteryService],
 })
 export class StudyStatsModule {}

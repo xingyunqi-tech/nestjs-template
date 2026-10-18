@@ -131,7 +131,10 @@
     "ACQ",
     "SAVEPOINT",
     "recordset",
-    "AGG"
+    "AGG",
+    "checkin",
+    "checkins",
+    "ORDINALITY"
   ],
   "patterns": [
     {

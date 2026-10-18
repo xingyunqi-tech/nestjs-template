@@ -16,10 +16,13 @@ export class StudyStatsQueueProcessor extends WorkerHost {
 
   /** 用户锁被占用时保留同一 jobId 延迟重试 */
   async process(job: Job<StudyStatsJobData>, token?: string): Promise<void> {
+    const { data } = job;
     const result =
-      'recordId' in job.data
-        ? await this.statsEventService.processRecord(job.data.recordId)
-        : await this.statsEventService.processSession(job.data.sessionId);
+      'recordId' in data
+        ? await this.statsEventService.processRecord(data.recordId)
+        : 'sessionId' in data
+          ? await this.statsEventService.processSession(data.sessionId)
+          : await this.statsEventService.processCheckIn(data.userId, data.date);
     if (result === 'locked') {
       await job.moveToDelayed(
         Date.now() + LOCK_RETRY_DELAY_MS + Math.floor(Math.random() * LOCK_RETRY_DELAY_MS),

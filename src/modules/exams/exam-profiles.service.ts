@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { UserExamProfileRepository } from './infrastructure/persistence/user-exam-profile.repository';
 import { UserExamProfile } from './domain/user-exam-profile';
+import { NullableType } from '../../common/types/nullable.type';
 import { ContentStatus } from './domain/content-status';
 import { UpsertExamProfileDto } from './dto/upsert-exam-profile.dto';
 import { ExamsService } from './exams.service';
@@ -17,6 +18,10 @@ export class ExamProfilesService {
     const profiles = await this.profileRepository.findManyByUserId(userId);
     await this.examsService.withResolvedIcons(profiles.flatMap((profile) => (profile.exam ? [profile.exam] : [])));
     return profiles;
+  }
+
+  findCurrent(userId: UserExamProfile['userId']): Promise<NullableType<UserExamProfile>> {
+    return this.profileRepository.findCurrentByUserId(userId);
   }
 
   /** 首次关注要求考试已发布 */

@@ -5,6 +5,7 @@ import {
   STUDY_STATS_QUEUE,
   StudyStatsJobData,
   StudyStatsJobName,
+  checkInJobId,
   sessionJobId,
 } from '../../infrastructure/queue/study-stats-queue/study-stats-queue.constants';
 
@@ -28,6 +29,14 @@ export class StatsEventQueue {
 
   async publishSession(sessionId: string): Promise<void> {
     await this.queue?.add(StudyStatsJobName.SESSION, { sessionId }, { ...JOB_OPTIONS, jobId: sessionJobId(sessionId) });
+  }
+
+  async publishCheckIn(userId: number, date: string): Promise<void> {
+    await this.queue?.add(
+      StudyStatsJobName.CHECK_IN,
+      { userId, date },
+      { ...JOB_OPTIONS, jobId: checkInJobId(userId, date) },
+    );
   }
 
   get enabled(): boolean {

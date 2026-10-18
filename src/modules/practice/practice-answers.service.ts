@@ -166,6 +166,9 @@ export class PracticeAnswersService {
     });
 
     await this.publishRecords(outcome.gradedRecordIds);
+    if (session.mode === PracticeMode.DAILY) {
+      await this.publishDailySubjectiveCheckIn(userId, outcome.records, questions);
+    }
     return {
       serverNow: new Date(),
       results: await this.toResults(userId, session, ids, questions, outcome.records),
@@ -417,6 +420,26 @@ export class PracticeAnswersService {
     if (files.length !== ids.length || files.some((file) => file.ownerUserId !== userId)) {
       throw unprocessable('answers', 'answerImageNotOwned');
     }
+  }
+
+  /** 每日一练主观题作答不产生统计事件，单独入队打卡判定 */
+  private async publishDailySubjectiveCheckIn(
+    userId: number,
+    records: Map<string, AnswerRecord>,
+    questions: Map<string, Question>,
+  ): Promise<void> {
+    const answeredSubjective = [...records.values()].some(
+      (record) => record.answer !== null && isSubjectiveType(questions.get(record.questionId)!.type),
+    );
+    if (!answeredSubjective) {
+      return;
+    }
+    const date = businessDate();
+    await this.statsEventPublisher.publishCheckIn(userId, date).catch((error: unknown) => {
+      this.logger.warn(
+        `Failed to publish check-in evaluation for user ${userId} on ${date}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
   }
 
   private async publishRecords(recordIds: string[]): Promise<void> {

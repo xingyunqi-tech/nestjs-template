@@ -26,6 +26,11 @@ export class UserExamProfileRelationalRepository implements UserExamProfileRepos
     return entities.map((entity) => UserExamProfileMapper.toDomain(entity));
   }
 
+  async findCurrentByUserId(userId: UserExamProfile['userId']): Promise<NullableType<UserExamProfile>> {
+    const entity = await this.profileRepository.findOne({ where: { userId: Number(userId), isCurrent: true } });
+    return entity ? UserExamProfileMapper.toDomain(entity) : null;
+  }
+
   async findByUserIdAndExamId(
     userId: UserExamProfile['userId'],
     examId: UserExamProfile['examId'],

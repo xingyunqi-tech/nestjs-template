@@ -7,6 +7,9 @@ export type ExamProfileChanges = Partial<Pick<UserExamProfile, 'examDate' | 'dai
 export abstract class UserExamProfileRepository {
   abstract findManyByUserId(userId: UserExamProfile['userId']): Promise<UserExamProfile[]>;
 
+  /** 当前考试档案，不加载考试 */
+  abstract findCurrentByUserId(userId: UserExamProfile['userId']): Promise<NullableType<UserExamProfile>>;
+
   abstract findByUserIdAndExamId(
     userId: UserExamProfile['userId'],
     examId: UserExamProfile['examId'],

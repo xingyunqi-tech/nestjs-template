@@ -162,7 +162,11 @@ describe('PracticeAnswersService', () => {
         ),
       ),
     };
-    publisher = { publishRecord: vi.fn().mockResolvedValue(undefined), publishSession: vi.fn() };
+    publisher = {
+      publishRecord: vi.fn().mockResolvedValue(undefined),
+      publishSession: vi.fn(),
+      publishCheckIn: vi.fn().mockResolvedValue(undefined),
+    };
     service = new PracticeAnswersService(
       repository as unknown as PracticeSessionRepository,
       questionsService as unknown as QuestionsService,
@@ -205,10 +209,21 @@ describe('PracticeAnswersService', () => {
     });
     expect(tx.records.get('short')!.gradedAt).toBeNull();
     expect(publisher.publishRecord).not.toHaveBeenCalled();
+    expect(publisher.publishCheckIn).not.toHaveBeenCalled();
 
     await save([patch('short', { text: '改答案' })]);
     expect(tx.records.get('short')!.answer).toEqual({ text: '我的答案' });
     expect(tx.totals().answered).toBe(1);
+  });
+
+  it('should publish a check-in evaluation after a subjective answer in the daily practice', async () => {
+    session.mode = PracticeMode.DAILY;
+
+    await save([patch('single', { keys: ['A'] })]);
+    expect(publisher.publishCheckIn).not.toHaveBeenCalled();
+
+    await save([patch('short', { text: '我的答案' })]);
+    expect(publisher.publishCheckIn).toHaveBeenCalledWith(USER, expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
   });
 
   it('should save a mark without counting it as answered and keep it when answering later', async () => {

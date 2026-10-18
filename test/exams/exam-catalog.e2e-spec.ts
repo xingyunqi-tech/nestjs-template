@@ -218,11 +218,21 @@ describe('Exam catalog', () => {
       expect(findNode(tree, a1x)).toMatchObject({ level: 3, isLeaf: true, path: `/${a}/${a1}/${a1x}/` });
     });
 
-    it('should return the public tree for guests and users with empty progress', async () => {
+    it('should return the public tree without progress for guests and with empty progress for new users', async () => {
       const guest = await as(null).get(`/subjects/${subjectId}/knowledge-points`).expect(200);
       const member = await as(user).get(`/subjects/${subjectId}/knowledge-points`).expect(200);
-      expect(member.body.data).toEqual(guest.body.data);
       expect(guest.body.data[0]).toMatchObject({ level: 1, progress: null });
+      expect(member.body.data[0]).toMatchObject({
+        id: guest.body.data[0].id,
+        level: 1,
+        progress: {
+          answeredQuestionCount: 0,
+          questionCount: expect.any(Number),
+          answered: 0,
+          correct: 0,
+          mastery: null,
+        },
+      });
     });
 
     it('should move a subtree and update levels, paths and leaf flags', async () => {

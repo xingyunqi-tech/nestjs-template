@@ -9,6 +9,7 @@ import { FilesModule } from '../files/files.module';
 import { AppConfigModule } from '../config/config.module';
 import { StudyStatsModule } from '../study-stats/study-stats.module';
 import { StatsEventQueue } from '../study-stats/stats-event.queue';
+import { KnowledgeMasteryService } from '../study-stats/knowledge-mastery.service';
 import { SchedulerModule } from '../../infrastructure/scheduler/scheduler.module';
 import { isRedisEnabled } from '../../infrastructure/redis/config/redis.config';
 import { MOCK_SUBMIT_QUEUE } from '../../infrastructure/queue/mock-submit-queue/mock-submit-queue.constants';
@@ -27,7 +28,7 @@ import { PracticeSessionsController } from './practice-sessions.controller';
 import { QuestionAccessController } from './question-access.controller';
 import { StatsEventPublisher } from './ports/stats-event.publisher';
 import { WrongBookReader } from './ports/wrong-book.reader';
-import { EmptyWeakPointReader, WeakPointReader } from './ports/weak-point.reader';
+import { WeakPointReader } from './ports/weak-point.reader';
 import {
   CompositeQuestionAssociationReader,
   QUESTION_ASSOCIATION_SOURCES,
@@ -73,7 +74,11 @@ import { WrongBookService } from '../wrong-book/wrong-book.service';
       inject: [WrongBookService],
       useFactory: (wrongBookService: WrongBookService): WrongBookReader => wrongBookService,
     },
-    { provide: WeakPointReader, useClass: EmptyWeakPointReader },
+    {
+      provide: WeakPointReader,
+      inject: [KnowledgeMasteryService],
+      useFactory: (knowledgeMasteryService: KnowledgeMasteryService): WeakPointReader => knowledgeMasteryService,
+    },
     {
       provide: QUESTION_ASSOCIATION_SOURCES,
       inject: [WrongBookService],

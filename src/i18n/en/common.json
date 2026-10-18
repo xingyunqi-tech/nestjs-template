@@ -143,6 +143,7 @@
   "invalidDifficultyRange": "Invalid difficulty range",
   "questionNotInTrial": "The question is not part of the trial",
   "invalidDate": "Invalid date",
+  "invalidMonth": "Invalid month",
   "invalidDateRange": "Invalid date range",
   "dailySetDateInPast": "Daily sets of past dates cannot be regenerated",
   "dailySetInUse": "The daily set is already in use and cannot be regenerated",

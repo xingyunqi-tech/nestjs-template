@@ -27,6 +27,7 @@ describe('ExamProfilesService', () => {
   beforeEach(() => {
     repository = {
       findManyByUserId: vi.fn(),
+      findCurrentByUserId: vi.fn(),
       findByUserIdAndExamId: vi.fn(),
       upsert: vi.fn(),
       markCurrent: vi.fn(),

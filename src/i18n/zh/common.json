@@ -143,6 +143,7 @@
   "invalidDifficultyRange": "难度区间无效",
   "questionNotInTrial": "题目不在试做范围内",
   "invalidDate": "日期格式无效",
+  "invalidMonth": "月份格式无效",
   "invalidDateRange": "日期区间无效",
   "dailySetDateInPast": "不能重新生成过去日期的题组",
   "dailySetInUse": "当日题组已有用户作答，不能重新生成",

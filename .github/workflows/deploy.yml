@@ -71,9 +71,13 @@ jobs:
 
       - name: Generate build info
         id: info
+        env:
+          SOURCE_BRANCH: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
         run: |
           echo "git_hash=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          echo "branch=${SOURCE_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "branch_tag=${SOURCE_BRANCH//\//-}" >> "$GITHUB_OUTPUT"
 
       - name: Normalize image name
         id: repo
@@ -94,10 +98,10 @@ jobs:
         with:
           images: ${{ steps.repo.outputs.image_name }}
           tags: |
-            type=sha,prefix=
-            type=ref,event=branch
+            type=raw,value=${{ steps.info.outputs.git_hash }}
+            type=raw,value=${{ steps.info.outputs.branch_tag }},enable=${{ !startsWith(github.ref, 'refs/tags/') }}
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ steps.info.outputs.branch == 'master' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7

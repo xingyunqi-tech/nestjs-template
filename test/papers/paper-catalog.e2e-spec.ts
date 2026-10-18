@@ -481,6 +481,55 @@ describe('Paper catalog', () => {
     }
   });
 
+  it('should expose the material audio url and fill blank count in public trials without answers', async () => {
+    const [{ id: audioId }]: { id: string }[] = await app
+      .get(DataSource)
+      .query(
+        `INSERT INTO "file" ("path", "visibility", "mimeType") VALUES ($1, 'PUBLIC', 'audio/mpeg') RETURNING "id"`,
+        [`/api/v1/files/e2e-audio-${unique}.mp3`],
+      );
+    fileIds.push(audioId);
+    const audioMaterialId = await createQuestion(
+      { subjectId, type: 'MATERIAL', stem: `听力 ${unique}`, audioFileId: audioId },
+      false,
+    );
+    const fillId = await createQuestion(
+      {
+        subjectId,
+        parentId: audioMaterialId,
+        type: 'FILL',
+        stem: `听写 ${unique}`,
+        answer: { blanks: [['春天'], ['花开']] },
+        knowledgePointIds: [leaf],
+      },
+      false,
+    );
+    await as(admin).post(`/admin/questions/${audioMaterialId}/submit`).expect(200);
+    await as(admin).post(`/admin/questions/${audioMaterialId}/publish`).expect(200);
+    try {
+      const today = businessDate();
+      await setDailyQuestions(today, [fillId, singles[0]]);
+
+      const trial = await as(null).get(`/subjects/${subjectId}/daily/trial`).expect(200);
+      const [unit, next] = trial.body.data.questions as (TrialUnit & {
+        audioUrl: string | null;
+        blankCount: number | null;
+        children?: { id: string; audioUrl: string | null; blankCount: number | null }[];
+      })[];
+      expect(unit).toMatchObject({
+        id: audioMaterialId,
+        audioFileId: audioId,
+        audioUrl: expect.stringMatching(new RegExp(`/api/v1/files/e2e-audio-${unique}\\.mp3$`)),
+        blankCount: null,
+      });
+      expect(unit.children).toEqual([expect.objectContaining({ id: fillId, audioUrl: null, blankCount: 2 })]);
+      expect(next).toMatchObject({ id: singles[0], audioUrl: null, blankCount: null });
+      expect(JSON.stringify(trial.body.data)).not.toMatch(/"answer"|"analysis"|blanks|春天|花开/);
+    } finally {
+      await as(admin).post(`/admin/questions/${audioMaterialId}/offline`).expect(200);
+    }
+  });
+
   it('should stop before a trailing material and grade only trial questions', async () => {
     const today = businessDate();
     await setDailyQuestions(today, [singles[0], singles[1], singles[2], ...subQuestionIds, singles[3]]);

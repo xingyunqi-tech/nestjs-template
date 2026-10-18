@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Question } from '../domain/question';
 import { QuestionVersion } from '../domain/question-version';
 import { QuestionType } from '../domain/question-type';
-import { QuestionOption } from '../domain/question-answer';
+import { FillAnswer, QuestionOption } from '../domain/question-answer';
 
 /** 用户与公开接口的题目内容，不含答案与解析 */
 export class PublicQuestionDto {
@@ -33,6 +33,12 @@ export class PublicQuestionDto {
   @ApiProperty({ type: String, format: 'uuid', nullable: true })
   audioFileId: string | null;
 
+  @ApiProperty({ type: String, nullable: true, description: '材料音频的访问地址，文件不可访问时为 null' })
+  audioUrl: string | null;
+
+  @ApiProperty({ type: Number, nullable: true, description: '填空题的空数，其他题型为 null' })
+  blankCount: number | null;
+
   @ApiProperty({ type: Number, minimum: 1, maximum: 5 })
   difficulty: number;
 
@@ -51,8 +57,12 @@ export class PublicQuestionUnitDto extends PublicQuestionDto {
   children?: PublicQuestionDto[];
 }
 
-/** 传入版本时题面取自该版本快照，知识点始终取当前关联 */
-export function toPublicQuestion(question: Question, version?: QuestionVersion): PublicQuestionDto {
+/** 传入版本时题面取自该版本快照，知识点始终取当前关联；fileUrls 键为小写文件 id */
+export function toPublicQuestion(
+  question: Question,
+  version?: QuestionVersion,
+  fileUrls: Record<string, string> = {},
+): PublicQuestionDto {
   const content = version ?? question;
   const dto = new PublicQuestionDto();
   dto.id = question.id;
@@ -66,6 +76,9 @@ export function toPublicQuestion(question: Question, version?: QuestionVersion):
     : null;
   dto.material = content.material;
   dto.audioFileId = content.audioFileId;
+  dto.audioUrl = content.audioFileId ? (fileUrls[content.audioFileId.toLowerCase()] ?? null) : null;
+  dto.blankCount =
+    content.type === QuestionType.FILL ? ((content.answer as FillAnswer | null)?.blanks.length ?? null) : null;
   dto.difficulty = question.difficulty;
   dto.knowledgePointIds = [...question.knowledgePointIds];
   dto.isFree = question.isFree;

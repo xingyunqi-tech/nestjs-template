@@ -36,7 +36,14 @@ describe('toPublicQuestion', () => {
   it('should exclude answer, analysis and internal fields', () => {
     const dto = toPublicQuestion(question);
 
-    expect(dto).toMatchObject({ id: 'q1', version: 2, stem: '当前题干', knowledgePointIds: ['k1'] });
+    expect(dto).toMatchObject({
+      id: 'q1',
+      version: 2,
+      stem: '当前题干',
+      knowledgePointIds: ['k1'],
+      audioUrl: null,
+      blankCount: null,
+    });
     for (const key of ['answer', 'analysis', 'contentHash', 'statAnswered', 'statCorrect', 'status', 'source']) {
       expect(dto).not.toHaveProperty(key);
     }
@@ -62,5 +69,36 @@ describe('toPublicQuestion', () => {
 
     expect(dto).toMatchObject({ version: 1, stem: '旧题干', knowledgePointIds: ['k1'] });
     expect(dto).not.toHaveProperty('analysis');
+  });
+
+  it('should expose the blank count of a fill question without its answer', () => {
+    const fill = Object.assign(new Question(), question, {
+      type: QuestionType.FILL,
+      options: null,
+      answer: { blanks: [['甲'], ['乙', '丙']] },
+    });
+
+    const dto = toPublicQuestion(fill);
+
+    expect(dto.blankCount).toBe(2);
+    expect(JSON.stringify(dto)).not.toMatch(/blanks|"甲"|"丙"/);
+  });
+
+  it('should resolve the audio url from the file url map', () => {
+    const audioId = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
+    const material = Object.assign(new Question(), question, {
+      type: QuestionType.MATERIAL,
+      options: null,
+      answer: null,
+      material: '材料',
+      audioFileId: audioId,
+    });
+
+    expect(toPublicQuestion(material, undefined, { [audioId.toLowerCase()]: 'https://cdn/a.mp3' })).toMatchObject({
+      audioFileId: audioId,
+      audioUrl: 'https://cdn/a.mp3',
+      blankCount: null,
+    });
+    expect(toPublicQuestion(material).audioUrl).toBeNull();
   });
 });

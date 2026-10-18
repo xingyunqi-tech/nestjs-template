@@ -1,5 +1,5 @@
 import type { Mocked } from 'vitest';
-import { FileUrlResolver, extractFileIds } from './file-url.resolver';
+import { FileUrlResolver, extractFileIds, replaceFileReferences } from './file-url.resolver';
 import { FilesService } from './files.service';
 import { FileRepository } from './infrastructure/persistence/file.repository';
 import { FileType } from './domain/file';
@@ -92,5 +92,11 @@ describe('FileUrlResolver', () => {
       PUBLIC_ID,
       PRIVATE_ID,
     ]);
+  });
+
+  it('should replace references with the given urls case-insensitively', () => {
+    expect(
+      replaceFileReferences(`file:${PUBLIC_ID.toUpperCase()} file:${MISSING_ID}`, { [PUBLIC_ID]: 'https://cdn/a' }),
+    ).toBe(`https://cdn/a file:${MISSING_ID}`);
   });
 });

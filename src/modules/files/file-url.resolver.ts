@@ -9,6 +9,11 @@ export function extractFileIds(content: string): string[] {
   return [...new Set(Array.from(content.matchAll(FILE_REFERENCE_PATTERN), (match) => match[1].toLowerCase()))];
 }
 
+/** urls 键为小写文件 id，缺失的引用保留原样 */
+export function replaceFileReferences(content: string, urls: Record<string, string>): string {
+  return content.replace(FILE_REFERENCE_PATTERN, (reference, id: string) => urls[id.toLowerCase()] ?? reference);
+}
+
 /** 文件不存在或查看者无权访问时保留原引用 */
 @Injectable()
 export class FileUrlResolver {
@@ -26,9 +31,7 @@ export class FileUrlResolver {
     }
 
     const urls = await this.resolveUrls(ids, viewerUserId);
-    return contents.map((content) =>
-      content.replace(FILE_REFERENCE_PATTERN, (reference, id: string) => urls[id.toLowerCase()] ?? reference),
-    );
+    return contents.map((content) => replaceFileReferences(content, urls));
   }
 
   /** 键为小写文件 id */

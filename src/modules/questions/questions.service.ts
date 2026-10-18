@@ -31,7 +31,7 @@ import {
 } from './question-import';
 import { SubjectsService } from '../exams/subjects.service';
 import { FilesService } from '../files/files.service';
-import { FileUrlResolver, extractFileIds } from '../files/file-url.resolver';
+import { FileUrlResolver, extractFileIds, replaceFileReferences } from '../files/file-url.resolver';
 import { BusinessException } from '../../common/exceptions/business.exception';
 import { IPaginationOptions } from '../../common/types/pagination-options';
 
@@ -39,7 +39,7 @@ type UserId = number | string;
 
 const DRAW_CANDIDATE_FACTOR = 3;
 const MIN_DRAW_CANDIDATES = 20;
-type FileReferencingContent = Pick<Question, 'stem' | 'analysis' | 'material' | 'options'>;
+type FileReferencingContent = Pick<Question, 'stem' | 'analysis' | 'material' | 'options' | 'audioFileId'>;
 export type FileReferenceSource = Partial<Pick<Question, 'stem' | 'options' | 'analysis' | 'material' | 'audioFileId'>>;
 
 const DEFAULT_DIFFICULTY = 3;
@@ -225,14 +225,14 @@ export class QuestionsService {
       root: { ...unit.root },
       questions: unit.root.type === QuestionType.MATERIAL ? unit.questions.map((question) => ({ ...question })) : [],
     }));
-    await this.resolveFileReferences(
+    const fileUrls = await this.resolveFileReferences(
       copies.flatMap((unit) => [unit.root, ...unit.questions]),
       viewerUserId,
     );
     return copies.map((unit) => {
-      const dto = Object.assign(new PublicQuestionUnitDto(), toPublicQuestion(unit.root));
+      const dto = Object.assign(new PublicQuestionUnitDto(), toPublicQuestion(unit.root, undefined, fileUrls));
       if (unit.root.type === QuestionType.MATERIAL) {
-        dto.children = unit.questions.map((question) => toPublicQuestion(question));
+        dto.children = unit.questions.map((question) => toPublicQuestion(question, undefined, fileUrls));
       }
       return dto;
     });
@@ -608,11 +608,17 @@ export class QuestionsService {
     );
   }
 
+  /** 正文引用就地替换为访问地址，返回本次解析的地址表（含音频），键为小写文件 id */
   private async resolveFileReferences<T extends FileReferencingContent>(
     items: T[],
     viewerUserId: UserId | null,
-  ): Promise<T[]> {
-    const resolved = await this.fileUrlResolver.resolveMany(items.flatMap(contentTexts), viewerUserId);
+  ): Promise<Record<string, string>> {
+    const texts = items.flatMap(contentTexts);
+    const urls = await this.fileUrlResolver.resolveUrls(
+      [...texts.flatMap(extractFileIds), ...items.flatMap((item) => item.audioFileId ?? [])],
+      viewerUserId,
+    );
+    const resolved = texts.map((text) => replaceFileReferences(text, urls));
     let index = 0;
     const next = (): string => resolved[index++];
     for (const item of items) {
@@ -625,6 +631,6 @@ export class QuestionsService {
       }
       item.options = item.options?.map((option) => ({ key: option.key, content: next() })) ?? null;
     }
-    return items;
+    return urls;
   }
 }

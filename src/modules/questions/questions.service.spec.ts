@@ -168,6 +168,7 @@ describe('QuestionsService', () => {
   let subjectsService: Mocked<Pick<SubjectsService, 'findById'>>;
   let filesService: Mocked<Pick<FilesService, 'findByIds' | 'canAccess'>>;
   let repository: QuestionRepository;
+  let fileUrlResolver: Mocked<Pick<FileUrlResolver, 'resolveUrls'>>;
   let service: QuestionsService;
 
   beforeEach(() => {
@@ -193,11 +194,9 @@ describe('QuestionsService', () => {
       findByIds: vi.fn((ids: string[]) => Promise.resolve(FILES.filter((file) => ids.includes(file.id)))),
       canAccess: vi.fn((file: { visibility?: FileVisibility }) => file.visibility !== FileVisibility.PRIVATE),
     };
-    const fileUrlResolver = {
-      resolveMany: (contents: string[]) =>
-        Promise.resolve(contents.map((content) => content.replaceAll(`file:${PUBLIC_FILE}`, PUBLIC_URL))),
+    fileUrlResolver = {
       resolveUrls: vi.fn((ids: string[]) =>
-        Promise.resolve(ids.includes(PUBLIC_FILE) ? { [PUBLIC_FILE]: PUBLIC_URL } : {}),
+        Promise.resolve<Record<string, string>>(ids.includes(PUBLIC_FILE) ? { [PUBLIC_FILE]: PUBLIC_URL } : {}),
       ),
     };
     service = new QuestionsService(
@@ -717,6 +716,30 @@ describe('QuestionsService', () => {
 
       expect(dto.stem).toBe(`看图 ![](${PUBLIC_URL})`);
       expect(store.snapshot(created.id).stem).toBe(`看图 ${image}`);
+    });
+
+    it('should resolve material audio and stem references with one lookup in public units', async () => {
+      const material = await create({ ...materialDto(`资料 ${image}`), audioFileId: PUBLIC_FILE });
+      await create(
+        singleDto({
+          parentId: material.id,
+          type: QuestionType.FILL,
+          options: null,
+          answer: { blanks: [['一'], ['二']] },
+          stem: '填空',
+        }),
+      );
+      await publish(material.id);
+      const units = await service.findUnits([material.id]);
+      fileUrlResolver.resolveUrls.mockClear();
+
+      const [dto] = await service.toPublicUnits(units, null);
+
+      expect(dto).toMatchObject({ material: `资料 ![](${PUBLIC_URL})`, audioUrl: PUBLIC_URL, blankCount: null });
+      expect(dto.children?.[0]).toMatchObject({ audioUrl: null, blankCount: 2 });
+      expect(JSON.stringify(dto)).not.toMatch(/"answer"|blanks|"一"/);
+      expect(fileUrlResolver.resolveUrls).toHaveBeenCalledTimes(1);
+      expect(fileUrlResolver.resolveUrls).toHaveBeenCalledWith([PUBLIC_FILE, PUBLIC_FILE], null);
     });
   });
 

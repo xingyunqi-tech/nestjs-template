@@ -594,16 +594,19 @@ describe('Practice sessions', () => {
       });
     });
 
-    it('should show wrong book questions only when they are not in the ongoing mock', async () => {
-      vi.spyOn(reader, 'findAssociatedQuestionIds').mockImplementation((_userId, ids) =>
-        Promise.resolve(ids.filter((id) => id === singles[2] || id === singles[1])),
-      );
+    it('should not reveal unanswered wrong book questions inside a session', async () => {
+      const lookup = vi
+        .spyOn(reader, 'findAssociatedQuestionIds')
+        .mockImplementation((_userId, ids) =>
+          Promise.resolve(ids.filter((id) => id === singles[2] || id === singles[1])),
+        );
       const questions = await segment(chapterId);
       expect(questions.find((question) => question.id === singles[1])).toMatchObject({
         answerState: null,
-        solution: { answer: { keys: ['B'] }, analysis: '单选乙解析' },
+        solution: null,
         hiddenReason: null,
       });
+      expect(lookup).not.toHaveBeenCalled();
       expect(questions.find((question) => question.id === singles[2])).toMatchObject({
         solution: null,
         hiddenReason: 'mockInProgress',

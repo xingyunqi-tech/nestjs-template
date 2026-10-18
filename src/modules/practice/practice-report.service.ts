@@ -93,6 +93,7 @@ export class PracticeReportService {
         session,
         record: recordMap.get(question.id),
       })),
+      'session',
     );
 
     const byType = new Map<QuestionType, Tally>();

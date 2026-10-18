@@ -57,6 +57,7 @@ import { PracticeModule } from './modules/practice/practice.module';
 import { ImportQueueModule } from './infrastructure/queue/import-queue/import-queue.module';
 import { MockSubmitQueueModule } from './infrastructure/queue/mock-submit-queue/mock-submit-queue.module';
 import { StudyStatsModule } from './modules/study-stats/study-stats.module';
+import { WrongBookApiModule } from './modules/wrong-book/wrong-book-api.module';
 import { StudyStatsQueueModule } from './infrastructure/queue/study-stats-queue/study-stats-queue.module';
 
 const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
@@ -203,6 +204,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     ImportsModule,
     PracticeModule,
     StudyStatsModule,
+    WrongBookApiModule,
     ConditionalModule.registerWhen(ImportQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(MockSubmitQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(StudyStatsQueueModule, isRedisEnabled),

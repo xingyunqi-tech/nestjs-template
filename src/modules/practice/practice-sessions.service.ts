@@ -182,6 +182,7 @@ export class PracticeSessionsService {
         session,
         record: recordMap.get(question.id),
       })),
+      'session',
     );
     const visibility = new Map(questions.map((question, index) => [question.id, visibilities[index]]));
     const rendered = await this.questionsService.renderUnits(units, userId, {
@@ -326,6 +327,7 @@ export class PracticeSessionsService {
         session,
         record: recordMap.get(questionId),
       })),
+      'session',
     );
     const visibility = new Map(known.map((id, index) => [id, visibilities[index]]));
     const dto = toPracticeSessionDto(session, target);

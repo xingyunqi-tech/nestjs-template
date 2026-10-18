@@ -18,6 +18,7 @@ const record = (overrides: Partial<StatsRecord> = {}): StatsRecord => ({
   mode: PracticeMode.RANDOM,
   questionId: 'q1',
   questionType: QuestionType.SINGLE,
+  questionSubjectId: 'sub1',
   knowledgePointIds: ['kp1'],
   answer: { keys: ['A'] },
   isCorrect: true,

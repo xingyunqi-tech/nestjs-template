@@ -191,5 +191,6 @@
   "answerNotMatchQuestion": "作答与题目不符：选项不存在、单选只能选一项或填空数量不符",
   "paperRequired": "模拟考试请选择试卷",
   "mockSessionBusy": "考试状态变化中，请稍后重试",
-  "reportNotAvailable": "会话结束后才能查看成绩报告"
+  "reportNotAvailable": "会话结束后才能查看成绩报告",
+  "wrongQuestionNotFound": "错题不存在"
 }

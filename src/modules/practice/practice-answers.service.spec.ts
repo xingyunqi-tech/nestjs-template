@@ -179,6 +179,7 @@ describe('PracticeAnswersService', () => {
       answerState: { answer: { keys: ['A'] }, isCorrect: false, durationSec: 600 },
       solution: { analysis: '解析' },
     });
+    expect(visibility.evaluate).toHaveBeenCalledWith(USER, expect.any(Array), 'session');
     const record = tx.records.get('single')!;
     expect(record.gradedAt).toBeInstanceOf(Date);
     expect(record.statDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);

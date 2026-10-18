@@ -283,5 +283,6 @@ describe('PracticeSessionsService', () => {
     const detail = await service.getDetail(USER, session.id);
     expect(detail.card[0]).toMatchObject({ questionId: 'a', answered: true, isCorrect: null, markedForReview: true });
     expect(detail.card[1]).toMatchObject({ questionId: 'm1', materialId: 'm', answered: false });
+    expect(visibility.evaluate).toHaveBeenCalledWith(USER, expect.any(Array), 'session');
   });
 });

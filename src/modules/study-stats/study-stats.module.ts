@@ -9,7 +9,9 @@ import { STUDY_STATS_QUEUE } from '../../infrastructure/queue/study-stats-queue/
 import { StatsEventQueue } from './stats-event.queue';
 import { StatsEventService } from './stats-event.service';
 import { StatsCompensationTask } from './stats-compensation.task';
-import { NoopWrongBookUpdater, WrongBookUpdater } from './ports/wrong-book.updater';
+import { WrongBookUpdater } from './ports/wrong-book.updater';
+import { WrongBookModule } from '../wrong-book/wrong-book.module';
+import { WrongBookService } from '../wrong-book/wrong-book.service';
 import { LearningStatsUpdater, NoopLearningStatsUpdater } from './ports/learning-stats.updater';
 import { CheckInEvaluator, NoopCheckInEvaluator } from './ports/check-in.evaluator';
 
@@ -18,13 +20,20 @@ import { CheckInEvaluator, NoopCheckInEvaluator } from './ports/check-in.evaluat
     RelationalStudyStatsPersistenceModule,
     AppConfigModule,
     SchedulerModule,
+    WrongBookModule,
     ConditionalModule.registerWhen(BullModule.registerQueue({ name: STUDY_STATS_QUEUE }), isRedisEnabled),
   ],
   providers: [
     StatsEventQueue,
     StatsEventService,
     StatsCompensationTask,
-    { provide: WrongBookUpdater, useClass: NoopWrongBookUpdater },
+    {
+      provide: WrongBookUpdater,
+      inject: [WrongBookService],
+      useFactory: (wrongBookService: WrongBookService): WrongBookUpdater => ({
+        apply: (handle, record) => wrongBookService.applyStatsRecord(handle, record),
+      }),
+    },
     { provide: LearningStatsUpdater, useClass: NoopLearningStatsUpdater },
     { provide: CheckInEvaluator, useClass: NoopCheckInEvaluator },
   ],

@@ -131,6 +131,7 @@ describe('PracticeReportService', () => {
     ]);
     expect(report.card[2]).toMatchObject({ score: null, hiddenReason: HiddenReason.MOCK_IN_PROGRESS, fullScore: 2 });
     expect(report.selfAssessment.pendingQuestionIds).toEqual(['q4']);
+    expect(visibility.evaluate).toHaveBeenCalledWith(USER, expect.any(Array), 'session');
     expect(report).toMatchObject({
       score: 3,
       totalScore: 8,

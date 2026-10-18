@@ -9,6 +9,9 @@ export interface VisibilityItem extends SessionAnswerContext {
   questionId: string;
 }
 
+/** session：练习会话内，只按规则 1-3；standalone：会话外查看题目，另按规则 4 */
+export type VisibilityContext = 'session' | 'standalone';
+
 export interface Visibility {
   visible: boolean;
   hiddenReason: HiddenReason | null;
@@ -16,7 +19,7 @@ export interface Visibility {
 
 const HIDDEN_BY_MOCK: Visibility = { visible: false, hiddenReason: HiddenReason.MOCK_IN_PROGRESS };
 
-/** 前提：题目不在用户进行中的模考；满足前提后按规则 1-4 判定是否返回答案、解析与判分结果 */
+/** 前提：题目不在用户进行中的模考；满足前提后按规则判定是否返回答案、解析与判分结果 */
 @Injectable()
 export class AnswerVisibilityService {
   constructor(
@@ -25,7 +28,7 @@ export class AnswerVisibilityService {
   ) {}
 
   /** 按传入顺序返回 */
-  async evaluate(userId: number, items: VisibilityItem[]): Promise<Visibility[]> {
+  async evaluate(userId: number, items: VisibilityItem[], context: VisibilityContext): Promise<Visibility[]> {
     if (items.length === 0) {
       return [];
     }
@@ -36,6 +39,9 @@ export class AnswerVisibilityService {
       }
       return revealedBySession(item) ? { visible: true, hiddenReason: null } : null;
     });
+    if (context === 'session') {
+      return results.map((result) => result ?? { visible: false, hiddenReason: null });
+    }
     const pending = [...new Set(items.filter((_, index) => results[index] === null).map((item) => item.questionId))];
     const associated = new Set(
       pending.length > 0 ? await this.questionAssociationReader.findAssociatedQuestionIds(userId, pending) : [],
@@ -45,13 +51,13 @@ export class AnswerVisibilityService {
     );
   }
 
-  async check(userId: number, item: VisibilityItem): Promise<Visibility> {
-    const [result] = await this.evaluate(userId, [item]);
+  async check(userId: number, item: VisibilityItem, context: VisibilityContext): Promise<Visibility> {
+    const [result] = await this.evaluate(userId, [item], context);
     return result;
   }
 
-  async assertVisible(userId: number, item: VisibilityItem): Promise<void> {
-    const result = await this.check(userId, item);
+  async assertVisible(userId: number, item: VisibilityItem, context: VisibilityContext): Promise<void> {
+    const result = await this.check(userId, item, context);
     if (!result.visible) {
       throw new BusinessException(
         'answerHidden',

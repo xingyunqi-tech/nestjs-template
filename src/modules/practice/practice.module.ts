@@ -26,9 +26,16 @@ import { AbandonInactiveSessionsTask } from './abandon-inactive-sessions.task';
 import { PracticeSessionsController } from './practice-sessions.controller';
 import { QuestionAccessController } from './question-access.controller';
 import { StatsEventPublisher } from './ports/stats-event.publisher';
-import { EmptyWrongBookReader, WrongBookReader } from './ports/wrong-book.reader';
+import { WrongBookReader } from './ports/wrong-book.reader';
 import { EmptyWeakPointReader, WeakPointReader } from './ports/weak-point.reader';
-import { EmptyQuestionAssociationReader, QuestionAssociationReader } from './ports/question-association.reader';
+import {
+  CompositeQuestionAssociationReader,
+  QUESTION_ASSOCIATION_SOURCES,
+  QuestionAssociationReader,
+  QuestionAssociationSource,
+} from './ports/question-association.reader';
+import { WrongBookModule } from '../wrong-book/wrong-book.module';
+import { WrongBookService } from '../wrong-book/wrong-book.service';
 
 @Module({
   imports: [
@@ -40,6 +47,7 @@ import { EmptyQuestionAssociationReader, QuestionAssociationReader } from './por
     AppConfigModule,
     SchedulerModule,
     StudyStatsModule,
+    WrongBookModule,
     ConditionalModule.registerWhen(BullModule.registerQueue({ name: MOCK_SUBMIT_QUEUE }), isRedisEnabled),
   ],
   controllers: [PracticeSessionsController, QuestionAccessController],
@@ -60,9 +68,23 @@ import { EmptyQuestionAssociationReader, QuestionAssociationReader } from './por
       inject: [StatsEventQueue],
       useFactory: (queue: StatsEventQueue): StatsEventPublisher => queue,
     },
-    { provide: WrongBookReader, useClass: EmptyWrongBookReader },
+    {
+      provide: WrongBookReader,
+      inject: [WrongBookService],
+      useFactory: (wrongBookService: WrongBookService): WrongBookReader => wrongBookService,
+    },
     { provide: WeakPointReader, useClass: EmptyWeakPointReader },
-    { provide: QuestionAssociationReader, useClass: EmptyQuestionAssociationReader },
+    {
+      provide: QUESTION_ASSOCIATION_SOURCES,
+      inject: [WrongBookService],
+      useFactory: (wrongBookService: WrongBookService): QuestionAssociationSource[] => [
+        {
+          findAssociatedQuestionIds: (userId, questionIds) =>
+            wrongBookService.findQuestionIdsInBook(userId, questionIds),
+        },
+      ],
+    },
+    { provide: QuestionAssociationReader, useClass: CompositeQuestionAssociationReader },
   ],
   exports: [PracticeSessionsService, MockExamService, AnswerVisibilityService, InProgressMockQuestionsService],
 })

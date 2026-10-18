@@ -191,5 +191,6 @@
   "answerNotMatchQuestion": "The answer does not match the question options or blanks",
   "paperRequired": "Please choose a paper for the mock exam",
   "mockSessionBusy": "The exam is changing state, please try again later",
-  "reportNotAvailable": "The report is available after the session ends"
+  "reportNotAvailable": "The report is available after the session ends",
+  "wrongQuestionNotFound": "Wrong question not found"
 }

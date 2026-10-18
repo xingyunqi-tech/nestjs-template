@@ -444,6 +444,7 @@ export class PracticeAnswersService {
         session,
         record: records.get(questionId),
       })),
+      'session',
     );
     const solutionIds = new Set(questionIds.filter((_, index) => visibilities[index].visible));
     const units = solutionIds.size > 0 ? await this.questionsService.findUnitsByQuestionIds([...solutionIds]) : [];

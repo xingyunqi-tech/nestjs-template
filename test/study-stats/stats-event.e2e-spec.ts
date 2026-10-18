@@ -295,6 +295,7 @@ describe('Stats events', () => {
       mode: 'RANDOM',
       questionId: questionIds[0],
       questionType: 'SINGLE',
+      questionSubjectId: subjectId,
       knowledgePointIds: [pointId],
       isCorrect: false,
       isPartial: false,

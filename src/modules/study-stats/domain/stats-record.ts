@@ -11,6 +11,7 @@ export interface StatsRecord {
   mode: PracticeMode;
   questionId: string;
   questionType: QuestionType;
+  questionSubjectId: string;
   /** 题目关联的叶子知识点 */
   knowledgePointIds: string[];
   answer: Record<string, unknown> | null;

@@ -41,6 +41,7 @@ class RelationalStatsEventTransaction implements StatsEventTransaction {
   async findRecord(id: string): Promise<NullableType<StatsRecord>> {
     const rows: StatsRecord[] = await this.manager.query(
       `SELECT r."id", r."sessionId", r."userId", s."subjectId", s."mode", r."questionId", q."type" AS "questionType",
+              q."subjectId" AS "questionSubjectId",
               ARRAY(
                 SELECT link."knowledgePointId" FROM "question_knowledge_point" AS link
                 JOIN "knowledge_point" AS kp ON kp."id" = link."knowledgePointId"

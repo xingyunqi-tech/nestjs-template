@@ -3,6 +3,7 @@ import { DailyQuestionSetRepository } from './infrastructure/persistence/daily-q
 import { DailySetUsageRepository } from './infrastructure/persistence/daily-set-usage.repository';
 import { DailyQuestionSet } from './domain/daily-question-set';
 import { businessDate, daysBetween } from './domain/business-date';
+import { positiveInteger } from '../../common/utils/number.utils';
 import {
   AdminDailyQuestionSetDto,
   DailySetQuestionDto,
@@ -25,10 +26,6 @@ const DAY_MS = 86_400_000;
 
 function unprocessable(field: string, error: string): UnprocessableEntityException {
   return new UnprocessableEntityException({ errors: { [field]: error } });
-}
-
-function positiveInteger(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 function isValidDate(value: string): boolean {

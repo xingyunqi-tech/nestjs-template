@@ -164,7 +164,7 @@ export abstract class PracticeSessionRepository {
   /** questionIds 中出现在该用户任一会话里的题目 */
   abstract findQuestionIdsInUserSessions(userId: number, questionIds: string[]): Promise<string[]>;
 
-  /** 该用户含此题的会话中背题、已交卷模考或已作答的会话状态与作答 */
+  /** 该用户含此题的会话中背题、已交卷模考或已作答的会话状态与作答，按作答时间倒序 */
   abstract findSessionAnswerContexts(
     userId: number,
     questionId: string,

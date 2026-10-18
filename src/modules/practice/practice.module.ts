@@ -44,6 +44,7 @@ import { QuestionNotesService } from '../question-notes/question-notes.service';
 import { QuestionAssociationPrerequisiteService } from './question-association-prerequisite.service';
 import { AnswerRegradeService } from './answer-regrade.service';
 import { PracticeAccountCleaner } from './practice-account.cleaner';
+import { TutorQuestionContextService } from './tutor-question-context.service';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { PracticeAccountCleaner } from './practice-account.cleaner';
     AnswerRegradeService,
     AbandonInactiveSessionsTask,
     PracticeAccountCleaner,
+    TutorQuestionContextService,
     {
       provide: StatsEventPublisher,
       inject: [StatsEventQueue],
@@ -123,6 +125,7 @@ import { PracticeAccountCleaner } from './practice-account.cleaner';
     QuestionAssociationPrerequisiteService,
     QuestionAccessService,
     AnswerRegradeService,
+    TutorQuestionContextService,
   ],
 })
 export class PracticeModule {}

@@ -15,6 +15,7 @@ import smsConfig from './integrations/sms/config/sms.config';
 import wechatConfig from './integrations/wechat/config/wechat.config';
 import alipayConfig from './integrations/alipay/config/alipay.config';
 import llmConfig from './integrations/llm/config/llm.config';
+import aiConfig from './modules/ai/config/ai.config';
 import path from 'path';
 import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -68,6 +69,7 @@ import { ErrataQueueModule } from './infrastructure/queue/errata-queue/errata-qu
 import { ConsentsModule } from './modules/consents/consents.module';
 import { AccountCleanupModule } from './modules/account-cleanup/account-cleanup.module';
 import { AccountCleanupQueueModule } from './infrastructure/queue/account-cleanup-queue/account-cleanup-queue.module';
+import { AiModule } from './modules/ai/ai.module';
 
 const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
   useClass: TypeOrmConfigService,
@@ -92,6 +94,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
         wechatConfig,
         alipayConfig,
         llmConfig,
+        aiConfig,
       ],
       envFilePath: ['.env'],
     }),
@@ -221,6 +224,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     QuestionReportsApiModule,
     ConsentsModule,
     AccountCleanupModule,
+    AiModule,
     ConditionalModule.registerWhen(ImportQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(MockSubmitQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(StudyStatsQueueModule, isRedisEnabled),

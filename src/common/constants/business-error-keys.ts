@@ -20,6 +20,7 @@ export const BUSINESS_ERRORS = {
   aiConsentRequired: HttpStatus.FORBIDDEN,
   wechatBindingRequired: HttpStatus.FORBIDDEN,
   contentBlocked: HttpStatus.UNPROCESSABLE_ENTITY,
+  aiConversationOutdated: HttpStatus.CONFLICT,
   errataInProgress: HttpStatus.CONFLICT,
   answerChangeNotAllowed: HttpStatus.UNPROCESSABLE_ENTITY,
 } as const satisfies Record<string, HttpStatus>;

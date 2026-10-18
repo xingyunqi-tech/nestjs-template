@@ -137,3 +137,8 @@ LLM_API_KEY=
 LLM_MODEL=deepseek-chat
 # 单次请求总时长上限（毫秒），1000–240000
 LLM_TIMEOUT_MS=120000
+
+# AI 成本估算的模型单价（元/百万 token），按当前模型的官方价格填写
+AI_PRICE_INPUT_CACHE_HIT=0.2
+AI_PRICE_INPUT_CACHE_MISS=2
+AI_PRICE_OUTPUT=3

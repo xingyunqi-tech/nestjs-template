@@ -406,7 +406,8 @@ export class PracticeSessionRelationalRepository implements PracticeSessionRepos
          FROM "practice_session" AS s
          LEFT JOIN "answer_record" AS r ON r."sessionId" = s."id" AND r."questionId" = $2
          WHERE s."userId" = $1 AND s."questionIds" @> ARRAY[$2::uuid]
-           AND (s."mode" = $3 OR (s."mode" = $4 AND s."status" = $5) OR r."answer" IS NOT NULL)`,
+           AND (s."mode" = $3 OR (s."mode" = $4 AND s."status" = $5) OR r."answer" IS NOT NULL)
+         ORDER BY r."answeredAt" DESC NULLS LAST, s."startedAt" DESC`,
         [userId, questionId, PracticeMode.MEMORIZE, PracticeMode.MOCK, PracticeSessionStatus.SUBMITTED],
       );
     return rows.map((row) => ({

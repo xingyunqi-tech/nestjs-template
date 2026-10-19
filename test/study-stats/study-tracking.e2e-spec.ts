@@ -4,6 +4,7 @@ import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { md5 } from '../utils/constants';
 import { createTestApp, randomIp } from '../utils/test-app';
+import { deletePracticeSessions } from '../utils/practice-sessions';
 import { UsersService } from '../../src/core/users/users.service';
 import { PermissionsService } from '../../src/core/permissions/permissions.service';
 import { RoleEnum } from '../../src/common/enums/roles/roles.enum';
@@ -238,7 +239,7 @@ describe('Study tracking', () => {
       }
       if (subjectId) {
         await dataSource.query(`DELETE FROM "daily_question_set" WHERE "subjectId" = $1`, [subjectId]);
-        await dataSource.query(`DELETE FROM "practice_session" WHERE "subjectId" = $1`, [subjectId]);
+        await deletePracticeSessions(app, [subjectId]);
         await dataSource.query(`DELETE FROM "user_daily_stat" WHERE "subjectId" = $1`, [subjectId]);
         const owned = `SELECT "id" FROM "question" WHERE "subjectId" = $1`;
         await dataSource.query(`DELETE FROM "wrong_question" WHERE "questionId" IN (${owned})`, [subjectId]);

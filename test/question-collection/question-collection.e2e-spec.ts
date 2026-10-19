@@ -4,6 +4,7 @@ import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { md5 } from '../utils/constants';
 import { createTestApp, randomIp } from '../utils/test-app';
+import { deletePracticeSessions } from '../utils/practice-sessions';
 import { UsersService } from '../../src/core/users/users.service';
 import { PermissionsService } from '../../src/core/permissions/permissions.service';
 import { RoleEnum } from '../../src/common/enums/roles/roles.enum';
@@ -244,7 +245,7 @@ describe('Question favorites and notes', () => {
         await dataSource.query(`DELETE FROM "favorite" WHERE "userId" = ANY($1::int[])`, [userIds]);
       }
       for (const subjectId of subjectIds) {
-        await dataSource.query(`DELETE FROM "practice_session" WHERE "subjectId" = $1`, [subjectId]);
+        await deletePracticeSessions(app, [subjectId]);
         await dataSource.query(`DELETE FROM "paper" WHERE "subjectId" = $1`, [subjectId]);
         const owned = `SELECT "id" FROM "question" WHERE "subjectId" = $1`;
         await dataSource.query(`DELETE FROM "question_note" WHERE "questionId" IN (${owned})`, [subjectId]);

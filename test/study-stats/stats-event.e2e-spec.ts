@@ -6,6 +6,7 @@ import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { md5 } from '../utils/constants';
 import { createTestApp, randomIp } from '../utils/test-app';
+import { deletePracticeSessions } from '../utils/practice-sessions';
 import { UsersService } from '../../src/core/users/users.service';
 import { PermissionsService } from '../../src/core/permissions/permissions.service';
 import { RoleEnum } from '../../src/common/enums/roles/roles.enum';
@@ -164,7 +165,7 @@ describe('Stats events', () => {
   afterAll(async () => {
     try {
       if (subjectId) {
-        await dataSource.query(`DELETE FROM "practice_session" WHERE "subjectId" = $1`, [subjectId]);
+        await deletePracticeSessions(app, [subjectId]);
         const owned = `SELECT "id" FROM "question" WHERE "subjectId" = $1`;
         await dataSource.query(`DELETE FROM "question_version" WHERE "questionId" IN (${owned})`, [subjectId]);
         await dataSource.query(`DELETE FROM "question" WHERE "subjectId" = $1`, [subjectId]);

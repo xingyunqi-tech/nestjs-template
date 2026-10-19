@@ -7,5 +7,6 @@ export default defineConfig({
     ...unitConfig.test,
     include: ['test/**/*.e2e-spec.ts'],
     fileParallelism: false,
+    setupFiles: ['test/utils/config-setup.mts'],
   },
 });

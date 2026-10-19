@@ -1,4 +1,4 @@
-// 需在独立的测试数据库与 Redis 上运行；LLM 与微信内容安全检测使用测试替身
+// 需在独立的测试数据库与 Redis 上运行；LLM 与内容安全审核使用测试替身
 import { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
@@ -10,7 +10,12 @@ import { PermissionsService } from '../../src/core/permissions/permissions.servi
 import { RoleEnum } from '../../src/common/enums/roles/roles.enum';
 import { AppConfigService } from '../../src/modules/config/config.service';
 import { StatsEventQueue } from '../../src/modules/study-stats/stats-event.queue';
-import { WechatService } from '../../src/integrations/wechat/wechat.service';
+import {
+  ContentModerationError,
+  ContentModerationParams,
+  ContentModerationProvider,
+  ContentModerationResult,
+} from '../../src/integrations/aliyun-green/content-moderation-provider';
 import { LlmError, LlmProvider, LlmStreamChatParams, LlmStreamChunk } from '../../src/integrations/llm/llm-provider';
 import { AlertReporter } from '../../src/infrastructure/alerting/alert-reporter';
 import { AiRealtimeStore, aiMessageStreamKey } from '../../src/modules/ai/infrastructure/realtime/ai-realtime.store';
@@ -30,11 +35,24 @@ type SseEvent = { id: string | null; event: string; data: Record<string, unknown
 
 type LlmScript = (params: LlmStreamChatParams) => AsyncIterable<LlmStreamChunk>;
 
+type ModerationScript = (params: ContentModerationParams) => Promise<ContentModerationResult>;
+
 const api = (app: NestExpressApplication): ReturnType<typeof request> => request(app.getHttpServer());
 
 const FIRST_PART =
   '这道题考查的是基础常识，需要先回顾题干中给出的条件，再结合选项逐项分析，把与条件矛盾的选项依次排除，最后留下唯一符合的答案。\n\n';
 const SECOND_PART = '因此正确答案是 B，选项 A 与 C 均与题干条件矛盾。';
+const PASSWORD = md5('Secret00');
+
+const moderationResult = (riskLevel: 'high' | 'medium' | 'low' | 'none'): ContentModerationResult => ({
+  verdict: riskLevel === 'high' || riskLevel === 'medium' ? 'block' : 'pass',
+  riskLevel,
+  labels: riskLevel === 'none' ? [] : ['political_content'],
+  requestId: 'e2e',
+});
+
+const keywordModeration: ModerationScript = ({ content }) =>
+  Promise.resolve(moderationResult(content.includes('违规') ? 'high' : 'none'));
 
 function parseSse(text: string): SseEvent[] {
   return text
@@ -99,6 +117,8 @@ describe('AI tutor', () => {
   let otherQuestionId: string;
   let mockPaperId: string;
   let llmScript: LlmScript;
+  let moderationScript: ModerationScript;
+  let moderationConfigured: boolean;
   let config: Record<string, unknown>;
   let raiseAlert: MockInstance<AlertReporter['raise']>;
   const unique = `${Date.now()}`;
@@ -154,16 +174,15 @@ describe('AI tutor', () => {
 
   const registerAndLogin = async (): Promise<Account> => {
     const email = `ai.${Date.now()}.${Math.random().toString(36).slice(2, 8)}@example.com`;
-    const password = md5('Secret00');
     await api(app)
       .post('/api/v1/auth/email/register')
       .set('X-Forwarded-For', randomIp())
-      .send({ email, password, firstName: 'Ai', lastName: 'E2E' })
+      .send({ email, password: PASSWORD, firstName: 'Ai', lastName: 'E2E' })
       .expect(200);
     const { body } = await api(app)
       .post('/api/v1/auth/email/login')
       .set('X-Forwarded-For', randomIp())
-      .send({ email, password })
+      .send({ email, password: PASSWORD })
       .expect(200);
     const account = { token: body.data.token as string, email, id: Number(body.data.user.id) };
     users.push(account.id);
@@ -178,13 +197,18 @@ describe('AI tutor', () => {
     }
   };
 
-  /** 已绑定微信、已同意 AI 服务声明，并在章节练习中作答该题 */
-  const prepareLearner = async (): Promise<{ account: Account; sessionId: string }> => {
-    const account = await registerAndLogin();
-    await dataSource.query(`UPDATE "user" SET "wechatOpenId" = $1 WHERE "id" = $2`, [
-      `e2e-ai-${unique}-${account.id}`,
-      account.id,
-    ]);
+  const phoneOf = (account: Account): string => `19${String(account.id).padStart(9, '0')}`;
+
+  const bindPhone = async (account: Account): Promise<void> => {
+    await dataSource.query(`UPDATE "user" SET "phone" = $1 WHERE "id" = $2`, [phoneOf(account), account.id]);
+  };
+
+  /** 已同意 AI 服务声明，并在章节练习中作答该题；未传入账号时注册并绑定手机号 */
+  const prepareLearner = async (existing?: Account): Promise<{ account: Account; sessionId: string }> => {
+    const account = existing ?? (await registerAndLogin());
+    if (!existing) {
+      await bindPhone(account);
+    }
     await as(account).post('/me/consents', { type: 'AI_SERVICE', version: 'ai-v1' }).expect(200);
     const session = await as(account)
       .post('/practice/sessions', {
@@ -314,10 +338,11 @@ describe('AI tutor', () => {
     vi.spyOn(app.get(StatsEventQueue), 'publishSession').mockResolvedValue(undefined);
     vi.spyOn(app.get(StatsEventQueue), 'publishCheckIn').mockResolvedValue(undefined);
 
-    vi.spyOn(app.get(WechatService), 'msgSecCheck').mockImplementation(({ content }) => {
-      const pass = !content.includes('违规');
-      return Promise.resolve({ pass, suggest: pass ? 'pass' : 'risky', label: pass ? 100 : 20001, traceId: 'e2e' });
-    });
+    moderationScript = keywordModeration;
+    moderationConfigured = true;
+    const moderation = app.get(ContentModerationProvider);
+    vi.spyOn(moderation, 'isConfigured').mockImplementation(() => moderationConfigured);
+    vi.spyOn(moderation, 'moderate').mockImplementation((params) => moderationScript(params));
     llmScript = answerScript;
     llmModel = model;
     vi.spyOn(app.get(LlmProvider), 'streamChat').mockImplementation((params) => llmScript(params));
@@ -344,7 +369,7 @@ describe('AI tutor', () => {
         await dataSource.query(`DELETE FROM "ai_conversation" WHERE "userId" = ANY($1::int[])`, [users]);
         await dataSource.query(`DELETE FROM "feedback" WHERE "userId" = ANY($1::int[])`, [users]);
         await dataSource.query(`DELETE FROM "user_consent" WHERE "userId" = ANY($1::int[])`, [users]);
-        await dataSource.query(`UPDATE "user" SET "wechatOpenId" = NULL WHERE "id" = ANY($1::int[])`, [users]);
+        await dataSource.query(`UPDATE "user" SET "phone" = NULL WHERE "id" = ANY($1::int[])`, [users]);
       }
       await dataSource.query(`DELETE FROM "ai_usage_daily" WHERE "model" LIKE $1`, [`${model}%`]);
       if (subjectId) {
@@ -372,6 +397,121 @@ describe('AI tutor', () => {
     } finally {
       await app?.close();
     }
+  });
+
+  describe('access and moderation', () => {
+    it('should answer a phone and password account without a WeChat binding', async () => {
+      const registered = await registerAndLogin();
+      await bindPhone(registered);
+      const { body } = await api(app)
+        .post('/api/v1/auth/phone/login')
+        .set('X-Forwarded-For', randomIp())
+        .send({ phone: phoneOf(registered), password: PASSWORD })
+        .expect(200);
+      const account = { ...registered, token: body.data.token as string };
+      const [user] = await dataSource.query(`SELECT "wechatOpenId" FROM "user" WHERE "id" = $1`, [account.id]);
+      expect(user.wechatOpenId).toBeNull();
+
+      const { sessionId } = await prepareLearner(account);
+      const conversationId = await createConversation(account, sessionId);
+      const events = await sendAndRead(account, conversationId);
+
+      expect(events.at(-1)).toMatchObject({ event: 'message.done', data: { status: 'DONE' } });
+      const messageId = events[0].data.messageId as string;
+      const moderate = vi.mocked(app.get(ContentModerationProvider).moderate);
+      expect(moderate).toHaveBeenCalledWith({ kind: 'input', content: '为什么选 B？', userId: account.id });
+      expect(moderate).toHaveBeenCalledWith({
+        kind: 'output',
+        content: FIRST_PART,
+        userId: account.id,
+        sessionId: messageId,
+      });
+    });
+
+    it('should reject an account without a phone number as phoneBindingRequired', async () => {
+      const { account, sessionId } = await prepareLearner();
+      const conversationId = await createConversation(account, sessionId);
+      await dataSource.query(`UPDATE "user" SET "phone" = NULL, "wechatOpenId" = $1 WHERE "id" = $2`, [
+        `e2e-ai-${unique}-${account.id}`,
+        account.id,
+      ]);
+
+      await as(account)
+        .post('/ai/conversations', { contextType: 'QUESTION', contextId: questionId, sessionId })
+        .expect(403)
+        .expect(({ body }) => expect(body.data.errorKey).toBe('phoneBindingRequired'));
+      await send(account, conversationId)
+        .expect(403)
+        .expect(({ body }) => expect(body.data.errorKey).toBe('phoneBindingRequired'));
+      expect(await quota(account)).toMatchObject({ used: 0 });
+      expect(app.get(ContentModerationProvider).moderate).not.toHaveBeenCalled();
+      await dataSource.query(`UPDATE "user" SET "wechatOpenId" = NULL WHERE "id" = $1`, [account.id]);
+    });
+
+    it('should answer aiUnavailable when content moderation is not configured', async () => {
+      const { account, sessionId } = await prepareLearner();
+      const conversationId = await createConversation(account, sessionId);
+      moderationConfigured = false;
+
+      await send(account, conversationId)
+        .expect(503)
+        .expect(({ body }) => expect(body.data.errorKey).toBe('aiUnavailable'));
+      expect(await quota(account)).toMatchObject({ used: 0 });
+      expect(app.get(LlmProvider).streamChat).not.toHaveBeenCalled();
+    });
+
+    it('should answer aiUnavailable without consuming the quota when the input moderation fails', async () => {
+      const { account, sessionId } = await prepareLearner();
+      const conversationId = await createConversation(account, sessionId);
+      moderationScript = () => Promise.reject(new ContentModerationError('timeout', 'timed out'));
+
+      await send(account, conversationId)
+        .expect(503)
+        .expect(({ body }) => expect(body.data.errorKey).toBe('aiUnavailable'));
+      expect(await quota(account)).toMatchObject({ used: 0 });
+      expect(app.get(LlmProvider).streamChat).not.toHaveBeenCalled();
+    });
+
+    it('should fail the answer and refund the quota without delivering content when the output moderation fails', async () => {
+      const { account, sessionId } = await prepareLearner();
+      const conversationId = await createConversation(account, sessionId);
+      moderationScript = (params) =>
+        params.kind === 'input'
+          ? keywordModeration(params)
+          : Promise.reject(new ContentModerationError('networkError', 'down'));
+
+      const events = await sendAndRead(account, conversationId);
+
+      expect(events.map((event) => event.event)).toEqual(['message.start', 'error']);
+      expect(events[1].data).toMatchObject({ code: 'aiGenerationFailed' });
+      expect(await messageStatus(events[0].data.messageId as string)).toBe('FAILED');
+      expect(await quota(account)).toMatchObject({ used: 0 });
+    });
+
+    it('should stop and save the answer as BLOCKED when an output segment is high risk', async () => {
+      const { account, sessionId } = await prepareLearner();
+      const conversationId = await createConversation(account, sessionId);
+      moderationScript = (params) =>
+        Promise.resolve(
+          moderationResult(params.kind === 'output' && params.content.includes('正确答案') ? 'high' : 'none'),
+        );
+
+      const events = await sendAndRead(account, conversationId);
+      const messageId = events[0].data.messageId as string;
+
+      expect(events.map((event) => event.event)).toEqual([
+        'message.start',
+        'answer.delta',
+        'answer.delta',
+        'message.done',
+      ]);
+      expect(events[1].data).toEqual({ text: FIRST_PART });
+      expect(events.at(-1)).toMatchObject({ data: { status: 'BLOCKED' } });
+      expect(await messageStatus(messageId)).toBe('BLOCKED');
+      const message = await as(account).get(`/ai/messages/${messageId}`).expect(200);
+      expect(message.body.data.content).not.toContain(SECOND_PART);
+      expect(await quota(account)).toMatchObject({ used: 1 });
+    });
   });
 
   describe('visibility', () => {

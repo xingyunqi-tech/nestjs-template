@@ -92,7 +92,7 @@
   "aiQuotaExceeded": "今日 AI 次数已用完",
   "aiRateLimited": "AI 请求过于频繁，请稍后再试",
   "aiConsentRequired": "请先同意 AI 服务声明",
-  "wechatBindingRequired": "请先绑定微信",
+  "phoneBindingRequired": "请先绑定手机号",
   "contentBlocked": "内容未通过安全检测",
   "aiConversationNotFound": "AI 会话不存在",
   "aiMessageNotFound": "AI 消息不存在",

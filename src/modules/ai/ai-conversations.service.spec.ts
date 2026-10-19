@@ -33,7 +33,7 @@ describe('AiConversationsService', () => {
       findPage: vi.fn(),
       findStreamingIds: vi.fn().mockResolvedValue([]),
     };
-    access = { assertCanUse: vi.fn().mockResolvedValue({ openId: 'o' }) };
+    access = { assertCanUse: vi.fn().mockResolvedValue(undefined) };
     tutorContext = {
       resolve: vi.fn().mockResolvedValue({
         question: { id: 'q1', stem: '已知 ![图](file:1)  函数\n f(x)', currentVersion: 3 },

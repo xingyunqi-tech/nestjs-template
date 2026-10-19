@@ -38,7 +38,6 @@ export interface AiGenerationJob {
   messageId: string;
   conversationId: string;
   userId: number;
-  openId: string;
   /** 扣减额度所属日期 */
   quotaDate: string;
   request: AiChatRequest;
@@ -179,7 +178,11 @@ export class AiGenerationService implements OnModuleInit, OnApplicationShutdown 
       if (abortedBefore) {
         return abortedBefore;
       }
-      const verdict = await this.safetyService.checkOutput(job.openId, segment);
+      const verdict = await this.safetyService.checkOutput({
+        userId: job.userId,
+        sessionId: type === 'answer' ? job.messageId : `${job.messageId}:reasoning`,
+        content: segment,
+      });
       const abortedAfter = this.abortedOutcome(controller);
       if (abortedAfter) {
         return abortedAfter;
@@ -216,7 +219,12 @@ export class AiGenerationService implements OnModuleInit, OnApplicationShutdown 
     if (suggestions.length === 0) {
       return [];
     }
-    return (await this.safetyService.checkOutput(job.openId, suggestions.join('\n'))) === 'pass' ? suggestions : [];
+    const verdict = await this.safetyService.checkOutput({
+      userId: job.userId,
+      sessionId: job.messageId,
+      content: suggestions.join('\n'),
+    });
+    return verdict === 'pass' ? suggestions : [];
   }
 
   private async complete(job: AiGenerationJob, outcome: Outcome, state: GenerationState): Promise<void> {

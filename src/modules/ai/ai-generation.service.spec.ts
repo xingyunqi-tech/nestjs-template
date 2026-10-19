@@ -39,7 +39,6 @@ describe('AiGenerationService', () => {
     messageId: 'm1',
     conversationId: 'c1',
     userId: 7,
-    openId: 'open-1',
     quotaDate: '2026-10-17',
     request: { system: 'system', messages: [{ role: 'user', content: '为什么' }] },
   };
@@ -113,7 +112,12 @@ describe('AiGenerationService', () => {
         data: { status: AiMessageStatus.DONE, usage: { inputTokens: 100, outputTokens: 50 } },
       },
     ]);
-    expect(safety.checkOutput).toHaveBeenCalledWith('open-1', PARAGRAPH_1);
+    expect(safety.checkOutput.mock.calls.map(([check]) => check)).toEqual([
+      { userId: 7, sessionId: 'm1:reasoning', content: '思考' },
+      { userId: 7, sessionId: 'm1', content: PARAGRAPH_1 },
+      { userId: 7, sessionId: 'm1', content: '结论。\n' },
+      { userId: 7, sessionId: 'm1', content: '为什么？\n还有吗？' },
+    ]);
     expect(budget.record).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'chat', failed: false, countsAsRequest: true }),
     );

@@ -92,7 +92,7 @@
   "aiQuotaExceeded": "Daily AI quota used up",
   "aiRateLimited": "Too many AI requests, please try again later",
   "aiConsentRequired": "Please accept the AI service terms first",
-  "wechatBindingRequired": "Please bind WeChat first",
+  "phoneBindingRequired": "Please bind a phone number first",
   "contentBlocked": "Content failed the safety check",
   "aiConversationNotFound": "AI conversation not found",
   "aiMessageNotFound": "AI message not found",

@@ -15,6 +15,7 @@ import smsConfig from './integrations/sms/config/sms.config';
 import wechatConfig from './integrations/wechat/config/wechat.config';
 import alipayConfig from './integrations/alipay/config/alipay.config';
 import llmConfig from './integrations/llm/config/llm.config';
+import aliyunGreenConfig from './integrations/aliyun-green/config/aliyun-green.config';
 import aiConfig from './modules/ai/config/ai.config';
 import path from 'path';
 import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
@@ -95,6 +96,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
         wechatConfig,
         alipayConfig,
         llmConfig,
+        aliyunGreenConfig,
         aiConfig,
       ],
       envFilePath: ['.env'],

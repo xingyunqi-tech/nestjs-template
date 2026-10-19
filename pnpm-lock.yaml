@@ -11,9 +11,15 @@ importers:
       '@alicloud/dysmsapi20170525':
         specifier: 4.6.0
         version: 4.6.0(supports-color@8.1.1)
+      '@alicloud/green20220302':
+        specifier: 3.4.5
+        version: 3.4.5(supports-color@8.1.1)
       '@alicloud/openapi-client':
         specifier: 0.4.15
         version: 0.4.15(supports-color@8.1.1)
+      '@alicloud/openapi-core':
+        specifier: 1.0.8
+        version: 1.0.8(supports-color@8.1.1)
       '@aws-sdk/client-s3':
         specifier: 3.1150.0
         version: 3.1150.0
@@ -329,6 +335,9 @@ packages:
 
   '@alicloud/gateway-spi@0.0.8':
     resolution: {integrity: sha512-KM7fu5asjxZPmrz9sJGHJeSU+cNQNOxW+SFmgmAIrITui5hXL2LB+KNRuzWmlwPjnuA2X3/keq9h6++S9jcV5g==}
+
+  '@alicloud/green20220302@3.4.5':
+    resolution: {integrity: sha512-lFoq03lcNsT3MEB8csphQ6ewrejZlQHUGYOH+VY5ugK80BQvGLLl3SDRhXYY28fyZ+2NSX5qiRtA5Bow11r6oQ==}
 
   '@alicloud/openapi-client@0.4.15':
     resolution: {integrity: sha512-4VE0/k5ZdQbAhOSTqniVhuX1k5DUeUMZv74degn3wIWjLY6Bq+hxjaGsaHYlLZ2gA5wUrs8NcI5TE+lIQS3iiA==}
@@ -6065,6 +6074,15 @@ snapshots:
       '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
+
+  '@alicloud/green20220302@3.4.5(supports-color@8.1.1)':
+    dependencies:
+      '@alicloud/openapi-core': 1.0.8(supports-color@8.1.1)
+      '@darabonba/typescript': 1.0.5(supports-color@8.1.1)
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
 
   '@alicloud/openapi-client@0.4.15(supports-color@8.1.1)':
     dependencies:

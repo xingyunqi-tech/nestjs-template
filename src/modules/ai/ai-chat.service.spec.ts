@@ -69,7 +69,7 @@ describe('AiChatService', () => {
       createExchange: step('createExchange', { user: new AiMessage(), assistant }),
       finish: vi.fn().mockResolvedValue(true),
     };
-    access = { assertCanUse: step('assertCanUse', { openId: 'open-1' }) };
+    access = { assertCanUse: step('assertCanUse') };
     tutorContext = { resolve: step('resolveVisibility', tutor) };
     safety = { assertInputSafe: step('assertInputSafe') };
     budget = { assertWithinBudget: step('assertWithinBudget') };
@@ -110,6 +110,7 @@ describe('AiChatService', () => {
       'appendStart',
     ]);
     expect(tutorContext.resolve).toHaveBeenCalledWith(7, 'q1', 's1');
+    expect(safety.assertInputSafe).toHaveBeenCalledWith(7, '为什么');
     expect(messages.createExchange).toHaveBeenCalledWith({
       conversationId: 'c1',
       content: '为什么',
@@ -121,7 +122,6 @@ describe('AiChatService', () => {
       messageId: 'm2',
       conversationId: 'c1',
       userId: 7,
-      openId: 'open-1',
       quotaDate: '2026-10-18',
       request,
     });

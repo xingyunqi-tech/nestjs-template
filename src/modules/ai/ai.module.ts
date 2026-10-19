@@ -23,7 +23,7 @@ import { AiMessageFeedbackService } from './ai-message-feedback.service';
 import { AiUsageService } from './ai-usage.service';
 import { AiAccountCleaner } from './ai-account.cleaner';
 import { LlmModule } from '../../integrations/llm/llm.module';
-import { WechatModule } from '../../integrations/wechat/wechat.module';
+import { AliyunGreenModule } from '../../integrations/aliyun-green/aliyun-green.module';
 import { UsersModule } from '../../core/users/users.module';
 import { ConsentsModule } from '../consents/consents.module';
 import { AppConfigModule } from '../config/config.module';
@@ -37,7 +37,7 @@ import { AllConfigType } from '../../config/config.type';
     ConfigModule.forFeature(aiConfig),
     RelationalAiPersistenceModule,
     LlmModule,
-    WechatModule,
+    AliyunGreenModule,
     UsersModule,
     ConsentsModule,
     AppConfigModule,

@@ -18,7 +18,7 @@ export const BUSINESS_ERRORS = {
   aiQuotaExceeded: HttpStatus.TOO_MANY_REQUESTS,
   aiRateLimited: HttpStatus.TOO_MANY_REQUESTS,
   aiConsentRequired: HttpStatus.FORBIDDEN,
-  wechatBindingRequired: HttpStatus.FORBIDDEN,
+  phoneBindingRequired: HttpStatus.FORBIDDEN,
   contentBlocked: HttpStatus.UNPROCESSABLE_ENTITY,
   aiConversationOutdated: HttpStatus.CONFLICT,
   errataInProgress: HttpStatus.CONFLICT,

@@ -11,6 +11,7 @@ import { SmsConfig } from '../integrations/sms/config/sms-config.type';
 import { WechatConfig } from '../integrations/wechat/config/wechat-config.type';
 import { AlipayConfig } from '../integrations/alipay/config/alipay-config.type';
 import { LlmConfig } from '../integrations/llm/config/llm-config.type';
+import { AliyunGreenConfig } from '../integrations/aliyun-green/config/aliyun-green-config.type';
 import { AiConfig } from '../modules/ai/config/ai-config.type';
 
 export type AllConfigType = {
@@ -27,5 +28,6 @@ export type AllConfigType = {
   wechat: WechatConfig;
   alipay: AlipayConfig;
   llm: LlmConfig;
+  aliyunGreen: AliyunGreenConfig;
   ai: AiConfig;
 };

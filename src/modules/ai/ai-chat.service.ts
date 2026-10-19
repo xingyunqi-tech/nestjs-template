@@ -41,7 +41,7 @@ export class AiChatService {
   /** 启动回答生成并返回回答消息 id；扣减额度后失败时退还额度 */
   async send(userId: number, conversationId: string, dto: SendAiMessageDto): Promise<{ messageId: string }> {
     const conversation = await this.conversationsService.findOwned(userId, conversationId);
-    const { openId } = await this.accessService.assertCanUse(userId);
+    await this.accessService.assertCanUse(userId);
     const tutor = await this.tutorQuestionContextService.resolve(
       userId,
       conversation.contextId ?? '',
@@ -54,7 +54,7 @@ export class AiChatService {
       throw messageInProgress();
     }
     await this.rateLimitService.assertWithinRate(userId);
-    await this.safetyService.assertInputSafe(openId, dto.content);
+    await this.safetyService.assertInputSafe(userId, dto.content);
     await this.budgetService.assertWithinBudget();
     const quotaDate = await this.quotaService.consume(userId, 'chat');
 
@@ -76,7 +76,6 @@ export class AiChatService {
         messageId,
         conversationId: conversation.id,
         userId,
-        openId,
         quotaDate,
         request,
       });

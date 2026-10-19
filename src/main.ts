@@ -16,6 +16,9 @@ import { MetricsMiddleware } from './infrastructure/metrics/metrics.middleware';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { applyRequestBodyContent } from './common/swagger/api-request-body-content';
 
+/** 容纳协议正文等富文本配置（HTML 约 200KB） */
+const JSON_BODY_LIMIT = '256kb';
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
@@ -91,6 +94,8 @@ async function bootstrap(): Promise<void> {
     const metricsMiddleware = app.get(MetricsMiddleware);
     app.use(metricsMiddleware.use.bind(metricsMiddleware));
   }
+
+  app.useBodyParser('json', { limit: JSON_BODY_LIMIT });
 
   const reflector = app.get(Reflector);
   app.useGlobalInterceptors(

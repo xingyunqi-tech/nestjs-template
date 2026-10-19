@@ -56,6 +56,24 @@ export const CONFIG_DEFINITIONS = [
   { key: 'consent.privacyPolicyVersion', type: 'string', isPublic: true, description: '隐私政策当前版本' },
   { key: 'consent.userAgreementVersion', type: 'string', isPublic: true, description: '用户协议当前版本' },
   { key: 'consent.aiServiceVersion', type: 'string', isPublic: true, description: 'AI 服务声明当前版本' },
+  {
+    key: 'agreement.userAgreement',
+    type: 'string',
+    isPublic: true,
+    description: '用户协议正文（HTML），未配置时小程序显示内置文本',
+  },
+  {
+    key: 'agreement.privacyPolicy',
+    type: 'string',
+    isPublic: true,
+    description: '隐私政策正文（HTML），未配置时小程序显示内置文本',
+  },
+  {
+    key: 'agreement.aiService',
+    type: 'string',
+    isPublic: true,
+    description: 'AI 服务声明正文（HTML），未配置时小程序显示内置文本',
+  },
   { key: 'alert.thresholds', type: 'json', isPublic: false, description: '各监控项告警阈值' },
 ] as const satisfies readonly ConfigDefinition[];
 

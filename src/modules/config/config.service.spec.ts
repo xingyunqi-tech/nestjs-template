@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { AppConfigService } from './config.service';
 import { AppConfigRepository } from './infrastructure/persistence/config.repository';
 import { Config } from './domain/config';
+import { findConfigDefinition } from './config-definitions';
 import type { Cache } from 'cache-manager';
 
 function buildConfig(overrides: Partial<Config> = {}): Config {
@@ -77,6 +78,28 @@ describe('AppConfigService', () => {
     it('should return 404 for a registered key without default absent from the database', async () => {
       repository.findByKey.mockResolvedValue(null);
       await expect(service.findByKey('ai.model')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it.each(['agreement.userAgreement', 'agreement.privacyPolicy', 'agreement.aiService'])(
+      'should register %s as a public string without default',
+      async (key) => {
+        expect(findConfigDefinition(key)).toMatchObject({ type: 'string', isPublic: true });
+        expect(findConfigDefinition(key)).not.toHaveProperty('defaultValue');
+
+        repository.findByKey.mockResolvedValue(null);
+        await expect(service.findPublicByKey(key)).rejects.toBeInstanceOf(NotFoundException);
+      },
+    );
+
+    it('should serve a stored agreement HTML through the public endpoint', async () => {
+      const html = `<h1>用户协议</h1>${'<p>条款内容</p>'.repeat(10_000)}`;
+      repository.findByKey.mockResolvedValue(
+        buildConfig({ key: 'agreement.userAgreement', value: { value: html }, isPublic: false }),
+      );
+      await expect(service.findPublicByKey('agreement.userAgreement')).resolves.toMatchObject({
+        isPublic: true,
+        value: { value: html },
+      });
     });
 
     it('should take isPublic from the registry over the stored flag', async () => {

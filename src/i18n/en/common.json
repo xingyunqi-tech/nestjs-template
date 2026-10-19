@@ -67,6 +67,7 @@
   "invalidRegionCombination": "Province, city and district do not match",
   "regionNotFound": "Region not found",
   "configNotFound": "Config not found",
+  "configManagedByDedicatedEndpoint": "This config can only be updated through its dedicated endpoint",
   "selectFile": "Please select a file",
   "notificationNotFound": "Notification not found",
   "settingNotFound": "Notification setting not found",

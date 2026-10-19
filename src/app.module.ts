@@ -70,6 +70,7 @@ import { ConsentsModule } from './modules/consents/consents.module';
 import { AccountCleanupModule } from './modules/account-cleanup/account-cleanup.module';
 import { AccountCleanupQueueModule } from './infrastructure/queue/account-cleanup-queue/account-cleanup-queue.module';
 import { AiModule } from './modules/ai/ai.module';
+import { AppProfileModule } from './modules/app-profile/app-profile.module';
 
 const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
   useClass: TypeOrmConfigService,
@@ -225,6 +226,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     ConsentsModule,
     AccountCleanupModule,
     AiModule,
+    AppProfileModule,
     ConditionalModule.registerWhen(ImportQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(MockSubmitQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(StudyStatsQueueModule, isRedisEnabled),

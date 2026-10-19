@@ -6,6 +6,8 @@ export interface ConfigDefinition {
   /** undefined 表示无默认值 */
   defaultValue?: unknown;
   isPublic: boolean;
+  /** 只能经专用接口写入，通用写接口拒绝 */
+  dedicated?: boolean;
   description: string;
 }
 
@@ -73,6 +75,13 @@ export const CONFIG_DEFINITIONS = [
     type: 'string',
     isPublic: true,
     description: 'AI 服务声明正文（HTML），未配置时小程序显示内置文本',
+  },
+  {
+    key: 'app.profile',
+    type: 'json',
+    isPublic: false,
+    dedicated: true,
+    description: '小程序站点信息（产品名称、主体、客服等），未配置的字段由小程序使用内置值',
   },
   { key: 'alert.thresholds', type: 'json', isPublic: false, description: '各监控项告警阈值' },
 ] as const satisfies readonly ConfigDefinition[];

@@ -67,6 +67,7 @@
   "invalidRegionCombination": "省市区不匹配",
   "regionNotFound": "地区不存在",
   "configNotFound": "配置不存在",
+  "configManagedByDedicatedEndpoint": "该配置只能通过专用接口修改",
   "selectFile": "请选择文件",
   "notificationNotFound": "通知不存在",
   "settingNotFound": "通知设置不存在",

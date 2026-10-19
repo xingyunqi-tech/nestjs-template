@@ -1,5 +1,5 @@
 import type { Mocked } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { AppConfigService } from './config.service';
 import { AppConfigRepository } from './infrastructure/persistence/config.repository';
 import { Config } from './domain/config';
@@ -199,6 +199,37 @@ describe('AppConfigService', () => {
     it('should fall back to the default when the stored value has no value field', async () => {
       repository.findByKey.mockResolvedValue(buildConfig({ key: 'ai.quota.chat', value: {} }));
       await expect(service.getValue('ai.quota.chat')).resolves.toBe(20);
+    });
+  });
+
+  describe('app.profile', () => {
+    const profile = { value: { appName: '备考刷题' } };
+
+    it('should hide app.profile from the public endpoint', async () => {
+      repository.findByKey.mockResolvedValue(buildConfig({ key: 'app.profile', value: profile, isPublic: true }));
+      await expect(service.findPublicByKey('app.profile')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('should read app.profile through getValue', async () => {
+      repository.findByKey.mockResolvedValue(buildConfig({ key: 'app.profile', value: profile, isPublic: false }));
+      await expect(service.getValue('app.profile')).resolves.toEqual({ appName: '备考刷题' });
+    });
+
+    it('should reject writing app.profile through the generic endpoint', async () => {
+      await expect(service.upsertGeneric('app.profile', profile)).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(repository.upsert).not.toHaveBeenCalled();
+    });
+
+    it('should write app.profile through upsert', async () => {
+      repository.upsert.mockResolvedValue(buildConfig({ key: 'app.profile', value: profile, isPublic: false }));
+      await service.upsert('app.profile', profile);
+      expect(repository.upsert).toHaveBeenCalledWith('app.profile', profile, false);
+    });
+
+    it('should write other keys through the generic endpoint', async () => {
+      repository.upsert.mockResolvedValue(buildConfig());
+      await service.upsertGeneric('app.theme', { primaryColor: '#000' }, true);
+      expect(repository.upsert).toHaveBeenCalledWith('app.theme', { primaryColor: '#000' }, true);
     });
   });
 });

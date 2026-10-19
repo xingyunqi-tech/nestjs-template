@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { randomUUID } from 'crypto';
@@ -51,6 +51,14 @@ export class AppConfigService {
       return config.value.value as T;
     }
     return findConfigDefinition(key)?.defaultValue as T | undefined;
+  }
+
+  /** 通用写接口入口，拒绝由专用接口管理的登记项 */
+  async upsertGeneric(key: string, value: Record<string, unknown>, isPublic?: boolean): Promise<Config> {
+    if (findConfigDefinition(key)?.dedicated) {
+      throw new UnprocessableEntityException({ errors: { key: 'configManagedByDedicatedEndpoint' } });
+    }
+    return this.upsert(key, value, isPublic);
   }
 
   /** 登记项的 isPublic 以登记表为准 */

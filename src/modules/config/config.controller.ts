@@ -46,6 +46,6 @@ export class AppConfigController {
   @Put(':key')
   @HttpCode(HttpStatus.OK)
   upsert(@Param('key') key: string, @Body() dto: UpsertConfigDto): Promise<Config> {
-    return this.appConfigService.upsert(key, dto.value, dto.isPublic);
+    return this.appConfigService.upsertGeneric(key, dto.value, dto.isPublic);
   }
 }

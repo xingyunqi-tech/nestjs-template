@@ -34,4 +34,24 @@ describe('AuditService', () => {
       },
     });
   });
+
+  it('should record dates as ISO strings and keep nested arrays', async () => {
+    const create = vi.fn().mockImplementation(async (data: unknown) => data);
+    const service = new AuditService({ create } as unknown as AuditLogRepository);
+    const at = new Date('2026-01-02T03:04:05.000Z');
+
+    await service.log({
+      action: 'UPDATE',
+      entityType: 'Question',
+      entityId: '1',
+      newValue: { at, nested: { at }, list: [at], blanks: [['甲'], ['乙', '丙']] },
+    } as Parameters<AuditService['log']>[0]);
+
+    expect(create.mock.calls[0][0].newValue).toEqual({
+      at: '2026-01-02T03:04:05.000Z',
+      nested: { at: '2026-01-02T03:04:05.000Z' },
+      list: ['2026-01-02T03:04:05.000Z'],
+      blanks: [['甲'], ['乙', '丙']],
+    });
+  });
 });

@@ -12,6 +12,15 @@ import { PaginationResponse, PaginationResponseDto } from '../../common/dto/pagi
 import { pagination } from '../../common/pagination';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import type { RequestWithUser } from '../../common/types/request-with-user.type';
+import { Auditable, AuditAction } from '../../infrastructure/audit';
+
+const ENTITY_TYPE = 'Errata';
+
+const summarizeErrata = (dto: CreateErrataDto, params: Record<string, string>): Record<string, unknown> => ({
+  questionId: params.id,
+  answer: dto.answer,
+  reportIds: dto.reportIds ?? [],
+});
 
 @ApiTags('Admin Errata')
 @ApiBearerAuth()
@@ -27,6 +36,12 @@ export class AdminErrataController {
   })
   @ApiOkResponse({ type: Errata })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({
+    action: AuditAction.CREATE,
+    entityType: ENTITY_TYPE,
+    entityIdFrom: 'response',
+    summarizeBody: summarizeErrata,
+  })
   @Post('admin/questions/:id/errata')
   @HttpCode(HttpStatus.OK)
   create(
@@ -63,6 +78,7 @@ export class AdminErrataController {
   @ApiOperation({ operationId: 'adminRetryErrata', summary: '失败或超过 10 分钟未进展的勘误任务从中断处继续' })
   @ApiOkResponse({ type: Errata })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.UPDATE, entityType: ENTITY_TYPE })
   @Post('admin/errata/:id/retry')
   @HttpCode(HttpStatus.OK)
   retry(@Param('id', ParseUuidPipe) id: string): Promise<Errata> {

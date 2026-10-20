@@ -27,6 +27,9 @@ import { Permission } from '../../core/permissions/permission.enum';
 import { PaginationResponse, PaginationResponseDto } from '../../common/dto/pagination-response.dto';
 import { pagination } from '../../common/pagination';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
+import { Auditable, AuditAction } from '../../infrastructure/audit';
+
+const ENTITY_TYPE = 'Subject';
 
 @ApiTags('Admin Subjects')
 @ApiBearerAuth()
@@ -55,6 +58,7 @@ export class AdminSubjectsController {
 
   @ApiOperation({ operationId: 'adminCreateSubject', summary: '创建科目（草稿）' })
   @ApiOkResponse({ type: Subject })
+  @Auditable({ action: AuditAction.CREATE, entityType: ENTITY_TYPE })
   @Post()
   @HttpCode(HttpStatus.OK)
   create(@Body() dto: CreateSubjectDto): Promise<Subject> {
@@ -73,6 +77,7 @@ export class AdminSubjectsController {
   @ApiOperation({ operationId: 'adminUpdateSubject', summary: '更新科目' })
   @ApiOkResponse({ type: Subject })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.UPDATE, entityType: ENTITY_TYPE })
   @Patch(':id')
   @HttpCode(HttpStatus.OK)
   update(@Param('id', ParseUuidPipe) id: string, @Body() dto: UpdateSubjectDto): Promise<Subject> {
@@ -81,6 +86,7 @@ export class AdminSubjectsController {
 
   @ApiOperation({ operationId: 'adminDeleteSubject', summary: '删除科目（仅无知识点的草稿）' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.DELETE, entityType: ENTITY_TYPE })
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   remove(@Param('id', ParseUuidPipe) id: string): Promise<void> {
@@ -91,6 +97,7 @@ export class AdminSubjectsController {
   @ApiOkResponse({ type: Subject })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @RequirePermissions(Permission.CONTENT_REVIEW)
+  @Auditable({ action: AuditAction.PUBLISH, entityType: ENTITY_TYPE })
   @Post(':id/publish')
   @HttpCode(HttpStatus.OK)
   publish(@Param('id', ParseUuidPipe) id: string): Promise<Subject> {
@@ -101,6 +108,7 @@ export class AdminSubjectsController {
   @ApiOkResponse({ type: Subject })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @RequirePermissions(Permission.CONTENT_REVIEW)
+  @Auditable({ action: AuditAction.OFFLINE, entityType: ENTITY_TYPE })
   @Post(':id/offline')
   @HttpCode(HttpStatus.OK)
   offline(@Param('id', ParseUuidPipe) id: string): Promise<Subject> {

@@ -8,7 +8,7 @@ const toBoolean = ({ value }: { value: unknown }): unknown =>
 const PUBLISH_ON_IMPORT_PROPERTY = {
   type: Boolean,
   default: false,
-  description: '导入成功的内容直接发布，需 content:review',
+  description: '导入成功的内容直接发布，仅管理员可用',
 };
 
 export class CreateImportDto {

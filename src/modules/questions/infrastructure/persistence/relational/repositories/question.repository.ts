@@ -18,6 +18,7 @@ import {
 } from '../../question.repository';
 import { Question, QuestionSummary } from '../../../../domain/question';
 import { QuestionVersion } from '../../../../domain/question-version';
+import { OperatorProfile } from '../../../../domain/question-operator';
 import { QuestionType } from '../../../../domain/question-type';
 import { QuestionStatus } from '../../../../domain/question-status';
 import { QuestionDrawCandidate, QuestionDrawCriteria } from '../../../../domain/question-unit';
@@ -313,6 +314,16 @@ export class QuestionRelationalRepository implements QuestionRepository {
       order: { version: 'DESC' },
     });
     return entities.map((entity) => QuestionVersionMapper.toDomain(entity));
+  }
+
+  async findOperatorProfiles(userIds: number[]): Promise<OperatorProfile[]> {
+    if (userIds.length === 0) {
+      return [];
+    }
+    return this.questionRepository.manager.query(
+      `SELECT "id", "nickname", "email" FROM "user" WHERE "id" = ANY($1) AND "deletedAt" IS NULL`,
+      [userIds],
+    );
   }
 
   async adjustStatCorrect(handle: TransactionHandle, id: Question['id'], delta: number): Promise<void> {

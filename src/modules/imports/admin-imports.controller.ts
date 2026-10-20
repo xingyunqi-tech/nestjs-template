@@ -44,6 +44,9 @@ import { pagination } from '../../common/pagination';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import type { RequestWithUser } from '../../common/types/request-with-user.type';
 import { ApiRequestBodyContent } from '../../common/swagger/api-request-body-content';
+import { Auditable, AuditAction } from '../../infrastructure/audit';
+
+const ENTITY_TYPE = 'ImportJob';
 
 const IMPORT_MAX_SIZE = (fileConfig() as FileConfig).maxSizes[FilePurpose.IMPORT];
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -70,6 +73,7 @@ export class AdminImportsController {
     'application/json': { schema: { $ref: getSchemaPath(CreateImportFileIdBodyDto) } },
   })
   @ApiOkResponse({ type: ImportJob })
+  @Auditable({ action: AuditAction.CREATE, entityType: ENTITY_TYPE, includeBody: false, includeResponse: true })
   @Post()
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(

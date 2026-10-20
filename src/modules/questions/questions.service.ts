@@ -1,7 +1,14 @@
-import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import {
   CreateQuestionVersionData,
   KnowledgePointCountDelta,
+  QuestionChanges,
   QuestionRepository,
   QuestionTransaction,
 } from './infrastructure/persistence/question.repository';
@@ -11,6 +18,7 @@ import { QuestionType } from './domain/question-type';
 import { QuestionSource } from './domain/question-source';
 import { QuestionAction, QuestionStatus, QUESTION_TRANSITIONS, publishedCountDelta } from './domain/question-status';
 import { QuestionChangeType, QuestionVersion } from './domain/question-version';
+import { OperatorProfile, QuestionOperator, isSelfReview } from './domain/question-operator';
 import { QuestionAnswer, QuestionOption } from './domain/question-answer';
 import { QuestionContent, normalizeAnswer, validateQuestionContent } from './domain/question-content';
 import { computeContentHash } from './domain/content-hash';
@@ -25,6 +33,7 @@ import { UpdateQuestionDto } from './dto/update-question.dto';
 import { QuestionFilterOptions } from './dto/query-admin-question.dto';
 import { AdminQuestionDto, AdminQuestionVersionDto } from './dto/admin-question.dto';
 import { BatchPublishQuestionsDto, BatchPublishQuestionsResultDto } from './dto/batch-publish-questions.dto';
+import { toQuestionOperator } from './dto/question-operator.dto';
 import { PublicQuestionUnitDto, toPublicQuestion } from './dto/public-question.dto';
 import { QuestionSolutionDto, toQuestionSolution } from './dto/question-solution.dto';
 import { QuestionDrawCriteria, QuestionUnit, groupIntoUnits, packUnits } from './domain/question-unit';
@@ -51,6 +60,11 @@ export type FileReferenceSource = Partial<Pick<Question, 'stem' | 'options' | 'a
 
 const DEFAULT_DIFFICULTY = 3;
 
+interface TransitionAudit {
+  operatorId: number | null;
+  rejectReason?: string;
+}
+
 export interface ErrataChanges {
   answer: QuestionAnswer;
   analysis?: string | null;
@@ -73,6 +87,22 @@ function unprocessable(field: string, error: string): UnprocessableEntityExcepti
 
 function conflict(error: string, errors?: Record<string, string>): ConflictException {
   return new ConflictException({ error, ...(errors && { errors }) });
+}
+
+function selfReviewForbidden(questionIds: Question['id'][]): ForbiddenException {
+  return new ForbiddenException({ error: 'selfReviewForbidden', errors: { questionIds } });
+}
+
+function auditChanges(action: QuestionAction, audit: TransitionAudit, at: Date): QuestionChanges {
+  switch (action) {
+    case QuestionAction.SUBMIT:
+      return { submittedBy: audit.operatorId, submittedAt: at, reviewedBy: null, reviewedAt: null, rejectReason: null };
+    case QuestionAction.REJECT:
+      return { reviewedBy: audit.operatorId, reviewedAt: at, rejectReason: audit.rejectReason ?? null };
+    case QuestionAction.PUBLISH:
+    case QuestionAction.OFFLINE:
+      return { reviewedBy: audit.operatorId, reviewedAt: at };
+  }
 }
 
 function plainOptions(options: QuestionOption[] | null | undefined): QuestionOption[] | null | undefined {
@@ -342,7 +372,7 @@ export class QuestionsService {
     return result;
   }
 
-  async create(dto: CreateQuestionDto, userId: UserId): Promise<AdminQuestionDto> {
+  async create(dto: CreateQuestionDto, operatorId: number): Promise<AdminQuestionDto> {
     const content = contentOf(dto);
     this.assertContent(content, !!dto.parentId);
     await this.subjectsService.findById(dto.subjectId).catch((error: unknown) => {
@@ -350,8 +380,10 @@ export class QuestionsService {
     });
     await this.assertFileReferences(content);
 
-    const id = await this.questionRepository.transaction([dto.subjectId], (tx) => this.insertInTx(tx, dto, content));
-    return this.getAdminDetail(id, userId);
+    const id = await this.questionRepository.transaction([dto.subjectId], (tx) =>
+      this.insertInTx(tx, dto, content, operatorId),
+    );
+    return this.getAdminDetail(id, operatorId);
   }
 
   async update(id: Question['id'], dto: UpdateQuestionDto, userId: UserId): Promise<AdminQuestionDto> {
@@ -383,7 +415,7 @@ export class QuestionsService {
             return item.id;
           }
           const dto: CreateQuestionDto = { ...item.fields, subjectId: unit.subjectId, parentId: parentId ?? undefined };
-          return this.insertInTx(tx, dto, contentOf(dto));
+          return this.insertInTx(tx, dto, contentOf(dto), unit.operatorId);
         });
 
       const rootId = await save(unit.root, null);
@@ -392,7 +424,7 @@ export class QuestionsService {
         ids[child.ref] = await save(child, rootId);
       }
       if (unit.publish) {
-        await withItemRef(unit.root.ref, () => this.publishInTx(tx, rootId));
+        await withItemRef(unit.root.ref, () => this.publishInTx(tx, rootId, unit.operatorId));
       }
       return { rootId, ids };
     });
@@ -451,7 +483,12 @@ export class QuestionsService {
     return this.questionRepository.adjustStatCorrect(handle, id, delta);
   }
 
-  private async insertInTx(tx: QuestionTransaction, dto: CreateQuestionDto, content: QuestionContent): Promise<string> {
+  private async insertInTx(
+    tx: QuestionTransaction,
+    dto: CreateQuestionDto,
+    content: QuestionContent,
+    operatorId: number | null,
+  ): Promise<string> {
     const parent = dto.parentId ? await this.lockDraftMaterial(tx, dto.parentId, dto.subjectId) : null;
     await this.assertTaggable(tx, dto.subjectId, content.knowledgePointIds);
     const contentHash = computeContentHash(content, parent?.contentHash ?? null);
@@ -470,6 +507,7 @@ export class QuestionsService {
       isFree: parent ? parent.isFree : (dto.isFree ?? true),
       sort,
       contentHash,
+      createdBy: operatorId,
     });
     await tx.replaceKnowledgePoints(question.id, knowledgePointIds);
     return question.id;
@@ -571,18 +609,35 @@ export class QuestionsService {
     }
   }
 
-  private async publishInTx(tx: QuestionTransaction, rootId: Question['id']): Promise<void> {
+  private async publishInTx(tx: QuestionTransaction, rootId: Question['id'], operatorId: number | null): Promise<void> {
     const [draft] = await tx.findForUpdate([rootId]);
     if (draft?.status === QuestionStatus.DRAFT) {
-      await this.transition(tx, [draft], QuestionAction.SUBMIT);
+      await this.transition(tx, [draft], QuestionAction.SUBMIT, { operatorId });
     }
     const [root] = await tx.findForUpdate([rootId]);
     if (root?.status === QuestionStatus.REVIEWING) {
-      await this.transition(tx, [root], QuestionAction.PUBLISH);
+      await this.transition(tx, [root], QuestionAction.PUBLISH, { operatorId });
     }
   }
 
-  async changeStatus(id: Question['id'], action: QuestionAction, userId: UserId): Promise<AdminQuestionDto> {
+  changeStatus(
+    id: Question['id'],
+    action: Exclude<QuestionAction, QuestionAction.REJECT>,
+    operator: QuestionOperator,
+  ): Promise<AdminQuestionDto> {
+    return this.applyAction(id, action, operator, {});
+  }
+
+  reject(id: Question['id'], reason: string, operator: QuestionOperator): Promise<AdminQuestionDto> {
+    return this.applyAction(id, QuestionAction.REJECT, operator, { rejectReason: reason });
+  }
+
+  private async applyAction(
+    id: Question['id'],
+    action: QuestionAction,
+    operator: QuestionOperator,
+    audit: Omit<TransitionAudit, 'operatorId'>,
+  ): Promise<AdminQuestionDto> {
     const existing = await this.findById(id);
     if (existing.parentId) {
       throw conflict('subQuestionStatusLocked');
@@ -592,12 +647,19 @@ export class QuestionsService {
       if (roots.length === 0) {
         throw notFound();
       }
-      await this.transition(tx, roots, action);
+      if (action === QuestionAction.PUBLISH || action === QuestionAction.REJECT) {
+        this.assertNotSelfReview(roots, operator);
+      }
+      await this.transition(tx, roots, action, { ...audit, operatorId: operator.id });
     });
-    return this.getAdminDetail(id, userId);
+    return this.getAdminDetail(id, operator.id);
   }
 
-  async batchPublish(dto: BatchPublishQuestionsDto): Promise<BatchPublishQuestionsResultDto> {
+  /** 任一题为当前操作人提交待审时整批拒绝 */
+  async batchPublish(
+    dto: BatchPublishQuestionsDto,
+    operator: QuestionOperator,
+  ): Promise<BatchPublishQuestionsResultDto> {
     const found = await this.questionRepository.findByIds(dto.ids);
     if (found.length !== dto.ids.length) {
       throw notFound();
@@ -610,10 +672,21 @@ export class QuestionsService {
         if (roots.length !== rootIds.length) {
           throw notFound();
         }
-        return this.transition(tx, roots, QuestionAction.PUBLISH);
+        this.assertNotSelfReview(roots, operator);
+        return this.transition(tx, roots, QuestionAction.PUBLISH, { operatorId: operator.id });
       },
     );
     return { count };
+  }
+
+  /** 只校验待审的题，从下架重新发布不受限 */
+  private assertNotSelfReview(roots: Question[], operator: QuestionOperator): void {
+    const selfReviewed = roots
+      .filter((root) => root.status === QuestionStatus.REVIEWING && isSelfReview(root.submittedBy, operator))
+      .map((root) => root.id);
+    if (selfReviewed.length > 0) {
+      throw selfReviewForbidden(selfReviewed);
+    }
   }
 
   /** 仅删除未发布过且未被作答或试卷引用的草稿，材料连同小题一起删除 */
@@ -637,7 +710,12 @@ export class QuestionsService {
   }
 
   /** 材料与全部小题整体流转，返回变更的题目数 */
-  private async transition(tx: QuestionTransaction, roots: Question[], action: QuestionAction): Promise<number> {
+  private async transition(
+    tx: QuestionTransaction,
+    roots: Question[],
+    action: QuestionAction,
+    audit: TransitionAudit,
+  ): Promise<number> {
     const { from, to } = QUESTION_TRANSITIONS[action];
     if (roots.some((root) => !from.includes(root.status))) {
       throw conflict('invalidStatusTransition');
@@ -670,7 +748,7 @@ export class QuestionsService {
     }
     await tx.update(
       group.map((question) => question.id),
-      { status: to },
+      { status: to, ...auditChanges(action, audit, new Date()) },
     );
 
     const deltas: KnowledgePointCountDelta[] = group.flatMap((question) => {
@@ -765,13 +843,34 @@ export class QuestionsService {
   }
 
   private async toAdminDtos(questions: Question[], viewerUserId: UserId): Promise<AdminQuestionDto[]> {
-    const fileUrls = await this.resolveFileUrls(questions, viewerUserId);
+    const [fileUrls, profiles] = await Promise.all([
+      this.resolveFileUrls(questions, viewerUserId),
+      this.findOperatorProfiles(questions),
+    ]);
     return questions.map((question, index) =>
       Object.assign(new AdminQuestionDto(), question, {
         audioUrl: audioUrlOf(question, fileUrls[index]),
         fileUrls: fileUrls[index],
+        creator: toQuestionOperator(question.createdBy, profiles),
+        submitter: toQuestionOperator(question.submittedBy, profiles),
+        reviewer: toQuestionOperator(question.reviewedBy, profiles),
       }),
     );
+  }
+
+  private async findOperatorProfiles(questions: Question[]): Promise<Map<number, OperatorProfile>> {
+    const ids = [
+      ...new Set(
+        questions.flatMap((question) =>
+          [question.createdBy, question.submittedBy, question.reviewedBy].filter((id): id is number => id !== null),
+        ),
+      ),
+    ];
+    if (ids.length === 0) {
+      return new Map();
+    }
+    const profiles = await this.questionRepository.findOperatorProfiles(ids);
+    return new Map(profiles.map((profile) => [profile.id, profile]));
   }
 
   /** 正文引用就地替换为访问地址，返回本次解析的地址表（含音频），键为小写文件 id */

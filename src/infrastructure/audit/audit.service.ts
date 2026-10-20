@@ -109,22 +109,23 @@ export class AuditService {
     const sanitized: Record<string, unknown> = {};
 
     for (const [key, val] of Object.entries(value)) {
-      if (isSensitiveKey(key)) {
-        sanitized[key] = '[REDACTED]';
-      } else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-        sanitized[key] = this.sanitize(val as Record<string, unknown>, visited, depth + 1);
-      } else if (Array.isArray(val)) {
-        sanitized[key] = val.map((item) =>
-          typeof item === 'object' && item !== null
-            ? this.sanitize(item as Record<string, unknown>, visited, depth + 1)
-            : item,
-        );
-      } else {
-        sanitized[key] = val;
-      }
+      sanitized[key] = isSensitiveKey(key) ? '[REDACTED]' : this.sanitizeValue(val, visited, depth);
     }
 
     return sanitized;
+  }
+
+  private sanitizeValue(value: unknown, visited: WeakSet<object>, depth: number): unknown {
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => this.sanitizeValue(item, visited, depth + 1));
+    }
+    if (typeof value === 'object' && value !== null) {
+      return this.sanitize(value as Record<string, unknown>, visited, depth + 1);
+    }
+    return value;
   }
 
   /**

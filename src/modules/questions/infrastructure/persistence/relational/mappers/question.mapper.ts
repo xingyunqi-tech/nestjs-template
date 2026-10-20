@@ -26,6 +26,12 @@ export class QuestionMapper {
     domain.contentHash = raw.contentHash;
     domain.statAnswered = raw.statAnswered;
     domain.statCorrect = raw.statCorrect;
+    domain.createdBy = raw.createdBy;
+    domain.submittedBy = raw.submittedBy;
+    domain.submittedAt = raw.submittedAt;
+    domain.reviewedBy = raw.reviewedBy;
+    domain.reviewedAt = raw.reviewedAt;
+    domain.rejectReason = raw.rejectReason;
     domain.createdAt = raw.createdAt;
     domain.updatedAt = raw.updatedAt;
     return domain;
@@ -50,6 +56,7 @@ export class QuestionMapper {
     entity.isFree = domain.isFree;
     entity.sort = domain.sort;
     entity.contentHash = domain.contentHash;
+    entity.createdBy = domain.createdBy;
     return entity;
   }
 }

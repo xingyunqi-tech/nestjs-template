@@ -1,5 +1,5 @@
 import type { Mocked } from 'vitest';
-import { ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import ExcelJS from 'exceljs';
@@ -13,8 +13,6 @@ import { FilesService } from '../files/files.service';
 import { FileStorageService } from '../files/file-storage.service';
 import { FilePurpose } from '../files/domain/file-purpose';
 import { FileType } from '../files/domain/file';
-import { PermissionsService } from '../../core/permissions/permissions.service';
-import { Permission } from '../../core/permissions/permission.enum';
 import { RoleEnum } from '../../common/enums/roles/roles.enum';
 import { AlertLevel, AlertReporter } from '../../infrastructure/alerting/alert-reporter';
 import { AllConfigType } from '../../config/config.type';
@@ -45,7 +43,6 @@ describe('ImportsService', () => {
   let contentImporter: Mocked<Pick<ContentImporter, 'run'>>;
   let filesService: Mocked<Pick<FilesService, 'findAccessible' | 'findById'>>;
   let fileStorageService: Mocked<Pick<FileStorageService, 'store' | 'read'>>;
-  let permissionsService: Mocked<Pick<PermissionsService, 'hasPermission'>>;
   let alertReporter: Mocked<AlertReporter>;
   let service: ImportsService;
 
@@ -65,7 +62,6 @@ describe('ImportsService', () => {
       store: vi.fn((_content: Buffer, name: string) => Promise.resolve(file({ id: `stored-${name}` }))),
       read: vi.fn().mockResolvedValue(Buffer.from('{"questions":[]}')),
     };
-    permissionsService = { hasPermission: vi.fn().mockResolvedValue(true) };
     alertReporter = { raise: vi.fn() };
     const configService = {
       getOrThrow: vi.fn(() => ({
@@ -80,7 +76,6 @@ describe('ImportsService', () => {
       contentImporter as unknown as ContentImporter,
       filesService as unknown as FilesService,
       fileStorageService as unknown as FileStorageService,
-      permissionsService as unknown as PermissionsService,
       configService as unknown as ConfigService<AllConfigType>,
       alertReporter,
       i18n as unknown as I18nService,
@@ -120,16 +115,16 @@ describe('ImportsService', () => {
       expect(repository.create).not.toHaveBeenCalled();
     });
 
-    it('should require the review permission to publish on import', async () => {
-      permissionsService.hasPermission.mockResolvedValue(false);
+    it('should allow only admins to publish on import', async () => {
+      for (const roleId of [RoleEnum.user, RoleEnum.editor, RoleEnum.reviewer, null]) {
+        await expect(
+          service.create({ fileId: 'file-1', publishOnImport: true }, { id: 3, roleId }),
+        ).rejects.toMatchObject({ response: { error: 'importPublishForbidden' } });
+      }
+      expect(repository.create).not.toHaveBeenCalled();
 
-      await expect(service.create({ fileId: 'file-1', publishOnImport: true }, requester)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
-      expect(permissionsService.hasPermission).toHaveBeenCalledWith(RoleEnum.user, Permission.CONTENT_REVIEW);
-      await expect(
-        service.create({ fileId: 'file-1', publishOnImport: true }, { id: 3, roleId: null }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      await service.create({ fileId: 'file-1', publishOnImport: true }, { id: 3, roleId: RoleEnum.admin });
+      expect(repository.create).toHaveBeenCalledWith({ fileId: 'file-1', publishOnImport: true, createdBy: 3 });
     });
   });
 
@@ -158,7 +153,7 @@ describe('ImportsService', () => {
 
       expect(contentImporter.run).toHaveBeenCalledWith(
         expect.objectContaining({ assets: new Map() }),
-        { publish: true },
+        { publish: true, operatorId: 3 },
         expect.any(Function),
       );
       const [content, name, purpose, owner] = fileStorageService.store.mock.calls[0];

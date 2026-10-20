@@ -64,6 +64,7 @@ describe('Question bank', () => {
   let app: NestExpressApplication;
   let admin: Account;
   let user: Account;
+  let reviewer: Account;
   let examId: string;
   let subjectId: string;
   let branch: string;
@@ -130,6 +131,8 @@ describe('Question bank', () => {
     app = await createTestApp();
     await app.get(PermissionsService).refreshCache();
     user = await registerAndLogin(app);
+    reviewer = await registerAndLogin(app);
+    await setRole(app, reviewer.email, RoleEnum.reviewer);
     admin = await registerAndLogin(app);
     await setRole(app, admin.email, RoleEnum.admin);
 
@@ -169,6 +172,7 @@ describe('Question bank', () => {
         await dataSource.query(`DELETE FROM "file" WHERE "id" = ANY($1)`, [fileIds]);
       }
       await setRole(app, admin.email, RoleEnum.user);
+      await setRole(app, reviewer.email, RoleEnum.user);
     } finally {
       await app?.close();
     }
@@ -232,7 +236,18 @@ describe('Question bank', () => {
       .expect(200);
     await as(admin).post(`/admin/questions/${question.id}/submit`).expect(200);
     await as(admin).patch(`/admin/questions/${question.id}`, { stem: 'x' }).expect(409);
-    await as(admin).post(`/admin/questions/${question.id}/reject`).expect(200);
+    await as(admin).post(`/admin/questions/${question.id}/reject`).expect(422);
+    await as(admin).post(`/admin/questions/${question.id}/reject`, { reason: '   ' }).expect(422);
+    const rejectedDraft = await as(admin)
+      .post(`/admin/questions/${question.id}/reject`, { reason: ' 答案待核实 ' })
+      .expect(200);
+    expect(rejectedDraft.body.data).toMatchObject({
+      status: 'DRAFT',
+      rejectReason: '答案待核实',
+      creator: { id: expect.any(Number), name: admin.email },
+      submitter: { id: expect.any(Number), name: admin.email },
+      reviewer: { id: expect.any(Number), name: admin.email },
+    });
     await as(admin).post(`/admin/questions/${question.id}/publish`).expect(409);
     await as(admin).post(`/admin/questions/${question.id}/submit`).expect(200);
 
@@ -305,6 +320,40 @@ describe('Question bank', () => {
     await as(admin).post(`/admin/questions/${second.id}/offline`).expect(409);
     const subVersions = await as(admin).get(`/admin/questions/${first.id}/versions`).expect(200);
     expect(subVersions.body.data).toEqual([expect.objectContaining({ version: 1, materialVersion: 1 })]);
+  });
+
+  it('should forbid a reviewer from publishing or rejecting a question they submitted', async () => {
+    const own = await createQuestion(single('自审题目'));
+    const other = await createQuestion(single('他审题目'));
+    await as(reviewer).post(`/admin/questions/${own.id}/submit`).expect(200);
+    await as(admin).post(`/admin/questions/${other.id}/submit`).expect(200);
+
+    const selfReviewForbidden = { code: 403, message: '不能审核自己提交的题目', data: { questionIds: [own.id] } };
+    const publish = await as(reviewer)
+      .post(`/admin/questions/${own.id}/publish`)
+      .set('x-custom-lang', 'zh')
+      .expect(403);
+    expect(publish.body).toEqual(selfReviewForbidden);
+    const reject = await as(reviewer)
+      .post(`/admin/questions/${own.id}/reject`, { reason: '自审' })
+      .set('x-custom-lang', 'zh')
+      .expect(403);
+    expect(reject.body).toEqual(selfReviewForbidden);
+    const batch = await as(reviewer)
+      .post('/admin/questions/batch-publish', { ids: [own.id, other.id] })
+      .set('x-custom-lang', 'zh')
+      .expect(403);
+    expect(batch.body).toEqual(selfReviewForbidden);
+
+    await as(reviewer).post(`/admin/questions/${other.id}/publish`).expect(200);
+    const published = await as(admin).post(`/admin/questions/${own.id}/publish`).expect(200);
+    expect(published.body.data).toMatchObject({
+      status: 'PUBLISHED',
+      submitter: { name: reviewer.email },
+      reviewer: { name: admin.email },
+      submittedAt: expect.any(String),
+      reviewedAt: expect.any(String),
+    });
   });
 
   it('should list questions with filters', async () => {

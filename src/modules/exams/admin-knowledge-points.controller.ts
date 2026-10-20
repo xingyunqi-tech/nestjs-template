@@ -14,6 +14,9 @@ import { PermissionsGuard } from '../../core/permissions/permissions.guard';
 import { RequirePermissions } from '../../core/permissions/permissions.decorator';
 import { Permission } from '../../core/permissions/permission.enum';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
+import { Auditable, AuditAction } from '../../infrastructure/audit';
+
+const ENTITY_TYPE = 'KnowledgePoint';
 
 @ApiTags('Admin Knowledge Points')
 @ApiBearerAuth()
@@ -25,6 +28,7 @@ export class AdminKnowledgePointsController {
 
   @ApiOperation({ operationId: 'adminCreateKnowledgePoint', summary: '新增知识点' })
   @ApiOkResponse({ type: KnowledgePoint })
+  @Auditable({ action: AuditAction.CREATE, entityType: ENTITY_TYPE })
   @Post()
   @HttpCode(HttpStatus.OK)
   create(@Body() dto: CreateKnowledgePointDto): Promise<KnowledgePoint> {
@@ -34,6 +38,7 @@ export class AdminKnowledgePointsController {
   @ApiOperation({ operationId: 'adminUpdateKnowledgePoint', summary: '修改知识点名称或排序' })
   @ApiOkResponse({ type: KnowledgePoint })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.UPDATE, entityType: ENTITY_TYPE })
   @Patch(':id')
   @HttpCode(HttpStatus.OK)
   update(@Param('id', ParseUuidPipe) id: string, @Body() dto: UpdateKnowledgePointDto): Promise<KnowledgePoint> {
@@ -42,6 +47,7 @@ export class AdminKnowledgePointsController {
 
   @ApiOperation({ operationId: 'adminDeleteKnowledgePoint', summary: '删除知识点（无子节点且无关联题目）' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.DELETE, entityType: ENTITY_TYPE })
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   remove(@Param('id', ParseUuidPipe) id: string): Promise<void> {
@@ -51,6 +57,7 @@ export class AdminKnowledgePointsController {
   @ApiOperation({ operationId: 'adminMoveKnowledgePoint', summary: '移动知识点' })
   @ApiOkResponse({ type: KnowledgePoint })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.MOVE, entityType: ENTITY_TYPE })
   @Post(':id/move')
   @HttpCode(HttpStatus.OK)
   move(@Param('id', ParseUuidPipe) id: string, @Body() dto: MoveKnowledgePointDto): Promise<KnowledgePoint> {
@@ -60,6 +67,7 @@ export class AdminKnowledgePointsController {
   @ApiOperation({ operationId: 'adminMigrateKnowledgePointQuestions', summary: '把知识点的题目迁移到另一叶子知识点' })
   @ApiOkResponse({ type: MigrateKnowledgePointQuestionsResultDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.MOVE, entityType: ENTITY_TYPE })
   @Post(':id/migrate-questions')
   @HttpCode(HttpStatus.OK)
   migrateQuestions(

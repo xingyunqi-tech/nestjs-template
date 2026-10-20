@@ -29,6 +29,18 @@ import { PaginationResponse, PaginationResponseDto } from '../../common/dto/pagi
 import { pagination } from '../../common/pagination';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import type { RequestWithUser } from '../../common/types/request-with-user.type';
+import { Auditable, AuditAction } from '../../infrastructure/audit';
+
+const ENTITY_TYPE = 'Paper';
+
+const summarizePaperQuestions = (dto: SetPaperQuestionsDto): Record<string, unknown> => ({
+  sectionCount: dto.sections.length,
+  questionCount: dto.questions.length,
+});
+
+const copiedFrom = (_body: unknown, params: Record<string, string>): Record<string, unknown> => ({
+  sourceId: params.id,
+});
 
 @ApiTags('Admin Papers')
 @ApiBearerAuth()
@@ -54,6 +66,7 @@ export class AdminPapersController {
 
   @ApiOperation({ operationId: 'adminCreatePaper', summary: '创建试卷（草稿）' })
   @ApiOkResponse({ type: AdminPaperDto })
+  @Auditable({ action: AuditAction.CREATE, entityType: ENTITY_TYPE })
   @Post()
   @HttpCode(HttpStatus.OK)
   create(@Body() dto: CreatePaperDto, @Request() request: RequestWithUser): Promise<AdminPaperDto> {
@@ -72,6 +85,7 @@ export class AdminPapersController {
   @ApiOperation({ operationId: 'adminUpdatePaper', summary: '更新试卷信息' })
   @ApiOkResponse({ type: AdminPaperDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.UPDATE, entityType: ENTITY_TYPE })
   @Patch(':id')
   @HttpCode(HttpStatus.OK)
   update(
@@ -84,6 +98,7 @@ export class AdminPapersController {
 
   @ApiOperation({ operationId: 'adminDeletePaper', summary: '删除草稿试卷' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.DELETE, entityType: ENTITY_TYPE })
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   remove(@Param('id', ParseUuidPipe) id: string): Promise<void> {
@@ -93,6 +108,7 @@ export class AdminPapersController {
   @ApiOperation({ operationId: 'adminSetPaperQuestions', summary: '整体设置分区、题目、顺序与分值（仅草稿）' })
   @ApiOkResponse({ type: AdminPaperDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.UPDATE, entityType: ENTITY_TYPE, summarizeBody: summarizePaperQuestions })
   @Put(':id/questions')
   @HttpCode(HttpStatus.OK)
   setQuestions(
@@ -107,6 +123,7 @@ export class AdminPapersController {
   @ApiOkResponse({ type: AdminPaperDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @RequirePermissions(Permission.CONTENT_REVIEW)
+  @Auditable({ action: AuditAction.PUBLISH, entityType: ENTITY_TYPE })
   @Post(':id/publish')
   @HttpCode(HttpStatus.OK)
   publish(@Param('id', ParseUuidPipe) id: string, @Request() request: RequestWithUser): Promise<AdminPaperDto> {
@@ -117,6 +134,7 @@ export class AdminPapersController {
   @ApiOkResponse({ type: AdminPaperDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @RequirePermissions(Permission.CONTENT_REVIEW)
+  @Auditable({ action: AuditAction.OFFLINE, entityType: ENTITY_TYPE })
   @Post(':id/offline')
   @HttpCode(HttpStatus.OK)
   offline(@Param('id', ParseUuidPipe) id: string, @Request() request: RequestWithUser): Promise<AdminPaperDto> {
@@ -126,6 +144,7 @@ export class AdminPapersController {
   @ApiOperation({ operationId: 'adminCopyPaper', summary: '复制为新的草稿试卷' })
   @ApiOkResponse({ type: AdminPaperDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.COPY, entityType: ENTITY_TYPE, entityIdFrom: 'response', summarizeBody: copiedFrom })
   @Post(':id/copy')
   @HttpCode(HttpStatus.OK)
   copy(@Param('id', ParseUuidPipe) id: string, @Request() request: RequestWithUser): Promise<AdminPaperDto> {

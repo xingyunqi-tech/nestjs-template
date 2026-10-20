@@ -30,6 +30,9 @@ import { PaginationResponse, PaginationResponseDto } from '../../common/dto/pagi
 import { pagination } from '../../common/pagination';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import type { RequestWithUser } from '../../common/types/request-with-user.type';
+import { Auditable, AuditAction } from '../../infrastructure/audit';
+
+const ENTITY_TYPE = 'PaperRule';
 
 @ApiTags('Admin Paper Rules')
 @ApiBearerAuth()
@@ -58,6 +61,7 @@ export class AdminPaperRulesController {
 
   @ApiOperation({ operationId: 'adminCreatePaperRule', summary: '创建组卷规则（草稿）' })
   @ApiOkResponse({ type: PaperRule })
+  @Auditable({ action: AuditAction.CREATE, entityType: ENTITY_TYPE })
   @Post()
   @HttpCode(HttpStatus.OK)
   create(@Body() dto: CreatePaperRuleDto): Promise<PaperRule> {
@@ -76,6 +80,7 @@ export class AdminPaperRulesController {
   @ApiOperation({ operationId: 'adminUpdatePaperRule', summary: '更新组卷规则' })
   @ApiOkResponse({ type: PaperRule })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.UPDATE, entityType: ENTITY_TYPE })
   @Patch(':id')
   @HttpCode(HttpStatus.OK)
   async update(
@@ -91,6 +96,7 @@ export class AdminPaperRulesController {
 
   @ApiOperation({ operationId: 'adminDeletePaperRule', summary: '删除组卷规则' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Auditable({ action: AuditAction.DELETE, entityType: ENTITY_TYPE })
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   remove(@Param('id', ParseUuidPipe) id: string): Promise<void> {

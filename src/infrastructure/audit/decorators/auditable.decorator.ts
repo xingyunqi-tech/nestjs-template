@@ -13,16 +13,27 @@ export interface AuditableOptions {
   entityType: string;
 
   /**
-   * The name of the route parameter containing the entity ID
+   * Route parameter(s) holding the entity ID; several parameters are joined with ':'
    * @default 'id'
    */
-  idParam?: string;
+  idParam?: string | string[];
 
   /**
-   * Whether to include the request body in the audit log
+   * 'param' uses the route parameter and falls back to the response `id`; 'response' does the opposite
+   * @default 'param'
+   */
+  entityIdFrom?: 'param' | 'response';
+
+  /**
+   * Whether to include the validated request body in the audit log
    * @default true
    */
   includeBody?: boolean;
+
+  /**
+   * Replaces the recorded body; receives the validated body and the route parameters
+   */
+  summarizeBody?(body: unknown, params: Record<string, string>): Record<string, unknown>;
 
   /**
    * Whether to include the response in the audit log
@@ -51,6 +62,7 @@ export const AUDITABLE_KEY = 'auditable';
 export const Auditable = (options: AuditableOptions): MethodDecorator =>
   SetMetadata(AUDITABLE_KEY, {
     idParam: 'id',
+    entityIdFrom: 'param',
     includeBody: true,
     includeResponse: false,
     ...options,

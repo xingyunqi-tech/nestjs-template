@@ -1,5 +1,5 @@
 import type { Mocked } from 'vitest';
-import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { QuestionsService } from './questions.service';
 import {
   CreateQuestionData,
@@ -18,12 +18,14 @@ import { QuestionSource } from './domain/question-source';
 import { QuestionChangeType, QuestionVersion } from './domain/question-version';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { QuestionImportItem, QuestionImportItemError } from './question-import';
+import { OperatorProfile, QuestionOperator } from './domain/question-operator';
 import { SubjectsService } from '../exams/subjects.service';
 import { FilesService } from '../files/files.service';
 import { FileUrlResolver } from '../files/file-url.resolver';
 import { FileVisibility } from '../files/domain/file-visibility';
 import { BusinessException } from '../../common/exceptions/business.exception';
 import { TransactionHandle } from '../../common/database/transaction-handle';
+import { RoleEnum } from '../../common/enums/roles/roles.enum';
 
 const SUBJECT = 's1';
 const PUBLIC_FILE = '11111111-1111-4111-8111-111111111111';
@@ -33,6 +35,15 @@ const PUBLIC_URL = 'https://cdn.example.com/p.png';
 const FILES = [
   { id: PUBLIC_FILE, path: '/p.png', visibility: FileVisibility.PUBLIC },
   { id: PRIVATE_FILE, path: '/q.png', visibility: FileVisibility.PRIVATE },
+];
+const EDITOR: QuestionOperator = { id: 1, roleId: RoleEnum.editor };
+const REVIEWER: QuestionOperator = { id: 2, roleId: RoleEnum.reviewer };
+const ADMIN: QuestionOperator = { id: 3, roleId: RoleEnum.admin };
+const IMPORTER_ID = 4;
+const PROFILES: OperatorProfile[] = [
+  { id: EDITOR.id, nickname: '编辑小王', email: 'editor@example.com' },
+  { id: REVIEWER.id, nickname: null, email: 'reviewer@example.com' },
+  { id: ADMIN.id, nickname: ' ', email: null },
 ];
 const OPTIONS = [
   { key: 'A', content: '甲' },
@@ -109,6 +120,11 @@ class FakeStore implements QuestionTransaction {
       knowledgePointIds: [],
       statAnswered: 0,
       statCorrect: 0,
+      submittedBy: null,
+      submittedAt: null,
+      reviewedBy: null,
+      reviewedAt: null,
+      rejectReason: null,
     });
     this.questions.set(id, question);
     return Promise.resolve(this.snapshot(id));
@@ -188,6 +204,9 @@ describe('QuestionsService', () => {
       findDrawCandidates,
       findManyWithPaginationAndCount: vi.fn(),
       findVersions: vi.fn(),
+      findOperatorProfiles: vi.fn((ids: number[]) =>
+        Promise.resolve(PROFILES.filter((profile) => ids.includes(profile.id))),
+      ),
       adjustStatCorrect: vi.fn().mockResolvedValue(undefined),
       findVersionsByKeys: (keys) =>
         Promise.resolve(
@@ -222,8 +241,15 @@ describe('QuestionsService', () => {
     );
   });
 
-  const create = (dto: CreateQuestionDto) => service.create(dto, 1);
-  const act = (id: string, action: QuestionAction) => service.changeStatus(id, action, 1);
+  const create = (dto: CreateQuestionDto) => service.create(dto, EDITOR.id);
+  const act = (
+    id: string,
+    action: QuestionAction,
+    operator: QuestionOperator = action === QuestionAction.SUBMIT ? EDITOR : REVIEWER,
+  ) =>
+    action === QuestionAction.REJECT
+      ? service.reject(id, '题干有误', operator)
+      : service.changeStatus(id, action, operator);
   const publish = async (id: string) => {
     await act(id, QuestionAction.SUBMIT);
     return act(id, QuestionAction.PUBLISH);
@@ -414,7 +440,7 @@ describe('QuestionsService', () => {
       await act(material.id, QuestionAction.SUBMIT);
       await act(standalone.id, QuestionAction.SUBMIT);
 
-      await expect(service.batchPublish({ ids: [sub.id, standalone.id] })).resolves.toEqual({ count: 3 });
+      await expect(service.batchPublish({ ids: [sub.id, standalone.id] }, REVIEWER)).resolves.toEqual({ count: 3 });
       expect(store.questions.get(material.id)!.status).toBe(QuestionStatus.PUBLISHED);
     });
 
@@ -423,8 +449,248 @@ describe('QuestionsService', () => {
       const draft = await create(singleDto({ stem: '草稿' }));
       await act(reviewing.id, QuestionAction.SUBMIT);
 
-      await expect(service.batchPublish({ ids: [reviewing.id, draft.id] })).rejects.toBeInstanceOf(ConflictException);
-      await expect(service.batchPublish({ ids: [reviewing.id, 'missing'] })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.batchPublish({ ids: [reviewing.id, draft.id] }, REVIEWER)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      await expect(service.batchPublish({ ids: [reviewing.id, 'missing'] }, REVIEWER)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('audit fields', () => {
+    const auditOf = (id: string) => {
+      const { createdBy, submittedBy, submittedAt, reviewedBy, reviewedAt, rejectReason } = store.questions.get(id)!;
+      return { createdBy, submittedBy, submittedAt, reviewedBy, reviewedAt, rejectReason };
+    };
+
+    it('should record the creator and leave review fields empty on create', async () => {
+      const created = await create(singleDto());
+
+      expect(auditOf(created.id)).toEqual({
+        createdBy: EDITOR.id,
+        submittedBy: null,
+        submittedAt: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectReason: null,
+      });
+      expect(created.creator).toEqual({ id: EDITOR.id, name: '编辑小王' });
+      expect(created.submitter).toBeNull();
+      expect(created.reviewer).toBeNull();
+    });
+
+    it('should record the submitter on the material and every sub-question', async () => {
+      const material = await create(materialDto());
+      const sub = await create(singleDto({ parentId: material.id }));
+
+      const submitted = await act(material.id, QuestionAction.SUBMIT);
+
+      for (const id of [material.id, sub.id]) {
+        expect(auditOf(id)).toMatchObject({
+          submittedBy: EDITOR.id,
+          submittedAt: expect.any(Date),
+          reviewedBy: null,
+        });
+      }
+      expect(submitted.submitter).toEqual({ id: EDITOR.id, name: '编辑小王' });
+      expect(submitted.children?.[0].submitter).toEqual({ id: EDITOR.id, name: '编辑小王' });
+    });
+
+    it('should record the reviewer and reason on reject and clear the review fields on the next submit', async () => {
+      const material = await create(materialDto());
+      const sub = await create(singleDto({ parentId: material.id }));
+      await act(material.id, QuestionAction.SUBMIT);
+
+      const rejected = await service.reject(material.id, '解析不完整', REVIEWER);
+
+      for (const id of [material.id, sub.id]) {
+        expect(auditOf(id)).toMatchObject({
+          reviewedBy: REVIEWER.id,
+          reviewedAt: expect.any(Date),
+          rejectReason: '解析不完整',
+        });
+      }
+      expect(rejected).toMatchObject({
+        status: QuestionStatus.DRAFT,
+        rejectReason: '解析不完整',
+        reviewer: { id: REVIEWER.id, name: 'reviewer@example.com' },
+      });
+
+      await act(material.id, QuestionAction.SUBMIT);
+      for (const id of [material.id, sub.id]) {
+        expect(auditOf(id)).toMatchObject({
+          submittedBy: EDITOR.id,
+          submittedAt: expect.any(Date),
+          reviewedBy: null,
+          reviewedAt: null,
+          rejectReason: null,
+        });
+      }
+    });
+
+    it('should keep the reject reason when editing a rejected draft', async () => {
+      const { id } = await create(singleDto());
+      await act(id, QuestionAction.SUBMIT);
+      await service.reject(id, '解析不完整', REVIEWER);
+
+      const updated = await service.update(id, { stem: '下列说法正确的是（修订）' }, EDITOR.id);
+
+      expect(updated.rejectReason).toBe('解析不完整');
+      expect(auditOf(id)).toMatchObject({ reviewedBy: REVIEWER.id, rejectReason: '解析不完整' });
+    });
+
+    it('should record the reviewer on publish and offline for the whole group', async () => {
+      const material = await create(materialDto());
+      const sub = await create(singleDto({ parentId: material.id }));
+      await act(material.id, QuestionAction.SUBMIT);
+
+      await act(material.id, QuestionAction.PUBLISH);
+      const publishedAt = auditOf(sub.id).reviewedAt;
+      expect([material.id, sub.id].map((id) => auditOf(id).reviewedBy)).toEqual([REVIEWER.id, REVIEWER.id]);
+      expect(publishedAt).toBeInstanceOf(Date);
+
+      await act(material.id, QuestionAction.OFFLINE, ADMIN);
+      expect([material.id, sub.id].map((id) => auditOf(id).reviewedBy)).toEqual([ADMIN.id, ADMIN.id]);
+      for (const id of [material.id, sub.id]) {
+        expect(auditOf(id).reviewedAt).toBeInstanceOf(Date);
+      }
+      expect(auditOf(material.id).submittedBy).toBe(EDITOR.id);
+    });
+
+    it('should record the reviewer for every group of a batch publish', async () => {
+      const material = await create(materialDto());
+      const sub = await create(singleDto({ parentId: material.id }));
+      const standalone = await create(singleDto({ stem: '独立题' }));
+      await act(material.id, QuestionAction.SUBMIT);
+      await act(standalone.id, QuestionAction.SUBMIT);
+
+      await service.batchPublish({ ids: [sub.id, standalone.id] }, REVIEWER);
+
+      expect([material.id, sub.id, standalone.id].map((id) => auditOf(id).reviewedBy)).toEqual([
+        REVIEWER.id,
+        REVIEWER.id,
+        REVIEWER.id,
+      ]);
+    });
+
+    it('should name operators by nickname, email and then id', async () => {
+      const { id } = await create(singleDto());
+      await act(id, QuestionAction.SUBMIT, ADMIN);
+      await act(id, QuestionAction.PUBLISH, { id: 99, roleId: RoleEnum.reviewer });
+
+      const detail = await service.getAdminDetail(id, EDITOR.id);
+
+      expect([detail.creator, detail.submitter, detail.reviewer]).toEqual([
+        { id: EDITOR.id, name: '编辑小王' },
+        { id: ADMIN.id, name: `用户${ADMIN.id}` },
+        { id: 99, name: '用户99' },
+      ]);
+    });
+
+    it('should look up operators of a page in one query', async () => {
+      const first = await create(singleDto());
+      const second = await create(singleDto({ stem: '第二题' }));
+      await act(second.id, QuestionAction.SUBMIT);
+      await act(second.id, QuestionAction.PUBLISH);
+      vi.mocked(repository.findManyWithPaginationAndCount).mockResolvedValue({
+        data: [store.snapshot(first.id), store.snapshot(second.id)],
+        total: 2,
+      });
+      vi.mocked(repository.findOperatorProfiles).mockClear();
+
+      const { data } = await service.findManyWithPaginationAndCount({ paginationOptions: { page: 1, limit: 20 } }, 1);
+
+      expect(repository.findOperatorProfiles).toHaveBeenCalledTimes(1);
+      expect(repository.findOperatorProfiles).toHaveBeenCalledWith([EDITOR.id, REVIEWER.id]);
+      expect(data.map((item) => [item.creator?.id, item.submitter?.id ?? null, item.reviewer?.id ?? null])).toEqual([
+        [EDITOR.id, null, null],
+        [EDITOR.id, EDITOR.id, REVIEWER.id],
+      ]);
+    });
+
+    it('should skip the operator lookup when no operator is recorded', async () => {
+      const { id } = await create(singleDto());
+      store.questions.get(id)!.createdBy = null;
+      vi.mocked(repository.findOperatorProfiles).mockClear();
+
+      const detail = await service.getAdminDetail(id, 1);
+
+      expect(repository.findOperatorProfiles).not.toHaveBeenCalled();
+      expect(detail.creator).toBeNull();
+    });
+  });
+
+  describe('self review', () => {
+    const SUBMITTER: QuestionOperator = { id: 5, roleId: RoleEnum.reviewer };
+
+    it('should forbid a non-admin from publishing or rejecting a question they submitted', async () => {
+      const { id } = await create(singleDto());
+      await act(id, QuestionAction.SUBMIT, SUBMITTER);
+
+      for (const attempt of [act(id, QuestionAction.PUBLISH, SUBMITTER), service.reject(id, '原因', SUBMITTER)]) {
+        const error = await attempt.catch((caught: unknown) => caught);
+        expect(error).toBeInstanceOf(ForbiddenException);
+        expect(error).toMatchObject({ response: { error: 'selfReviewForbidden' } });
+      }
+      expect(store.questions.get(id)).toMatchObject({ status: QuestionStatus.REVIEWING, reviewedBy: null });
+    });
+
+    it('should let an admin publish a question they submitted', async () => {
+      const { id } = await create(singleDto());
+      await act(id, QuestionAction.SUBMIT, ADMIN);
+
+      await expect(act(id, QuestionAction.PUBLISH, ADMIN)).resolves.toMatchObject({
+        status: QuestionStatus.PUBLISHED,
+      });
+    });
+
+    it('should let the submitter republish an offline question', async () => {
+      const { id } = await create(singleDto());
+      await act(id, QuestionAction.SUBMIT, SUBMITTER);
+      await act(id, QuestionAction.PUBLISH, REVIEWER);
+      await act(id, QuestionAction.OFFLINE, REVIEWER);
+
+      await expect(act(id, QuestionAction.PUBLISH, SUBMITTER)).resolves.toMatchObject({
+        status: QuestionStatus.PUBLISHED,
+        reviewer: { id: SUBMITTER.id },
+      });
+    });
+
+    it('should forbid the whole batch and list the questions the operator submitted', async () => {
+      const own = await create(singleDto({ stem: '自己提交' }));
+      const material = await create(materialDto());
+      const sub = await create(singleDto({ parentId: material.id }));
+      const other = await create(singleDto({ stem: '他人提交' }));
+      await act(own.id, QuestionAction.SUBMIT, SUBMITTER);
+      await act(material.id, QuestionAction.SUBMIT, SUBMITTER);
+      await act(other.id, QuestionAction.SUBMIT, EDITOR);
+
+      const error = await service
+        .batchPublish({ ids: [own.id, sub.id, other.id] }, SUBMITTER)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect((error as ForbiddenException).getResponse()).toEqual({
+        error: 'selfReviewForbidden',
+        errors: { questionIds: expect.arrayContaining([own.id, material.id]) },
+      });
+      expect(
+        ((error as ForbiddenException).getResponse() as { errors: { questionIds: string[] } }).errors.questionIds,
+      ).toHaveLength(2);
+      expect([own.id, material.id, sub.id, other.id].map((id) => store.questions.get(id)!.status)).toEqual([
+        QuestionStatus.REVIEWING,
+        QuestionStatus.REVIEWING,
+        QuestionStatus.REVIEWING,
+        QuestionStatus.REVIEWING,
+      ]);
+    });
+
+    it('should let an admin batch publish questions they submitted', async () => {
+      const { id } = await create(singleDto());
+      await act(id, QuestionAction.SUBMIT, ADMIN);
+
+      await expect(service.batchPublish({ ids: [id] }, ADMIN)).resolves.toEqual({ count: 1 });
     });
   });
 
@@ -956,6 +1222,7 @@ describe('QuestionsService', () => {
         root: materialItem('m'),
         children: [item('c1', { stem: '小题一', sort: 1 }), item('c2', { stem: '小题二', sort: 2 })],
         publish: false,
+        operatorId: IMPORTER_ID,
       });
 
       const children = await store.findChildrenForUpdate([result.rootId]);
@@ -973,6 +1240,7 @@ describe('QuestionsService', () => {
           root: materialItem('m'),
           children: [item('c1', { stem: '小题一' }), item('c2', { stem: '小题二', knowledgePointIds: ['branch'] })],
           publish: false,
+          operatorId: IMPORTER_ID,
         })
         .catch((caught: unknown) => caught);
 
@@ -984,7 +1252,13 @@ describe('QuestionsService', () => {
 
     it('should validate content before opening the transaction', async () => {
       const error = await service
-        .importUnit({ subjectId: SUBJECT, root: item('q', { answer: { keys: ['Z'] } }), children: [], publish: false })
+        .importUnit({
+          subjectId: SUBJECT,
+          root: item('q', { answer: { keys: ['Z'] } }),
+          children: [],
+          publish: false,
+          operatorId: IMPORTER_ID,
+        })
         .catch((caught: unknown) => caught);
 
       expect((error as QuestionImportItemError).ref).toBe('q');
@@ -997,11 +1271,64 @@ describe('QuestionsService', () => {
         root: materialItem('m'),
         children: [item('c1')],
         publish: true,
+        operatorId: IMPORTER_ID,
       });
 
       expect(store.snapshot(result.rootId)).toMatchObject({ status: QuestionStatus.PUBLISHED, currentVersion: 1 });
       expect(store.snapshot(result.ids.c1)).toMatchObject({ status: QuestionStatus.PUBLISHED, currentVersion: 1 });
       expect(store.deltas).toEqual([{ knowledgePointId: 'leaf1', delta: 1 }]);
+    });
+
+    it('should record the importer on created and published rows', async () => {
+      const result = await service.importUnit({
+        subjectId: SUBJECT,
+        root: materialItem('m'),
+        children: [item('c1')],
+        publish: true,
+        operatorId: IMPORTER_ID,
+      });
+
+      for (const id of [result.rootId, result.ids.c1]) {
+        expect(store.snapshot(id)).toMatchObject({
+          createdBy: IMPORTER_ID,
+          submittedBy: IMPORTER_ID,
+          submittedAt: expect.any(Date),
+          reviewedBy: IMPORTER_ID,
+          reviewedAt: expect.any(Date),
+          rejectReason: null,
+        });
+      }
+    });
+
+    it('should leave operator fields empty when the import has no operator', async () => {
+      const result = await service.importUnit({
+        subjectId: SUBJECT,
+        root: item('q'),
+        children: [],
+        publish: true,
+        operatorId: null,
+      });
+
+      expect(store.snapshot(result.rootId)).toMatchObject({
+        status: QuestionStatus.PUBLISHED,
+        createdBy: null,
+        submittedBy: null,
+        reviewedBy: null,
+      });
+    });
+
+    it('should keep the creator of an existing question it updates', async () => {
+      const { id } = await create(singleDto());
+
+      await service.importUnit({
+        subjectId: SUBJECT,
+        root: item('q', { analysis: '新解析' }, id),
+        children: [],
+        publish: false,
+        operatorId: IMPORTER_ID,
+      });
+
+      expect(store.snapshot(id).createdBy).toBe(EDITOR.id);
     });
 
     it('should update a published question with an EDIT version', async () => {
@@ -1013,6 +1340,7 @@ describe('QuestionsService', () => {
         root: item('q', { analysis: '新解析' }, id),
         children: [],
         publish: true,
+        operatorId: IMPORTER_ID,
       });
 
       expect(store.snapshot(id)).toMatchObject({ analysis: '新解析', currentVersion: 2 });
@@ -1029,6 +1357,7 @@ describe('QuestionsService', () => {
           root: item('q', { answer: { keys: ['A'] } }, id),
           children: [],
           publish: false,
+          operatorId: IMPORTER_ID,
         })
         .catch((caught: unknown) => caught);
 
@@ -1048,6 +1377,7 @@ describe('QuestionsService', () => {
           root: { ref: 'm', id: material.id, fields: {} },
           children: [item('c', { sort: sort + 1 }, sub.id)],
           publish: false,
+          operatorId: IMPORTER_ID,
         })
         .catch((caught: unknown) => caught);
 
@@ -1063,13 +1393,25 @@ describe('QuestionsService', () => {
       store.questions.get(id)!.subjectId = 'other';
 
       const otherSubject = await service
-        .importUnit({ subjectId: SUBJECT, root: item('q', {}, id), children: [], publish: false })
+        .importUnit({
+          subjectId: SUBJECT,
+          root: item('q', {}, id),
+          children: [],
+          publish: false,
+          operatorId: IMPORTER_ID,
+        })
         .catch((caught: unknown) => caught);
       expect((otherSubject as QuestionImportItemError).cause).toBeInstanceOf(UnprocessableEntityException);
 
       store.questions.get(id)!.subjectId = SUBJECT;
       const asChild = await service
-        .importUnit({ subjectId: SUBJECT, root: materialItem('m'), children: [item('c', {}, id)], publish: false })
+        .importUnit({
+          subjectId: SUBJECT,
+          root: materialItem('m'),
+          children: [item('c', {}, id)],
+          publish: false,
+          operatorId: IMPORTER_ID,
+        })
         .catch((caught: unknown) => caught);
       expect((asChild as QuestionImportItemError).ref).toBe('c');
       expect(store.questions.size).toBe(1);

@@ -52,7 +52,7 @@ pnpm import:content ./xingce-sample.zip --publish  # 导入成功的题目与试
 
 ### 管理端接口
 
-权限 `content:manage`，`publishOnImport=true` 还需要 `content:review`。
+权限 `content:manage`，`publishOnImport=true` 仅管理员可用。
 
 | 方法 | 路径                        | 说明                                                                                                          |
 | ---- | --------------------------- | ------------------------------------------------------------------------------------------------------------- |

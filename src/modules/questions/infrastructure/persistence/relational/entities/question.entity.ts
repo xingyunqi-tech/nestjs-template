@@ -9,11 +9,13 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { EntityRelationalHelper } from '../../../../../../common/relational-entity-helper';
+import { UserEntity } from '../../../../../../core/users/infrastructure/persistence/relational/entities/user.entity';
 import { SubjectEntity } from '../../../../../exams/infrastructure/persistence/relational/entities/subject.entity';
 import { QuestionType } from '../../../../domain/question-type';
 import { QuestionStatus } from '../../../../domain/question-status';
 import { QuestionSource } from '../../../../domain/question-source';
 import { QuestionAnswer, QuestionOption } from '../../../../domain/question-answer';
+import { REJECT_REASON_MAX_LENGTH } from '../../../../domain/question';
 
 @Entity({ name: 'question' })
 @Index('UQ_question_subjectId_contentHash', ['subjectId', 'contentHash'], { unique: true })
@@ -87,6 +89,36 @@ export class QuestionEntity extends EntityRelationalHelper {
 
   @Column({ type: 'int', default: 0 })
   statCorrect: number;
+
+  @Column({ type: 'int', nullable: true })
+  createdBy: number | null;
+
+  @ManyToOne(() => UserEntity, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'createdBy', foreignKeyConstraintName: 'FK_question_creator' })
+  creator?: UserEntity | null;
+
+  @Column({ type: 'int', nullable: true })
+  submittedBy: number | null;
+
+  @ManyToOne(() => UserEntity, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'submittedBy', foreignKeyConstraintName: 'FK_question_submitter' })
+  submitter?: UserEntity | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  submittedAt: Date | null;
+
+  @Column({ type: 'int', nullable: true })
+  reviewedBy: number | null;
+
+  @ManyToOne(() => UserEntity, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'reviewedBy', foreignKeyConstraintName: 'FK_question_reviewer' })
+  reviewer?: UserEntity | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  reviewedAt: Date | null;
+
+  @Column({ type: 'varchar', length: REJECT_REASON_MAX_LENGTH, nullable: true })
+  rejectReason: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

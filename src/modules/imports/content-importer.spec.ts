@@ -105,7 +105,7 @@ describe('ContentImporter', () => {
     );
   });
 
-  const run = (content: ImportPackage, publish = false) => importer.run(content, { publish });
+  const run = (content: ImportPackage, publish = false) => importer.run(content, { publish, operatorId: null });
 
   it('should import knowledge points, a material group, standalone questions and a paper', async () => {
     const progress: number[] = [];
@@ -127,7 +127,7 @@ describe('ContentImporter', () => {
         },
         { 'chart.png': PNG_BYTES },
       ),
-      { publish: true },
+      { publish: true, operatorId: 7 },
       (current) => {
         progress.push(current.succeeded + current.failed);
         return Promise.resolve();
@@ -145,6 +145,7 @@ describe('ContentImporter', () => {
     expect(materialUnit).toMatchObject({
       subjectId: SUBJECT_ID,
       publish: true,
+      operatorId: 7,
       root: {
         ref: 'materials:2',
         id: null,

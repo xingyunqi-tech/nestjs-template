@@ -140,7 +140,9 @@
     "checkins",
     "ORDINALITY",
     "llm",
-    "deepseek"
+    "deepseek",
+    "metatype",
+    "paramtypes"
   ],
   "patterns": [
     {

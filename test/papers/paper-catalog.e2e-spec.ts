@@ -383,8 +383,12 @@ describe('Paper catalog', () => {
       .expect(({ body }) => expect(body.data).toMatchObject({ status: 'PUBLISHED' }));
     const listed = await as(admin).get(`/admin/paper-rules?subjectId=${subjectId}`).expect(200);
     expect(listed.body.data.total).toBe(1);
-    await as(admin).delete(`/admin/paper-rules/${ruleId}`).expect(200);
-    await as(admin).get(`/admin/paper-rules/${ruleId}`).expect(404);
+    await as(admin)
+      .delete(`/admin/paper-rules/${ruleId}`)
+      .set('x-custom-lang', 'zh')
+      .expect(409)
+      .expect(({ body }) => expect(body.message).toBe('只能删除草稿状态的内容，已发布过的请下架'));
+    await as(admin).get(`/admin/paper-rules/${ruleId}`).expect(200);
   });
 
   it('should generate the daily set once on first access', async () => {

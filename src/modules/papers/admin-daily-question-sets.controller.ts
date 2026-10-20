@@ -9,6 +9,7 @@ import { RequirePermissions } from '../../core/permissions/permissions.decorator
 import { Permission } from '../../core/permissions/permission.enum';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import type { RequestWithUser } from '../../common/types/request-with-user.type';
+import { Auditable, AuditAction } from '../../infrastructure/audit';
 
 @ApiTags('Admin Daily Question Sets')
 @ApiBearerAuth()
@@ -35,6 +36,7 @@ export class AdminDailyQuestionSetsController {
   @ApiOkResponse({ type: DailyQuestionSet })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiParam({ name: 'date', type: String, format: 'date' })
+  @Auditable({ action: AuditAction.UPDATE, entityType: 'DailyQuestionSet', idParam: ['id', 'date'] })
   @Post(':date/regenerate')
   @HttpCode(HttpStatus.OK)
   regenerate(@Param('id', ParseUuidPipe) id: string, @Param('date') date: string): Promise<DailyQuestionSet> {

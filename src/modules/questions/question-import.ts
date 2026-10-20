@@ -14,6 +14,8 @@ export interface QuestionImportUnit {
   /** 材料的小题，按顺序 */
   children: QuestionImportItem[];
   publish: boolean;
+  /** 写入新建题目的 createdBy；publish 时同时写入 submittedBy、reviewedBy */
+  operatorId: number | null;
 }
 
 export interface QuestionImportResult {

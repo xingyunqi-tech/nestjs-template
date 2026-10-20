@@ -2,13 +2,25 @@ import { NullableType } from '../../../../common/types/nullable.type';
 import { IPaginationOptions } from '../../../../common/types/pagination-options';
 import { Question, QuestionSummary } from '../../domain/question';
 import { QuestionVersion } from '../../domain/question-version';
+import { OperatorProfile } from '../../domain/question-operator';
 import { QuestionDrawCandidate, QuestionDrawCriteria } from '../../domain/question-unit';
 import { QuestionFilterOptions } from '../../dto/query-admin-question.dto';
 import { TransactionHandle } from '../../../../common/database/transaction-handle';
 
 export type CreateQuestionData = Omit<
   Question,
-  'id' | 'currentVersion' | 'knowledgePointIds' | 'statAnswered' | 'statCorrect' | 'createdAt' | 'updatedAt'
+  | 'id'
+  | 'currentVersion'
+  | 'knowledgePointIds'
+  | 'statAnswered'
+  | 'statCorrect'
+  | 'submittedBy'
+  | 'submittedAt'
+  | 'reviewedBy'
+  | 'reviewedAt'
+  | 'rejectReason'
+  | 'createdAt'
+  | 'updatedAt'
 >;
 
 export type QuestionChanges = Partial<
@@ -29,6 +41,11 @@ export type QuestionChanges = Partial<
     | 'contentHash'
     | 'currentVersion'
     | 'status'
+    | 'submittedBy'
+    | 'submittedAt'
+    | 'reviewedBy'
+    | 'reviewedAt'
+    | 'rejectReason'
   >
 >;
 
@@ -96,6 +113,9 @@ export abstract class QuestionRepository {
   }): Promise<{ data: Question[]; total: number }>;
 
   abstract findVersions(questionId: Question['id']): Promise<QuestionVersion[]>;
+
+  /** 未注销的用户，不存在的 id 忽略 */
+  abstract findOperatorProfiles(userIds: number[]): Promise<OperatorProfile[]>;
 
   /** 事务内增减全站首次作答正确人次，不低于 0 */
   abstract adjustStatCorrect(handle: TransactionHandle, id: Question['id'], delta: number): Promise<void>;

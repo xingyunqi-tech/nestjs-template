@@ -164,7 +164,7 @@
   "subjectAmbiguous": "存在多个同名科目，请检查考试与科目名称",
   "importJobNotFound": "导入任务不存在",
   "importErrorReportNotFound": "该导入任务没有错误报告",
-  "importPublishForbidden": "导入后直接发布需要审核发布权限",
+  "importPublishForbidden": "导入后直接发布需要管理员权限",
   "paperRuleReviewRequired": "修改已发布或已下架的组卷规则、以及发布或下架组卷规则需要审核发布权限",
   "importInvalidPackage": "导入包格式无效",
   "importInvalidWorkbook": "content.xlsx 无法读取",
@@ -214,5 +214,7 @@
   "errataNotLinkable": "只能关联同一题目的勘误任务",
   "questionReportNotFound": "纠错单不存在或不属于该题目",
   "consentVersionNotCurrent": "协议版本已更新，请重新查看后同意",
-  "userNotDeleted": "用户未注销"
+  "userNotDeleted": "用户未注销",
+  "selfReviewForbidden": "不能审核自己提交的题目",
+  "rejectReasonLength": "驳回原因须为 1–500 个字"
 }

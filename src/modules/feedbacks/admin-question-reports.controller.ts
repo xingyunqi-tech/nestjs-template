@@ -11,6 +11,9 @@ import { Permission } from '../../core/permissions/permission.enum';
 import { ParseIdPipe } from '../../common/pipes/parse-id.pipe';
 import { PaginationResponse, PaginationResponseDto } from '../../common/dto/pagination-response.dto';
 import { pagination } from '../../common/pagination';
+import { Auditable, AuditAction } from '../../infrastructure/audit';
+
+const ENTITY_TYPE = 'QuestionReport';
 
 @ApiTags('Admin Question Reports')
 @ApiBearerAuth()
@@ -44,6 +47,7 @@ export class AdminQuestionReportsController {
   @ApiOperation({ operationId: 'adminUpdateQuestionReport', summary: '处理纠错单：修改状态、回复、关联勘误' })
   @ApiOkResponse({ type: AdminQuestionReportDetailDto })
   @ApiParam({ name: 'id', type: Number })
+  @Auditable({ action: AuditAction.UPDATE, entityType: ENTITY_TYPE })
   @Patch(':id')
   @HttpCode(HttpStatus.OK)
   update(

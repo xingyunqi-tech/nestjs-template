@@ -164,7 +164,7 @@
   "subjectAmbiguous": "Several subjects match the exam and subject names",
   "importJobNotFound": "Import job not found",
   "importErrorReportNotFound": "This import job has no error report",
-  "importPublishForbidden": "Publishing on import requires the content review permission",
+  "importPublishForbidden": "Publishing on import requires the administrator role",
   "paperRuleReviewRequired": "Changing the status of a paper rule, or editing a rule that is not a draft, requires the content review permission",
   "importInvalidPackage": "Invalid import package",
   "importInvalidWorkbook": "content.xlsx cannot be read",
@@ -214,5 +214,7 @@
   "errataNotLinkable": "Only errata of the same question can be linked",
   "questionReportNotFound": "Question report not found or not for this question",
   "consentVersionNotCurrent": "The agreement version is outdated, please review and agree again",
-  "userNotDeleted": "User has not been deleted"
+  "userNotDeleted": "User has not been deleted",
+  "selfReviewForbidden": "You cannot review questions you submitted",
+  "rejectReasonLength": "The rejection reason must be 1 to 500 characters"
 }

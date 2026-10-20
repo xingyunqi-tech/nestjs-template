@@ -47,6 +47,7 @@ export interface ImportSessionDeps {
 
 export interface ImportRunOptions {
   publish: boolean;
+  operatorId: number | null;
 }
 
 export type ImportProgressListener = (progress: ImportProgress) => Promise<void>;
@@ -572,6 +573,7 @@ export class ImportSession {
         root: root.item,
         children: children.map((child) => child.item),
         publish: this.options.publish,
+        operatorId: this.options.operatorId,
       });
       return { kind: 'written', ...result };
     } catch (error) {

@@ -4,6 +4,8 @@ import { QuestionStatus } from './question-status';
 import { QuestionSource } from './question-source';
 import { QuestionAnswer, QuestionOption } from './question-answer';
 
+export const REJECT_REASON_MAX_LENGTH = 500;
+
 export class Question {
   @ApiProperty({ type: String, format: 'uuid' })
   id: string;
@@ -67,6 +69,24 @@ export class Question {
 
   @ApiProperty({ type: Number })
   statCorrect: number;
+
+  @ApiProperty({ type: Number, nullable: true })
+  createdBy: number | null;
+
+  @ApiProperty({ type: Number, nullable: true })
+  submittedBy: number | null;
+
+  @ApiProperty({ type: Date, nullable: true })
+  submittedAt: Date | null;
+
+  @ApiProperty({ type: Number, nullable: true, description: '最近一次发布、驳回或下架的操作人' })
+  reviewedBy: number | null;
+
+  @ApiProperty({ type: Date, nullable: true })
+  reviewedAt: Date | null;
+
+  @ApiProperty({ type: String, nullable: true, description: '最近一次驳回的原因，再次提交审核时清空' })
+  rejectReason: string | null;
 
   @ApiProperty()
   createdAt: Date;

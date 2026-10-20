@@ -28,8 +28,6 @@ import { FilesService } from '../files/files.service';
 import { FileStorageService } from '../files/file-storage.service';
 import { FilePurpose } from '../files/domain/file-purpose';
 import { FILE_PURPOSE_RULES } from '../files/file-purposes';
-import { PermissionsService } from '../../core/permissions/permissions.service';
-import { Permission } from '../../core/permissions/permission.enum';
 import { RoleEnum } from '../../common/enums/roles/roles.enum';
 import { AllConfigType } from '../../config/config.type';
 import { IPaginationOptions } from '../../common/types/pagination-options';
@@ -73,14 +71,13 @@ export class ImportsService {
     private readonly contentImporter: ContentImporter,
     private readonly filesService: FilesService,
     private readonly fileStorageService: FileStorageService,
-    private readonly permissionsService: PermissionsService,
     private readonly configService: ConfigService<AllConfigType>,
     @Optional() private readonly alertReporter?: AlertReporter,
     @Optional() private readonly i18n?: I18nService,
   ) {}
 
   async create(input: CreateImportInput, requester: ImportRequester): Promise<ImportJob> {
-    if (input.publishOnImport && !(await this.canPublish(requester))) {
+    if (input.publishOnImport && requester.roleId !== RoleEnum.admin) {
       throw new ForbiddenException({ error: 'importPublishForbidden' });
     }
     let fileId: string;
@@ -164,7 +161,7 @@ export class ImportsService {
       let reported = 0;
       const outcome = await this.contentImporter.run(
         pkg,
-        { publish: job.publishOnImport },
+        { publish: job.publishOnImport, operatorId: job.createdBy },
         async (progress: ImportProgress) => {
           const processed = progress.succeeded + progress.failed + progress.skipped;
           if (processed === 0 || processed - reported >= IMPORT_PROGRESS_INTERVAL) {
@@ -244,12 +241,5 @@ export class ImportsService {
     } catch (error) {
       this.logger.error(`Failed to raise alert for import job ${id}: ${String(error)}`);
     }
-  }
-
-  private async canPublish(requester: ImportRequester): Promise<boolean> {
-    return (
-      requester.roleId !== null &&
-      (await this.permissionsService.hasPermission(requester.roleId, Permission.CONTENT_REVIEW))
-    );
   }
 }

@@ -494,6 +494,15 @@ export class QuestionsService {
     if (current.status === QuestionStatus.REVIEWING) {
       throw conflict('questionUnderReview');
     }
+    // 试卷按小题顺序套用 childScores，材料发布后小题顺序固定
+    if (
+      current.parentId !== null &&
+      current.status !== QuestionStatus.DRAFT &&
+      dto.sort !== undefined &&
+      dto.sort !== current.sort
+    ) {
+      throw unprocessable('sort', 'subQuestionSortLocked');
+    }
 
     const type = dto.type ?? current.type;
     const next: QuestionContent = {

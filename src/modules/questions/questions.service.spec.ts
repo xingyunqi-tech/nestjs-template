@@ -562,6 +562,27 @@ describe('QuestionsService', () => {
       expect(store.questions.get(sub.id)!.contentHash).not.toBe(oldHash);
     });
 
+    it('should reject reordering sub-questions after the material is published', async () => {
+      const material = await create(materialDto());
+      const sub = await create(singleDto({ parentId: material.id }));
+      const { sort } = store.questions.get(sub.id)!;
+      await publish(material.id);
+
+      await expect(service.update(sub.id, { sort: sort + 1 }, 1)).rejects.toMatchObject({
+        response: { errors: { sort: 'subQuestionSortLocked' } },
+      });
+      await expect(service.update(sub.id, { sort, analysis: '新解析' }, 1)).resolves.toMatchObject({
+        analysis: '新解析',
+      });
+    });
+
+    it('should allow reordering sub-questions of a draft material', async () => {
+      const material = await create(materialDto());
+      const sub = await create(singleDto({ parentId: material.id }));
+
+      await expect(service.update(sub.id, { sort: 5 }, 1)).resolves.toMatchObject({ sort: 5 });
+    });
+
     it('should reject converting between material and other types', async () => {
       const { id } = await create(singleDto());
 
@@ -1013,6 +1034,28 @@ describe('QuestionsService', () => {
 
       expect((error as QuestionImportItemError).cause).toMatchObject({ errorKey: 'answerChangeNotAllowed' });
       expect(store.snapshot(id).answer).toEqual({ keys: ['B'] });
+    });
+
+    it('should reject reordering sub-questions of a published material', async () => {
+      const material = await create(materialDto());
+      const sub = await create(singleDto({ parentId: material.id }));
+      const { sort } = store.questions.get(sub.id)!;
+      await publish(material.id);
+
+      const error = await service
+        .importUnit({
+          subjectId: SUBJECT,
+          root: { ref: 'm', id: material.id, fields: {} },
+          children: [item('c', { sort: sort + 1 }, sub.id)],
+          publish: false,
+        })
+        .catch((caught: unknown) => caught);
+
+      expect((error as QuestionImportItemError).ref).toBe('c');
+      expect((error as QuestionImportItemError).cause).toMatchObject({
+        response: { errors: { sort: 'subQuestionSortLocked' } },
+      });
+      expect(store.snapshot(sub.id).sort).toBe(sort);
     });
 
     it('should reject an id from another subject or with a different parent', async () => {

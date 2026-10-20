@@ -138,6 +138,7 @@
   "materialNotDraft": "Sub-questions can only be added to or removed from a draft material",
   "questionUnderReview": "Questions under review cannot be edited; reject it first",
   "subQuestionStatusLocked": "Sub-questions follow their material; change the material instead",
+  "subQuestionSortLocked": "Sub-question order cannot be changed after the material is published",
   "materialHasNoSubQuestions": "The material has no sub-questions",
   "questionInUse": "The question has been answered or used in a paper; take it offline instead",
   "paperNotFound": "Paper not found",

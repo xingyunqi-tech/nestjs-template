@@ -138,6 +138,7 @@
   "materialNotDraft": "只能在草稿材料下增删小题",
   "questionUnderReview": "审核中的题目不能编辑，请先驳回",
   "subQuestionStatusLocked": "小题跟随材料整体流转，请操作所属材料",
+  "subQuestionSortLocked": "材料发布后小题顺序不能调整",
   "materialHasNoSubQuestions": "材料下还没有小题",
   "questionInUse": "题目已被作答或被试卷引用，只能下架",
   "paperNotFound": "试卷不存在",

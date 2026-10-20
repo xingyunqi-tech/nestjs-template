@@ -1,0 +1,9 @@
+{
+  "sources": [
+    "s6-scanned.pdf"
+  ],
+  "expect": "reject",
+  "notes": "整页为图片、无文字层，应判定为扫描件并拒绝",
+  "materials": [],
+  "questions": []
+}

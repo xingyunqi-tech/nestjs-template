@@ -7,3 +7,5 @@ files
 pnpm-lock.yaml
 CHANGELOG.md
 src/integrations/mail/mail-templates
+scripts/poc/samples/expected/
+scripts/poc/m0/out/

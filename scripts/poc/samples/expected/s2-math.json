@@ -1,0 +1,110 @@
+{
+  "sources": [
+    "s2-math.docx"
+  ],
+  "expect": "extract",
+  "notes": "公式为 Word 原生公式（OMML），期望文本中以 $LaTeX$ 表示；答案集中在文末另起一页",
+  "materials": [],
+  "questions": [
+    {
+      "questionKey": "s2-01",
+      "number": 1,
+      "type": "SINGLE",
+      "stem": "极限 $\\lim_{x\\to 0} \\frac{\\sin x}{x}$ 的值为（　　）。",
+      "optionA": "0",
+      "optionB": "1",
+      "optionC": "∞",
+      "optionD": "不存在",
+      "answer": "B",
+      "analysis": "重要极限。"
+    },
+    {
+      "questionKey": "s2-02",
+      "number": 2,
+      "type": "SINGLE",
+      "stem": "定积分 $\\int_{0}^{1} x^{2}dx$ 的值为（　　）。",
+      "optionA": "$\\frac{1}{2}$",
+      "optionB": "$\\frac{1}{3}$",
+      "optionC": "$\\frac{1}{4}$",
+      "optionD": "1",
+      "answer": "B",
+      "analysis": "原函数为 $\\frac{x^{3}}{3}$，代入上下限得 $\\frac{1}{3}$。"
+    },
+    {
+      "questionKey": "s2-03",
+      "number": 3,
+      "type": "SINGLE",
+      "stem": "函数 $f(x)=x^{3}−3x$ 的极小值点为（　　）。",
+      "optionA": "x=−1",
+      "optionB": "x=0",
+      "optionC": "x=1",
+      "optionD": "x=3",
+      "answer": "C",
+      "analysis": "f′(x)=3$x^{2}$−3，驻点为 ±1；f″(1)=6>0，故 x=1 为极小值点。"
+    },
+    {
+      "questionKey": "s2-04",
+      "number": 4,
+      "type": "FILL",
+      "stem": "级数 $\\sum_{n=1}^{\\infty} \\frac{1}{2^{n}}$ 的和为______。",
+      "answer": "1",
+      "analysis": "首项 1/2、公比 1/2 的等比级数，和为 1。"
+    },
+    {
+      "questionKey": "s2-05",
+      "number": 5,
+      "type": "FILL",
+      "stem": "设 $y=e^{2x}$，则 y′=______。",
+      "answer": "$2e^{2x}$",
+      "analysis": "复合函数求导。"
+    },
+    {
+      "questionKey": "s2-06",
+      "number": 6,
+      "type": "SINGLE",
+      "stem": "$\\sqrt{16}+\\sqrt[3]{27}$ 的值为（　　）。",
+      "optionA": "5",
+      "optionB": "6",
+      "optionC": "7",
+      "optionD": "8",
+      "answer": "C",
+      "analysis": "4 + 3 = 7。"
+    },
+    {
+      "questionKey": "s2-07",
+      "number": 7,
+      "type": "JUDGE",
+      "stem": "若 f(x) 在 $x_{0}$ 处可导，则 f(x) 在 $x_{0}$ 处连续。",
+      "answer": "对",
+      "analysis": "可导必连续，连续不一定可导。"
+    },
+    {
+      "questionKey": "s2-08",
+      "number": 8,
+      "type": "SINGLE",
+      "stem": "不定积分 $\\int \\frac{1}{x}dx$ 等于（　　）。",
+      "optionA": "$\\ln |x|+C$",
+      "optionB": "$\\frac{1}{x^{2}}+C$",
+      "optionC": "$−\\frac{1}{x^{2}}+C$",
+      "optionD": "x+C",
+      "answer": "A",
+      "analysis": "1/x 的原函数为 ln|x|。"
+    },
+    {
+      "questionKey": "s2-09",
+      "number": 9,
+      "type": "SHORT_ANSWER",
+      "stem": "求极限 $\\lim_{x\\to \\infty} \\left(1+\\frac{1}{x}\\right)^{x}$。",
+      "answer": "由重要极限，原式 = e。",
+      "points": "识别为重要极限形式\n结果为 e"
+    },
+    {
+      "questionKey": "s2-10",
+      "number": 10,
+      "type": "SHORT_ANSWER",
+      "stem": "计算定积分 $\\int_{0}^{\\pi} \\sin x dx$。",
+      "answer": "原函数为 −cos x，原式 = −cos π + cos 0 = 1 + 1 = 2。",
+      "points": "求出原函数 −cos x\n代入上下限得 2"
+    }
+  ]
+}

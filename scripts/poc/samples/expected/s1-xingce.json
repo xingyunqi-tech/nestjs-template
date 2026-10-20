@@ -1,0 +1,226 @@
+{
+  "sources": [
+    "s1-xingce.docx"
+  ],
+  "expect": "extract",
+  "notes": "每题后紧跟【答案】【解析】；第 11 题含插图；部分题目选项在同一行用制表符分隔",
+  "materials": [],
+  "questions": [
+    {
+      "questionKey": "s1-01",
+      "number": 1,
+      "type": "SINGLE",
+      "stem": "我国的根本政治制度是（　　）。",
+      "optionA": "人民代表大会制度",
+      "optionB": "中国共产党领导的多党合作和政治协商制度",
+      "optionC": "民族区域自治制度",
+      "optionD": "基层群众自治制度",
+      "answer": "A",
+      "analysis": "人民代表大会制度是我国的根本政治制度，其余三项属于基本政治制度。"
+    },
+    {
+      "questionKey": "s1-02",
+      "number": 2,
+      "type": "SINGLE",
+      "stem": "下列诗句与其描写的季节对应错误的是（　　）。",
+      "optionA": "“接天莲叶无穷碧”——夏",
+      "optionB": "“霜叶红于二月花”——秋",
+      "optionC": "“春风又绿江南岸”——春",
+      "optionD": "“忽如一夜春风来，千树万树梨花开”——春",
+      "answer": "D",
+      "analysis": "“千树万树梨花开”以梨花比喻雪景，描写的是冬季。"
+    },
+    {
+      "questionKey": "s1-03",
+      "number": 3,
+      "type": "SINGLE",
+      "stem": "2，5，10，17，26，（　　）",
+      "optionA": "35",
+      "optionB": "36",
+      "optionC": "37",
+      "optionD": "38",
+      "answer": "C",
+      "analysis": "相邻两项之差依次为 3、5、7、9，下一个差为 11，26 + 11 = 37。"
+    },
+    {
+      "questionKey": "s1-04",
+      "number": 4,
+      "type": "SINGLE",
+      "stem": "一项工程，甲单独做 10 天完成，乙单独做 15 天完成，两人合作需要（　　）天完成。",
+      "optionA": "5",
+      "optionB": "6",
+      "optionC": "7",
+      "optionD": "8",
+      "answer": "B",
+      "analysis": "甲效率 1/10，乙效率 1/15，合作效率 1/6，需要 6 天。"
+    },
+    {
+      "questionKey": "s1-05",
+      "number": 5,
+      "type": "MULTIPLE",
+      "stem": "下列属于我国古代四大发明的有（　　）。",
+      "optionA": "造纸术",
+      "optionB": "指南针",
+      "optionC": "地动仪",
+      "optionD": "火药",
+      "answer": "ABD",
+      "analysis": "四大发明是造纸术、指南针、火药和印刷术，地动仪不在其中。"
+    },
+    {
+      "questionKey": "s1-06",
+      "number": 6,
+      "type": "MULTIPLE",
+      "stem": "下列关于光合作用的说法，正确的有（　　）。",
+      "optionA": "需要光照",
+      "optionB": "释放氧气",
+      "optionC": "只在夜间进行",
+      "optionD": "将光能转化为化学能",
+      "answer": "ABD",
+      "analysis": "光合作用需要光照，在白天进行。"
+    },
+    {
+      "questionKey": "s1-07",
+      "number": 7,
+      "type": "JUDGE",
+      "stem": "地球自转的方向是自西向东。",
+      "answer": "对",
+      "analysis": "从北极上空看呈逆时针，即自西向东。"
+    },
+    {
+      "questionKey": "s1-08",
+      "number": 8,
+      "type": "JUDGE",
+      "stem": "根据宪法规定，年满十六周岁的公民有选举权和被选举权。",
+      "answer": "错",
+      "analysis": "宪法规定年满十八周岁的公民有选举权和被选举权。"
+    },
+    {
+      "questionKey": "s1-09",
+      "number": 9,
+      "type": "FILL",
+      "stem": "我国第一部纪传体通史是______，作者是______。",
+      "answer": "《史记》|史记||司马迁",
+      "analysis": "《史记》由西汉司马迁撰写。"
+    },
+    {
+      "questionKey": "s1-10",
+      "number": 10,
+      "type": "FILL",
+      "stem": "光在真空中的传播速度约为______万千米每秒。",
+      "answer": "30",
+      "analysis": "约 3×10⁸ 米每秒。"
+    },
+    {
+      "questionKey": "s1-11",
+      "number": 11,
+      "type": "SINGLE",
+      "stem": "根据下图，某企业 2023 年销售额最高的季度是（　　）。\n\n![](assets/s1-chart.png)",
+      "optionA": "第一季度",
+      "optionB": "第二季度",
+      "optionC": "第三季度",
+      "optionD": "第四季度",
+      "answer": "C",
+      "analysis": "第三季度柱形最高，为 180 万元。"
+    },
+    {
+      "questionKey": "s1-12",
+      "number": 12,
+      "type": "SINGLE",
+      "stem": "某商品先提价 20%，再降价 20%，现价与原价相比（　　）。",
+      "optionA": "不变",
+      "optionB": "降低 4%",
+      "optionC": "提高 4%",
+      "optionD": "降低 2%",
+      "answer": "B",
+      "analysis": "1.2 × 0.8 = 0.96，比原价降低 4%。"
+    },
+    {
+      "questionKey": "s1-13",
+      "number": 13,
+      "type": "SINGLE",
+      "stem": "下列选项中，与“教师：学校”逻辑关系最为相似的是（　　）。",
+      "optionA": "医生：医院",
+      "optionB": "学生：书包",
+      "optionC": "司机：汽油",
+      "optionD": "厨师：菜刀",
+      "answer": "A",
+      "analysis": "教师在学校工作，医生在医院工作，均为人员与工作场所的关系。"
+    },
+    {
+      "questionKey": "s1-14",
+      "number": 14,
+      "type": "MULTIPLE",
+      "stem": "下列城市中，属于直辖市的有（　　）。",
+      "optionA": "重庆",
+      "optionB": "天津",
+      "optionC": "深圳",
+      "optionD": "青岛",
+      "answer": "AB",
+      "analysis": "我国直辖市为北京、天津、上海、重庆。"
+    },
+    {
+      "questionKey": "s1-15",
+      "number": 15,
+      "type": "JUDGE",
+      "stem": "水的沸点在任何条件下都是 100℃。",
+      "answer": "错",
+      "analysis": "沸点随气压变化，标准大气压下为 100℃。"
+    },
+    {
+      "questionKey": "s1-16",
+      "number": 16,
+      "type": "SINGLE",
+      "stem": "某班有学生 40 人，会游泳的 25 人，会骑车的 30 人，两样都会的 20 人，两样都不会的有（　　）人。",
+      "optionA": "3",
+      "optionB": "4",
+      "optionC": "5",
+      "optionD": "6",
+      "answer": "C",
+      "analysis": "至少会一样的有 25 + 30 − 20 = 35 人，都不会的有 5 人。"
+    },
+    {
+      "questionKey": "s1-17",
+      "number": 17,
+      "type": "FILL",
+      "stem": "我国最长的河流是______。",
+      "answer": "长江",
+      "analysis": "长江全长约 6300 千米。"
+    },
+    {
+      "questionKey": "s1-18",
+      "number": 18,
+      "type": "SINGLE",
+      "stem": "下列不属于可再生能源的是（　　）。",
+      "optionA": "太阳能",
+      "optionB": "风能",
+      "optionC": "煤炭",
+      "optionD": "水能",
+      "answer": "C",
+      "analysis": "煤炭是化石能源，不可再生。"
+    },
+    {
+      "questionKey": "s1-19",
+      "number": 19,
+      "type": "MULTIPLE",
+      "stem": "下列属于唐代诗人的有（　　）。",
+      "optionA": "李白",
+      "optionB": "杜甫",
+      "optionC": "苏轼",
+      "optionD": "白居易",
+      "answer": "ABD",
+      "analysis": "苏轼是北宋文学家。"
+    },
+    {
+      "questionKey": "s1-20",
+      "number": 20,
+      "type": "SINGLE",
+      "stem": "6 个人排成一排，甲必须站在两端，共有（　　）种排法。",
+      "optionA": "120",
+      "optionB": "240",
+      "optionC": "360",
+      "optionD": "720",
+      "answer": "B",
+      "analysis": "甲有 2 种站法，其余 5 人全排列 120 种，共 240 种。"
+    }
+  ]
+}

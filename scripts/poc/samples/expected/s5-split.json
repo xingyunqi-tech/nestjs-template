@@ -1,0 +1,175 @@
+{
+  "sources": [
+    "s5-questions.docx",
+    "s5-answers.docx"
+  ],
+  "expect": "extract",
+  "notes": "题目与答案分属两个文件；答案卷为表格，填空题同义答案用“/”分隔",
+  "materials": [],
+  "questions": [
+    {
+      "questionKey": "s5-01",
+      "number": 1,
+      "type": "SINGLE",
+      "stem": "我国现行宪法是哪一年通过的？（　　）",
+      "optionA": "1954 年",
+      "optionB": "1975 年",
+      "optionC": "1978 年",
+      "optionD": "1982 年",
+      "answer": "D",
+      "analysis": "现行宪法于 1982 年 12 月 4 日通过。"
+    },
+    {
+      "questionKey": "s5-02",
+      "number": 2,
+      "type": "SINGLE",
+      "stem": "被誉为“诗圣”的是（　　）。",
+      "optionA": "李白",
+      "optionB": "杜甫",
+      "optionC": "王维",
+      "optionD": "白居易",
+      "answer": "B",
+      "analysis": "杜甫被誉为“诗圣”。"
+    },
+    {
+      "questionKey": "s5-03",
+      "number": 3,
+      "type": "SINGLE",
+      "stem": "人体最大的器官是（　　）。",
+      "optionA": "肝脏",
+      "optionB": "心脏",
+      "optionC": "皮肤",
+      "optionD": "肺",
+      "answer": "C",
+      "analysis": "皮肤是人体最大的器官。"
+    },
+    {
+      "questionKey": "s5-04",
+      "number": 4,
+      "type": "SINGLE",
+      "stem": "下列不属于金属元素的是（　　）。",
+      "optionA": "汞",
+      "optionB": "硅",
+      "optionC": "铁",
+      "optionD": "铝",
+      "answer": "B",
+      "analysis": "硅是非金属元素。"
+    },
+    {
+      "questionKey": "s5-05",
+      "number": 5,
+      "type": "SINGLE",
+      "stem": "“三个臭皮匠，顶个诸葛亮”体现的哲学道理是（　　）。",
+      "optionA": "整体功能大于部分功能之和",
+      "optionB": "矛盾具有特殊性",
+      "optionC": "量变引起质变",
+      "optionD": "意识对物质具有反作用",
+      "answer": "A",
+      "analysis": "体现整体与部分的关系。"
+    },
+    {
+      "questionKey": "s5-06",
+      "number": 6,
+      "type": "MULTIPLE",
+      "stem": "下列属于我国法定节假日的有（　　）。",
+      "optionA": "春节",
+      "optionB": "清明节",
+      "optionC": "重阳节",
+      "optionD": "端午节",
+      "answer": "ABD",
+      "analysis": "重阳节不是法定节假日。"
+    },
+    {
+      "questionKey": "s5-07",
+      "number": 7,
+      "type": "MULTIPLE",
+      "stem": "下列属于哺乳动物的有（　　）。",
+      "optionA": "鲸",
+      "optionB": "蝙蝠",
+      "optionC": "企鹅",
+      "optionD": "海豚",
+      "answer": "ABD",
+      "analysis": "企鹅是鸟类。"
+    },
+    {
+      "questionKey": "s5-08",
+      "number": 8,
+      "type": "JUDGE",
+      "stem": "月球本身会发光。",
+      "answer": "错",
+      "analysis": "月光是反射的太阳光。"
+    },
+    {
+      "questionKey": "s5-09",
+      "number": 9,
+      "type": "JUDGE",
+      "stem": "我国陆地面积约 960 万平方千米。",
+      "answer": "对",
+      "analysis": "我国陆地面积约 960 万平方千米，仅次于俄罗斯和加拿大，居世界第三位。"
+    },
+    {
+      "questionKey": "s5-10",
+      "number": 10,
+      "type": "FILL",
+      "stem": "中国共产党第一次全国代表大会于______年召开。",
+      "answer": "1921",
+      "analysis": "1921 年 7 月在上海召开。"
+    },
+    {
+      "questionKey": "s5-11",
+      "number": 11,
+      "type": "FILL",
+      "stem": "世界上最高的山峰是______。",
+      "answer": "珠穆朗玛峰|珠峰",
+      "analysis": "海拔约 8848.86 米。"
+    },
+    {
+      "questionKey": "s5-12",
+      "number": 12,
+      "type": "SINGLE",
+      "stem": "被称为“世界屋脊”的是（　　）。",
+      "optionA": "青藏高原",
+      "optionB": "黄土高原",
+      "optionC": "内蒙古高原",
+      "optionD": "云贵高原",
+      "answer": "A",
+      "analysis": "青藏高原平均海拔 4000 米以上。"
+    },
+    {
+      "questionKey": "s5-13",
+      "number": 13,
+      "type": "SINGLE",
+      "stem": "在计算机中，1 KB 等于（　　）。",
+      "optionA": "1000 B",
+      "optionB": "1024 B",
+      "optionC": "512 B",
+      "optionD": "2048 B",
+      "answer": "B",
+      "analysis": "1 KB = 2¹⁰ B。"
+    },
+    {
+      "questionKey": "s5-14",
+      "number": 14,
+      "type": "SINGLE",
+      "stem": "下列成语与人物对应错误的是（　　）。",
+      "optionA": "卧薪尝胆——勾践",
+      "optionB": "破釜沉舟——项羽",
+      "optionC": "纸上谈兵——赵括",
+      "optionD": "三顾茅庐——曹操",
+      "answer": "D",
+      "analysis": "三顾茅庐的是刘备。"
+    },
+    {
+      "questionKey": "s5-15",
+      "number": 15,
+      "type": "MULTIPLE",
+      "stem": "下列属于第一产业的有（　　）。",
+      "optionA": "农业",
+      "optionB": "林业",
+      "optionC": "采矿业",
+      "optionD": "渔业",
+      "answer": "ABD",
+      "analysis": "采矿业属于第二产业。"
+    }
+  ]
+}

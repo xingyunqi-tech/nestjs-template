@@ -1,0 +1,340 @@
+{
+  "sources": [
+    "s3-two-column.pdf"
+  ],
+  "expect": "extract",
+  "notes": "双栏、页眉页脚页码、题目跨栏跨页；短选项两两并排；答案以“1—5：B、C、…”形式集中在文末，无解析",
+  "materials": [],
+  "questions": [
+    {
+      "questionKey": "s3-01",
+      "number": 1,
+      "type": "SINGLE",
+      "stem": "城市更新不是简单的拆旧建新，而是要在保留城市记忆的基础上，补齐公共服务短板，改善人居环境，让老城区焕发新的活力。一些地方在推进过程中大拆大建，不仅割裂了城市文脉，也增加了地方债务风险，还让原住居民失去了熟悉的生活环境。因此，城市更新应当坚持“留改拆”并举、以保留利用提升为主，注重小规模、渐进式、可持续。这段文字意在强调（　　）。",
+      "optionA": "城市更新应以拆除重建为主",
+      "optionB": "城市更新应坚持渐进式、可持续的方式",
+      "optionC": "大拆大建会增加地方债务风险",
+      "optionD": "城市记忆是城市发展的根基",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-02",
+      "number": 2,
+      "type": "SINGLE",
+      "stem": "依次填入画横线部分最恰当的一项是：面对复杂形势，我们既要保持战略定力，又要______应对各种风险挑战，做到______、未雨绸缪。",
+      "optionA": "从容　居安思危",
+      "optionB": "被动　临危不惧",
+      "optionC": "盲目　防患未然",
+      "optionD": "仓促　处变不惊",
+      "answer": "A"
+    },
+    {
+      "questionKey": "s3-03",
+      "number": 3,
+      "type": "SINGLE",
+      "stem": "下列关于我国地理常识的表述，正确的是（　　）。",
+      "optionA": "我国最大的淡水湖是洞庭湖",
+      "optionB": "我国面积最大的省级行政区是新疆",
+      "optionC": "秦岭—淮河一线是我国 400 毫米等降水量线",
+      "optionD": "我国地势东高西低",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-04",
+      "number": 4,
+      "type": "SINGLE",
+      "stem": "“桃李不言，下自成蹊”比喻的是（　　）。",
+      "optionA": "为人正直诚恳，自然受人尊重",
+      "optionB": "桃树李树长得茂盛",
+      "optionC": "做事要善于宣传",
+      "optionD": "师生关系融洽",
+      "answer": "A"
+    },
+    {
+      "questionKey": "s3-05",
+      "number": 5,
+      "type": "MULTIPLE",
+      "stem": "下列属于行政处罚种类的有（　　）。",
+      "optionA": "警告",
+      "optionB": "罚款",
+      "optionC": "记过",
+      "optionD": "暂扣许可证件",
+      "answer": "ABD"
+    },
+    {
+      "questionKey": "s3-06",
+      "number": 6,
+      "type": "SINGLE",
+      "stem": "下列选项中，与“钢笔：书写”逻辑关系最为相似的是（　　）。",
+      "optionA": "剪刀：裁剪",
+      "optionB": "汽车：轮胎",
+      "optionC": "桌子：木材",
+      "optionD": "老师：学生",
+      "answer": "A"
+    },
+    {
+      "questionKey": "s3-07",
+      "number": 7,
+      "type": "SINGLE",
+      "stem": "下列哪一项不是我国的少数民族（　　）。",
+      "optionA": "畲族",
+      "optionB": "仡佬族",
+      "optionC": "傈僳族",
+      "optionD": "客家族",
+      "answer": "D"
+    },
+    {
+      "questionKey": "s3-08",
+      "number": 8,
+      "type": "MULTIPLE",
+      "stem": "下列关于二十四节气的说法，正确的有（　　）。",
+      "optionA": "立春是第一个节气",
+      "optionB": "冬至这天北半球白昼最短",
+      "optionC": "清明既是节气也是传统节日",
+      "optionD": "夏至这天太阳直射南回归线",
+      "answer": "ABC"
+    },
+    {
+      "questionKey": "s3-09",
+      "number": 9,
+      "type": "SINGLE",
+      "stem": "近年来，数字阅读用户规模持续扩大，但碎片化阅读也引发了人们对阅读深度的担忧。有研究者认为，数字阅读与纸质阅读并非此消彼长的关系，二者可以优势互补：数字阅读便于检索和分享，纸质阅读利于专注和沉浸。关键在于读者能否根据阅读目的选择合适的方式。对这段文字理解正确的是（　　）。",
+      "optionA": "数字阅读将取代纸质阅读",
+      "optionB": "碎片化阅读没有任何价值",
+      "optionC": "应根据阅读目的选择阅读方式",
+      "optionD": "纸质阅读更便于检索",
+      "answer": "C"
+    },
+    {
+      "questionKey": "s3-10",
+      "number": 10,
+      "type": "SINGLE",
+      "stem": "“春江潮水连海平，海上明月共潮生”出自（　　）。",
+      "optionA": "《春江花月夜》",
+      "optionB": "《滕王阁序》",
+      "optionC": "《望月怀远》",
+      "optionD": "《将进酒》",
+      "answer": "A"
+    },
+    {
+      "questionKey": "s3-11",
+      "number": 11,
+      "type": "SINGLE",
+      "stem": "20，25，30，35，40，（　　）",
+      "optionA": "43",
+      "optionB": "45",
+      "optionC": "46",
+      "optionD": "48",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-12",
+      "number": 12,
+      "type": "SINGLE",
+      "stem": "某单位去年有职工 500 人，今年比去年增加了 10%，今年该单位有职工（　　）人。",
+      "optionA": "503",
+      "optionB": "550",
+      "optionC": "579",
+      "optionD": "586",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-13",
+      "number": 13,
+      "type": "SINGLE",
+      "stem": "甲、乙两地相距 120 千米，一辆汽车以每小时 60 千米的速度从甲地开往乙地，需要（　　）小时。",
+      "optionA": "2",
+      "optionB": "3",
+      "optionC": "4",
+      "optionD": "5",
+      "answer": "A"
+    },
+    {
+      "questionKey": "s3-14",
+      "number": 14,
+      "type": "SINGLE",
+      "stem": "10，17，24，31，38，（　　）",
+      "optionA": "41",
+      "optionB": "45",
+      "optionC": "46",
+      "optionD": "48",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-15",
+      "number": 15,
+      "type": "SINGLE",
+      "stem": "某单位去年有职工 800 人，今年比去年增加了 5%，今年该单位有职工（　　）人。",
+      "optionA": "812",
+      "optionB": "840",
+      "optionC": "847",
+      "optionD": "880",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-16",
+      "number": 16,
+      "type": "SINGLE",
+      "stem": "甲、乙两地相距 100 千米，一辆汽车以每小时 50 千米的速度从甲地开往乙地，需要（　　）小时。",
+      "optionA": "2",
+      "optionB": "3",
+      "optionC": "4",
+      "optionD": "5",
+      "answer": "A"
+    },
+    {
+      "questionKey": "s3-17",
+      "number": 17,
+      "type": "SINGLE",
+      "stem": "5，10，15，20，25，（　　）",
+      "optionA": "28",
+      "optionB": "30",
+      "optionC": "31",
+      "optionD": "33",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-18",
+      "number": 18,
+      "type": "SINGLE",
+      "stem": "某单位去年有职工 800 人，今年比去年增加了 15%，今年该单位有职工（　　）人。",
+      "optionA": "848",
+      "optionB": "878",
+      "optionC": "920",
+      "optionD": "992",
+      "answer": "C"
+    },
+    {
+      "questionKey": "s3-19",
+      "number": 19,
+      "type": "SINGLE",
+      "stem": "甲、乙两地相距 240 千米，一辆汽车以每小时 80 千米的速度从甲地开往乙地，需要（　　）小时。",
+      "optionA": "1",
+      "optionB": "3",
+      "optionC": "4",
+      "optionD": "5",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-20",
+      "number": 20,
+      "type": "SINGLE",
+      "stem": "9，14，19，24，29，（　　）",
+      "optionA": "32",
+      "optionB": "33",
+      "optionC": "34",
+      "optionD": "36",
+      "answer": "C"
+    },
+    {
+      "questionKey": "s3-21",
+      "number": 21,
+      "type": "SINGLE",
+      "stem": "某单位去年有职工 400 人，今年比去年增加了 10%，今年该单位有职工（　　）人。",
+      "optionA": "410",
+      "optionB": "427",
+      "optionC": "440",
+      "optionD": "476",
+      "answer": "C"
+    },
+    {
+      "questionKey": "s3-22",
+      "number": 22,
+      "type": "SINGLE",
+      "stem": "甲、乙两地相距 200 千米，一辆汽车以每小时 40 千米的速度从甲地开往乙地，需要（　　）小时。",
+      "optionA": "2",
+      "optionB": "4",
+      "optionC": "5",
+      "optionD": "7",
+      "answer": "C"
+    },
+    {
+      "questionKey": "s3-23",
+      "number": 23,
+      "type": "SINGLE",
+      "stem": "13，16，19，22，25，（　　）",
+      "optionA": "27",
+      "optionB": "28",
+      "optionC": "30",
+      "optionD": "31",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-24",
+      "number": 24,
+      "type": "SINGLE",
+      "stem": "某单位去年有职工 800 人，今年比去年增加了 25%，今年该单位有职工（　　）人。",
+      "optionA": "943",
+      "optionB": "1000",
+      "optionC": "1035",
+      "optionD": "1068",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-25",
+      "number": 25,
+      "type": "SINGLE",
+      "stem": "甲、乙两地相距 200 千米，一辆汽车以每小时 50 千米的速度从甲地开往乙地，需要（　　）小时。",
+      "optionA": "2",
+      "optionB": "3",
+      "optionC": "4",
+      "optionD": "7",
+      "answer": "C"
+    },
+    {
+      "questionKey": "s3-26",
+      "number": 26,
+      "type": "SINGLE",
+      "stem": "7，10，13，16，19，（　　）",
+      "optionA": "19",
+      "optionB": "21",
+      "optionC": "22",
+      "optionD": "24",
+      "answer": "C"
+    },
+    {
+      "questionKey": "s3-27",
+      "number": 27,
+      "type": "SINGLE",
+      "stem": "某单位去年有职工 400 人，今年比去年增加了 25%，今年该单位有职工（　　）人。",
+      "optionA": "457",
+      "optionB": "474",
+      "optionC": "500",
+      "optionD": "537",
+      "answer": "C"
+    },
+    {
+      "questionKey": "s3-28",
+      "number": 28,
+      "type": "SINGLE",
+      "stem": "甲、乙两地相距 160 千米，一辆汽车以每小时 40 千米的速度从甲地开往乙地，需要（　　）小时。",
+      "optionA": "2",
+      "optionB": "3",
+      "optionC": "4",
+      "optionD": "6",
+      "answer": "C"
+    },
+    {
+      "questionKey": "s3-29",
+      "number": 29,
+      "type": "SINGLE",
+      "stem": "17，25，33，41，49，（　　）",
+      "optionA": "54",
+      "optionB": "57",
+      "optionC": "59",
+      "optionD": "62",
+      "answer": "B"
+    },
+    {
+      "questionKey": "s3-30",
+      "number": 30,
+      "type": "SINGLE",
+      "stem": "某单位去年有职工 500 人，今年比去年增加了 15%，今年该单位有职工（　　）人。",
+      "optionA": "575",
+      "optionB": "608",
+      "optionC": "615",
+      "optionD": "626",
+      "answer": "A"
+    }
+  ]
+}

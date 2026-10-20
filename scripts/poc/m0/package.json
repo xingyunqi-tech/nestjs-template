@@ -1,0 +1,19 @@
+{
+  "name": "m0-poc",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "parse": "node src/main.mjs --stage parse",
+    "start": "node src/main.mjs"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "0.9.12",
+    "jszip": "3.10.1",
+    "mammoth": "1.13.0",
+    "node-html-parser": "9.0.4",
+    "unpdf": "1.8.1"
+  }
+}

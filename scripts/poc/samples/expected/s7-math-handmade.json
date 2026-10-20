@@ -1,0 +1,102 @@
+{
+  "sources": [
+    "s7-math-handmade.docx"
+  ],
+  "expect": "extract",
+  "notes": "手写的 Word 风格 OMML：m:rPr/w:rPr/m:ctrlPr、sSubSup、acc、bar、矩阵、eqArr、groupChr、线性分式、box、修订标记 w:ins/w:del；页脚另有 1 个公式，不进入正文",
+  "materials": [],
+  "questions": [
+    {
+      "questionKey": "s7-01",
+      "number": 1,
+      "type": "SINGLE",
+      "stem": "已知 $a_{1}^{2}+a_{2}^{2}=5$，$a_{1}=1$，且 $a_{2}>0$，则 $a_{2}$ 等于（　　）。",
+      "optionA": "1",
+      "optionB": "2",
+      "optionC": "3",
+      "optionD": "4",
+      "answer": "B",
+      "analysis": "由 $1+a_{2}^{2}=5$ 得 $a_{2}=2$（负根舍去）。"
+    },
+    {
+      "questionKey": "s7-02",
+      "number": 2,
+      "type": "SINGLE",
+      "stem": "已知向量 $\\vec{a}=(1,2)$，$\\vec{b}=(3,-1)$，则 $\\vec{a}\\cdot\\vec{b}$ 等于（　　）。",
+      "optionA": "1",
+      "optionB": "2",
+      "optionC": "5",
+      "optionD": "−1",
+      "answer": "A",
+      "analysis": "$\\vec{a}\\cdot\\vec{b}=1\\times3+2\\times(-1)=1$。"
+    },
+    {
+      "questionKey": "s7-03",
+      "number": 3,
+      "type": "SINGLE",
+      "stem": "设矩阵 $A=\\left(\\begin{matrix}1&2\\\\3&4\\end{matrix}\\right)$，则 $\\det A$ 等于（　　）。",
+      "optionA": "−2",
+      "optionB": "2",
+      "optionC": "10",
+      "optionD": "−10",
+      "answer": "A",
+      "analysis": "$\\det A=1\\times4-2\\times3=-2$。"
+    },
+    {
+      "questionKey": "s7-04",
+      "number": 4,
+      "type": "SINGLE",
+      "stem": "方程组 $\\left\\{\\begin{aligned}x+y=3\\\\x-y=1\\end{aligned}\\right.$ 的解为（　　）。",
+      "optionA": "x=2，y=1",
+      "optionB": "x=1，y=2",
+      "optionC": "x=3，y=0",
+      "optionD": "x=0，y=3",
+      "answer": "A",
+      "analysis": "两式相加得 2x=4。"
+    },
+    {
+      "questionKey": "s7-05",
+      "number": 5,
+      "type": "FILL",
+      "stem": "$\\underbrace{2+2+\\cdots+2}_{n}$ 的值为______。",
+      "answer": "2n",
+      "analysis": "n 个 2 相加。"
+    },
+    {
+      "questionKey": "s7-06",
+      "number": 6,
+      "type": "FILL",
+      "stem": "若 $z=1+2i$，则 $z\\cdot\\overline{z}$ 的值为______。",
+      "answer": "5",
+      "analysis": "$z\\cdot\\overline{z}=1^{2}+2^{2}=5$。"
+    },
+    {
+      "questionKey": "s7-07",
+      "number": 7,
+      "type": "JUDGE",
+      "stem": "函数 $f(x)=(x+1)/(x-1)$ 在 $x=1$ 处没有定义。",
+      "answer": "对",
+      "analysis": "分母 $x-1=0$ 时分式无意义。"
+    },
+    {
+      "questionKey": "s7-08",
+      "number": 8,
+      "type": "SINGLE",
+      "stem": "极限 $\\lim_{x\\to 0}\\frac{\\sin 3x}{x}$ 的值为（　　）。",
+      "optionA": "0",
+      "optionB": "1",
+      "optionC": "3",
+      "optionD": "∞",
+      "answer": "C",
+      "analysis": "$\\frac{\\sin 3x}{x}=3\\cdot\\frac{\\sin 3x}{3x}\\xrightarrow{x\\to 0}3$。"
+    },
+    {
+      "questionKey": "s7-09",
+      "number": 9,
+      "type": "SHORT_ANSWER",
+      "stem": "计算 $\\int_{0}^{1}(2x+1)dx$。",
+      "answer": "原函数为 $x^{2}+x$，代入上下限得 2。",
+      "points": "求出原函数\n代入上下限得 2"
+    }
+  ]
+}

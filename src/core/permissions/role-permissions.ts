@@ -4,6 +4,7 @@ import { Permission } from './permission.enum';
 /**
  * Mapping of roles to their permitted actions.
  * Admin has all permissions, regular users have a subset.
+ * Editors manage content; reviewers manage and review content.
  */
 export const RolePermissions: Record<RoleEnum, Permission[]> = {
   [RoleEnum.admin]: Object.values(Permission),
@@ -34,6 +35,15 @@ export const RolePermissions: Record<RoleEnum, Permission[]> = {
     Permission.PRACTICE_WRITE,
     Permission.AI_CHAT,
     Permission.AI_GRADING,
+  ],
+
+  [RoleEnum.editor]: [Permission.FILE_UPLOAD, Permission.FILE_READ, Permission.CONTENT_MANAGE, Permission.AI_GENERATE],
+
+  [RoleEnum.reviewer]: [
+    Permission.FILE_UPLOAD,
+    Permission.FILE_READ,
+    Permission.CONTENT_MANAGE,
+    Permission.CONTENT_REVIEW,
   ],
 };
 

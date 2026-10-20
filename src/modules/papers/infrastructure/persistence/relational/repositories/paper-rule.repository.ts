@@ -80,8 +80,8 @@ export class PaperRuleRelationalRepository implements PaperRuleRepository {
     return this.findById(id);
   }
 
-  async remove(id: PaperRule['id']): Promise<boolean> {
-    const result = await this.paperRuleRepository.delete({ id });
+  async removeDraft(id: PaperRule['id']): Promise<boolean> {
+    const result = await this.paperRuleRepository.delete({ id, status: ContentStatus.DRAFT });
     return (result.affected ?? 0) > 0;
   }
 }

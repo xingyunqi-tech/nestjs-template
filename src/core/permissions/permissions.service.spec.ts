@@ -54,9 +54,9 @@ describe('PermissionsService', () => {
 
   it('should reload every role after a permission change', async () => {
     await service.getPermissionsForRole(RoleEnum.user);
-    repository.findAllRolePermissions.mockResolvedValue(new Map([[3, [Permission.FILE_READ]]]));
+    repository.findAllRolePermissions.mockResolvedValue(new Map([[RoleEnum.editor, [Permission.FILE_READ]]]));
 
-    await service.addPermissionToRole(3 as RoleEnum, Permission.FILE_READ);
+    await service.addPermissionToRole(RoleEnum.editor, Permission.FILE_READ);
 
     await expect(service.getPermissionsForRole(RoleEnum.user)).resolves.toEqual([]);
   });
@@ -87,5 +87,33 @@ describe('PermissionsService', () => {
 
     managementPermissions.forEach((permission) => expect(userPermissions).not.toContain(permission));
     expect(adminPermissions).toEqual(expect.arrayContaining(managementPermissions));
+  });
+
+  it('should let editors manage content and generate with AI but not review by default', async () => {
+    const permissions = await service.getPermissionsForRole(RoleEnum.editor);
+
+    expect(permissions).toEqual(expect.arrayContaining([Permission.CONTENT_MANAGE, Permission.AI_GENERATE]));
+    expect(permissions).not.toContain(Permission.CONTENT_REVIEW);
+    expect(permissions).not.toContain(Permission.AI_ADMIN);
+    expect(permissions).not.toContain(Permission.SYSTEM_CONFIG);
+  });
+
+  it('should let reviewers manage and review content but not generate with AI by default', async () => {
+    const permissions = await service.getPermissionsForRole(RoleEnum.reviewer);
+
+    expect(permissions).toEqual(expect.arrayContaining([Permission.CONTENT_MANAGE, Permission.CONTENT_REVIEW]));
+    expect(permissions).not.toContain(Permission.AI_GENERATE);
+    expect(permissions).not.toContain(Permission.AI_ADMIN);
+    expect(permissions).not.toContain(Permission.SYSTEM_CONFIG);
+  });
+
+  it('should not grant learning permissions to editors or reviewers by default', async () => {
+    const editor = await service.getPermissionsForRole(RoleEnum.editor);
+    const reviewer = await service.getPermissionsForRole(RoleEnum.reviewer);
+
+    [Permission.PRACTICE_WRITE, Permission.AI_CHAT, Permission.AI_GRADING].forEach((permission) => {
+      expect(editor).not.toContain(permission);
+      expect(reviewer).not.toContain(permission);
+    });
   });
 });

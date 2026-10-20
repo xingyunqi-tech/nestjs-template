@@ -106,6 +106,7 @@ export class AdminPapersController {
   @ApiOperation({ operationId: 'adminPublishPaper', summary: '发布试卷' })
   @ApiOkResponse({ type: AdminPaperDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @RequirePermissions(Permission.CONTENT_REVIEW)
   @Post(':id/publish')
   @HttpCode(HttpStatus.OK)
   publish(@Param('id', ParseUuidPipe) id: string, @Request() request: RequestWithUser): Promise<AdminPaperDto> {
@@ -115,6 +116,7 @@ export class AdminPapersController {
   @ApiOperation({ operationId: 'adminOfflinePaper', summary: '下架试卷' })
   @ApiOkResponse({ type: AdminPaperDto })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @RequirePermissions(Permission.CONTENT_REVIEW)
   @Post(':id/offline')
   @HttpCode(HttpStatus.OK)
   offline(@Param('id', ParseUuidPipe) id: string, @Request() request: RequestWithUser): Promise<AdminPaperDto> {

@@ -165,6 +165,7 @@
   "importJobNotFound": "Import job not found",
   "importErrorReportNotFound": "This import job has no error report",
   "importPublishForbidden": "Publishing on import requires the content review permission",
+  "paperRuleReviewRequired": "Changing the status of a paper rule, or editing a rule that is not a draft, requires the content review permission",
   "importInvalidPackage": "Invalid import package",
   "importInvalidWorkbook": "content.xlsx cannot be read",
   "importInvalidJson": "Invalid JSON content",

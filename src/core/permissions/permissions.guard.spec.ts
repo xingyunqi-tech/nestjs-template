@@ -9,6 +9,9 @@ import { UsersController } from '../users/users.controller';
 import { WechatPayController } from '../../modules/payments/wechat-pay.controller';
 import { AlipayController } from '../../modules/payments/alipay.controller';
 import { AppConfigController } from '../../modules/config/config.controller';
+import { AdminPapersController } from '../../modules/papers/admin-papers.controller';
+import { AdminExamsController } from '../../modules/exams/admin-exams.controller';
+import { AdminSubjectsController } from '../../modules/exams/admin-subjects.controller';
 import { PERMISSIONS_KEY } from './permissions.decorator';
 
 class TestController {
@@ -97,6 +100,12 @@ describe('admin endpoints', () => {
       Permission.SYSTEM_CONFIG,
     ],
     ['AppConfigController.upsert', AppConfigController.prototype, 'upsert', Permission.SYSTEM_CONFIG],
+    ['AdminPapersController.publish', AdminPapersController.prototype, 'publish', Permission.CONTENT_REVIEW],
+    ['AdminPapersController.offline', AdminPapersController.prototype, 'offline', Permission.CONTENT_REVIEW],
+    ['AdminExamsController.publish', AdminExamsController.prototype, 'publish', Permission.CONTENT_REVIEW],
+    ['AdminExamsController.offline', AdminExamsController.prototype, 'offline', Permission.CONTENT_REVIEW],
+    ['AdminSubjectsController.publish', AdminSubjectsController.prototype, 'publish', Permission.CONTENT_REVIEW],
+    ['AdminSubjectsController.offline', AdminSubjectsController.prototype, 'offline', Permission.CONTENT_REVIEW],
   ])('should require a permission on %s', (_label, target, method, permission) => {
     expect(required(target, method)).toEqual([permission]);
   });

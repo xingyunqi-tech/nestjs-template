@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { PaperRuleRepository } from './infrastructure/persistence/paper-rule.repository';
 import { PaperRule, PaperRuleItem } from './domain/paper-rule';
 import { PaperSection } from './domain/paper-section';
@@ -105,8 +105,9 @@ export class PaperRulesService {
   }
 
   async remove(id: PaperRule['id']): Promise<void> {
-    if (!(await this.paperRuleRepository.remove(id))) {
-      throw notFound();
+    await this.findById(id);
+    if (!(await this.paperRuleRepository.removeDraft(id))) {
+      throw new ConflictException({ error: 'onlyDraftDeletable' });
     }
   }
 

@@ -85,6 +85,7 @@ export class AdminExamsController {
   @ApiOperation({ operationId: 'adminPublishExam', summary: '上架考试' })
   @ApiOkResponse({ type: Exam })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @RequirePermissions(Permission.CONTENT_REVIEW)
   @Post(':id/publish')
   @HttpCode(HttpStatus.OK)
   publish(@Param('id', ParseUuidPipe) id: string): Promise<Exam> {
@@ -94,6 +95,7 @@ export class AdminExamsController {
   @ApiOperation({ operationId: 'adminOfflineExam', summary: '下架考试' })
   @ApiOkResponse({ type: Exam })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @RequirePermissions(Permission.CONTENT_REVIEW)
   @Post(':id/offline')
   @HttpCode(HttpStatus.OK)
   offline(@Param('id', ParseUuidPipe) id: string): Promise<Exam> {

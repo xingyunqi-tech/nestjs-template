@@ -46,7 +46,7 @@ describe('PaperRulesService', () => {
       findById: vi.fn(),
       findManyWithPaginationAndCount: vi.fn(),
       update: vi.fn(),
-      remove: vi.fn(),
+      removeDraft: vi.fn(),
       findPublishedBySubject: vi.fn().mockResolvedValue([]),
     };
     knowledgePointsService = { findByIds: vi.fn().mockResolvedValue([]) };
@@ -263,8 +263,25 @@ describe('PaperRulesService', () => {
   });
 
   it('should report missing rules on remove', async () => {
-    repository.remove.mockResolvedValue(false);
+    repository.findById.mockResolvedValue(null);
 
     await expect(service.remove('r1')).rejects.toMatchObject({ response: { error: 'paperRuleNotFound' } });
+    expect(repository.removeDraft).not.toHaveBeenCalled();
+  });
+
+  it('should remove a draft rule', async () => {
+    repository.findById.mockResolvedValue(rule([]));
+    repository.removeDraft.mockResolvedValue(true);
+
+    await service.remove('r1');
+
+    expect(repository.removeDraft).toHaveBeenCalledWith('r1');
+  });
+
+  it('should refuse to remove a rule that is not a draft', async () => {
+    repository.findById.mockResolvedValue(Object.assign(rule([]), { status: ContentStatus.PUBLISHED }));
+    repository.removeDraft.mockResolvedValue(false);
+
+    await expect(service.remove('r1')).rejects.toMatchObject({ response: { error: 'onlyDraftDeletable' } });
   });
 });

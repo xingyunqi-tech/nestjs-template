@@ -165,6 +165,7 @@
   "importJobNotFound": "导入任务不存在",
   "importErrorReportNotFound": "该导入任务没有错误报告",
   "importPublishForbidden": "导入后直接发布需要审核发布权限",
+  "paperRuleReviewRequired": "修改已发布或已下架的组卷规则、以及发布或下架组卷规则需要审核发布权限",
   "importInvalidPackage": "导入包格式无效",
   "importInvalidWorkbook": "content.xlsx 无法读取",
   "importInvalidJson": "JSON 内容格式无效",

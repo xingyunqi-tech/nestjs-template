@@ -90,6 +90,7 @@ export class AdminSubjectsController {
   @ApiOperation({ operationId: 'adminPublishSubject', summary: '上架科目' })
   @ApiOkResponse({ type: Subject })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @RequirePermissions(Permission.CONTENT_REVIEW)
   @Post(':id/publish')
   @HttpCode(HttpStatus.OK)
   publish(@Param('id', ParseUuidPipe) id: string): Promise<Subject> {
@@ -99,6 +100,7 @@ export class AdminSubjectsController {
   @ApiOperation({ operationId: 'adminOfflineSubject', summary: '下架科目' })
   @ApiOkResponse({ type: Subject })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @RequirePermissions(Permission.CONTENT_REVIEW)
   @Post(':id/offline')
   @HttpCode(HttpStatus.OK)
   offline(@Param('id', ParseUuidPipe) id: string): Promise<Subject> {

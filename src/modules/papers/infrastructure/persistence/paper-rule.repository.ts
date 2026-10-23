@@ -24,7 +24,9 @@ export abstract class PaperRuleRepository {
 
   abstract update(id: PaperRule['id'], changes: PaperRuleChanges): Promise<NullableType<PaperRule>>;
 
-  /** 返回是否删除 */
+  /** 仅更新草稿，规则不存在或不是草稿时返回 null */
+  abstract updateDraft(id: PaperRule['id'], changes: PaperRuleChanges): Promise<NullableType<PaperRule>>;
+
   /** 仅删除草稿，返回是否删除 */
   abstract removeDraft(id: PaperRule['id']): Promise<boolean>;
 }

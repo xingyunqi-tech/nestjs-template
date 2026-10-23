@@ -46,6 +46,7 @@ describe('PaperRulesService', () => {
       findById: vi.fn(),
       findManyWithPaginationAndCount: vi.fn(),
       update: vi.fn(),
+      updateDraft: vi.fn(),
       removeDraft: vi.fn(),
       findPublishedBySubject: vi.fn().mockResolvedValue([]),
     };
@@ -260,6 +261,37 @@ describe('PaperRulesService', () => {
 
     expect(questionsService.resolveFileUrls).toHaveBeenCalledWith([{ stem: 'q1' }], 5);
     expect(draft.questions[0]).toMatchObject({ stem: 'q1', fileUrls: { f1: 'https://cdn.example.com/a.png' } });
+  });
+
+  it('should update a draft rule through the draft-only write when restricted to drafts', async () => {
+    const updated = rule([]);
+    repository.findById.mockResolvedValue(rule([]));
+    repository.updateDraft.mockResolvedValue(updated);
+
+    await expect(service.update('r1', { name: '新规则' }, { draftOnly: true })).resolves.toBe(updated);
+    expect(repository.updateDraft).toHaveBeenCalledWith('r1', expect.objectContaining({ name: '新规则' }));
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it.each([ContentStatus.PUBLISHED, ContentStatus.OFFLINE])(
+    'should refuse a draft-only update of a %s rule',
+    async (status) => {
+      repository.findById.mockResolvedValue(Object.assign(rule([]), { status }));
+
+      await expect(service.update('r1', { name: '新规则' }, { draftOnly: true })).rejects.toMatchObject({
+        response: { error: 'paperRuleReviewRequired' },
+      });
+      expect(repository.updateDraft).not.toHaveBeenCalled();
+    },
+  );
+
+  it('should refuse a draft-only update when the rule leaves draft before the write', async () => {
+    repository.findById.mockResolvedValue(rule([]));
+    repository.updateDraft.mockResolvedValue(null);
+
+    await expect(service.update('r1', { name: '新规则' }, { draftOnly: true })).rejects.toMatchObject({
+      response: { error: 'paperRuleReviewRequired' },
+    });
   });
 
   it('should report missing rules on remove', async () => {

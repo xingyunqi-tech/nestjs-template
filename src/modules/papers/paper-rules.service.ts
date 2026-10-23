@@ -1,4 +1,10 @@
-import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { PaperRuleRepository } from './infrastructure/persistence/paper-rule.repository';
 import { PaperRule, PaperRuleItem } from './domain/paper-rule';
 import { PaperSection } from './domain/paper-section';
@@ -19,6 +25,10 @@ import { IPaginationOptions } from '../../common/types/pagination-options';
 
 function notFound(): NotFoundException {
   return new NotFoundException({ error: 'paperRuleNotFound' });
+}
+
+function reviewRequired(): ForbiddenException {
+  return new ForbiddenException({ error: 'paperRuleReviewRequired' });
 }
 
 function unprocessable(field: string, error: string): UnprocessableEntityException {
@@ -88,16 +98,28 @@ export class PaperRulesService {
     });
   }
 
-  async update(id: PaperRule['id'], dto: UpdatePaperRuleDto): Promise<PaperRule> {
+  /** draftOnly 时仅允许修改草稿，规则已不是草稿时报 paperRuleReviewRequired */
+  async update(id: PaperRule['id'], dto: UpdatePaperRuleDto, { draftOnly = false } = {}): Promise<PaperRule> {
     const rule = await this.findById(id);
+    if (draftOnly && rule.status !== ContentStatus.DRAFT) {
+      throw reviewRequired();
+    }
     const items = dto.items ? await this.validateItems(rule.subjectId, dto.items) : undefined;
-    const updated = await this.paperRuleRepository.update(id, {
+    const changes = {
       name: dto.name,
       durationMin: dto.durationMin,
       multiScoringRule: dto.multiScoringRule,
       items,
       status: dto.status,
-    });
+    };
+    if (draftOnly) {
+      const updated = await this.paperRuleRepository.updateDraft(id, changes);
+      if (!updated) {
+        throw reviewRequired();
+      }
+      return updated;
+    }
+    const updated = await this.paperRuleRepository.update(id, changes);
     if (!updated) {
       throw notFound();
     }

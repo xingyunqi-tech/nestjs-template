@@ -11,20 +11,17 @@ import type { RequestWithUser } from '../../common/types/request-with-user.type'
 
 const RULE_ID = '00000000-0000-4000-8000-000000000001';
 
-const ruleWithStatus = (status: ContentStatus): PaperRule => Object.assign(new PaperRule(), { id: RULE_ID, status });
-
 const requestAs = (roleId?: RoleEnum): RequestWithUser =>
   ({ user: { id: 1, role: roleId === undefined ? undefined : { id: roleId } } }) as unknown as RequestWithUser;
 
 describe('AdminPaperRulesController.update', () => {
-  let paperRulesService: Mocked<Pick<PaperRulesService, 'update' | 'findById'>>;
+  let paperRulesService: Mocked<Pick<PaperRulesService, 'update'>>;
   let permissionsService: Mocked<Pick<PermissionsService, 'hasPermission'>>;
   let controller: AdminPaperRulesController;
 
   beforeEach(() => {
     paperRulesService = {
       update: vi.fn().mockResolvedValue(new PaperRule()),
-      findById: vi.fn().mockResolvedValue(ruleWithStatus(ContentStatus.DRAFT)),
     };
     permissionsService = {
       hasPermission: vi.fn(async (roleId: RoleEnum) => roleId === RoleEnum.reviewer),
@@ -35,30 +32,16 @@ describe('AdminPaperRulesController.update', () => {
     );
   });
 
-  it('should let a role without content review edit a draft rule', async () => {
+  it('should restrict a role without content review to draft rules', async () => {
     await controller.update(RULE_ID, { name: '新规则' }, requestAs(RoleEnum.editor));
 
-    expect(paperRulesService.update).toHaveBeenCalledWith(RULE_ID, { name: '新规则' });
+    expect(paperRulesService.update).toHaveBeenCalledWith(RULE_ID, { name: '新规则' }, { draftOnly: true });
   });
 
-  it.each([ContentStatus.PUBLISHED, ContentStatus.OFFLINE])(
-    'should reject a role without content review editing a %s rule',
-    async (status) => {
-      paperRulesService.findById.mockResolvedValue(ruleWithStatus(status));
-
-      await expect(controller.update(RULE_ID, { name: '新规则' }, requestAs(RoleEnum.editor))).rejects.toMatchObject({
-        response: { error: 'paperRuleReviewRequired' },
-      });
-      expect(paperRulesService.update).not.toHaveBeenCalled();
-    },
-  );
-
-  it('should let a role with content review edit a published rule', async () => {
-    paperRulesService.findById.mockResolvedValue(ruleWithStatus(ContentStatus.PUBLISHED));
-
+  it('should let a role with content review edit rules in any status', async () => {
     await controller.update(RULE_ID, { name: '新规则' }, requestAs(RoleEnum.reviewer));
 
-    expect(paperRulesService.update).toHaveBeenCalledWith(RULE_ID, { name: '新规则' });
+    expect(paperRulesService.update).toHaveBeenCalledWith(RULE_ID, { name: '新规则' }, { draftOnly: false });
   });
 
   it('should reject a status change from a role without content review', async () => {
@@ -80,6 +63,10 @@ describe('AdminPaperRulesController.update', () => {
   it('should allow a status change from a role with content review', async () => {
     await controller.update(RULE_ID, { status: ContentStatus.PUBLISHED }, requestAs(RoleEnum.reviewer));
 
-    expect(paperRulesService.update).toHaveBeenCalledWith(RULE_ID, { status: ContentStatus.PUBLISHED });
+    expect(paperRulesService.update).toHaveBeenCalledWith(
+      RULE_ID,
+      { status: ContentStatus.PUBLISHED },
+      { draftOnly: false },
+    );
   });
 });

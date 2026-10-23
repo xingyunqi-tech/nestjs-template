@@ -21,7 +21,6 @@ import { CreatePaperRuleDto } from './dto/create-paper-rule.dto';
 import { UpdatePaperRuleDto } from './dto/update-paper-rule.dto';
 import { QueryAdminPaperRuleDto } from './dto/query-admin-paper-rule.dto';
 import { PaperDraftDto } from './dto/paper-draft.dto';
-import { ContentStatus } from '../exams/domain/content-status';
 import { PermissionsGuard } from '../../core/permissions/permissions.guard';
 import { RequirePermissions } from '../../core/permissions/permissions.decorator';
 import { Permission } from '../../core/permissions/permission.enum';
@@ -88,10 +87,11 @@ export class AdminPaperRulesController {
     @Body() dto: UpdatePaperRuleDto,
     @Request() request: RequestWithUser,
   ): Promise<PaperRule> {
-    if (!(await this.canReview(request)) && (dto.status !== undefined || !(await this.isDraft(id)))) {
+    const canReview = await this.canReview(request);
+    if (!canReview && dto.status !== undefined) {
       throw new ForbiddenException({ error: 'paperRuleReviewRequired' });
     }
-    return this.paperRulesService.update(id, dto);
+    return this.paperRulesService.update(id, dto, { draftOnly: !canReview });
   }
 
   @ApiOperation({ operationId: 'adminDeletePaperRule', summary: '删除组卷规则' })
@@ -110,10 +110,6 @@ export class AdminPaperRulesController {
   @HttpCode(HttpStatus.OK)
   preview(@Param('id', ParseUuidPipe) id: string, @Request() request: RequestWithUser): Promise<PaperDraftDto> {
     return this.paperRulesService.preview(id, request.user.id);
-  }
-
-  private async isDraft(id: string): Promise<boolean> {
-    return (await this.paperRulesService.findById(id)).status === ContentStatus.DRAFT;
   }
 
   private async canReview(request: RequestWithUser): Promise<boolean> {

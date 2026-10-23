@@ -17,6 +17,12 @@ function escapeLike(value: string): string {
 
 const UPDATABLE_COLUMNS = ['name', 'durationMin', 'multiScoringRule', 'items', 'status'] as const;
 
+function toUpdateValues(changes: PaperRuleChanges): QueryDeepPartialEntity<PaperRuleEntity> {
+  return Object.fromEntries(
+    UPDATABLE_COLUMNS.filter((key) => changes[key] !== undefined).map((key) => [key, changes[key]]),
+  );
+}
+
 @Injectable()
 export class PaperRuleRelationalRepository implements PaperRuleRepository {
   constructor(
@@ -71,13 +77,21 @@ export class PaperRuleRelationalRepository implements PaperRuleRepository {
   }
 
   async update(id: PaperRule['id'], changes: PaperRuleChanges): Promise<NullableType<PaperRule>> {
-    const values = Object.fromEntries(
-      UPDATABLE_COLUMNS.filter((key) => changes[key] !== undefined).map((key) => [key, changes[key]]),
-    ) as QueryDeepPartialEntity<PaperRuleEntity>;
+    const values = toUpdateValues(changes);
     if (Object.keys(values).length > 0) {
       await this.paperRuleRepository.update({ id }, values);
     }
     return this.findById(id);
+  }
+
+  async updateDraft(id: PaperRule['id'], changes: PaperRuleChanges): Promise<NullableType<PaperRule>> {
+    const where = { id, status: ContentStatus.DRAFT };
+    const values = toUpdateValues(changes);
+    const matched =
+      Object.keys(values).length > 0
+        ? ((await this.paperRuleRepository.update(where, values)).affected ?? 0) > 0
+        : await this.paperRuleRepository.exists({ where });
+    return matched ? this.findById(id) : null;
   }
 
   async removeDraft(id: PaperRule['id']): Promise<boolean> {

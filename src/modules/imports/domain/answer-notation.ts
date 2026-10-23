@@ -1,5 +1,5 @@
 import { QuestionType } from '../../questions/domain/question-type';
-import { QuestionAnswer } from '../../questions/domain/question-answer';
+import { QuestionAnswer, QuestionOption } from '../../questions/domain/question-answer';
 
 const JUDGE_VALUES: Readonly<Record<string, boolean>> = {
   对: true,
@@ -80,4 +80,26 @@ export function parseAnswerNotation(
     default:
       return null;
   }
+}
+
+const OPTION_LINE = /^[(（]?([A-Za-zＡ-Ｚａ-ｚ])(?:[)）]|\s*[.．、:：])\s*(.*)$/s;
+const OPTION_KEY_COUNT = 26;
+
+function toOptionKey(letter: string): string {
+  const code = letter.charCodeAt(0);
+  return (code > 0xff ? String.fromCharCode(code - 0xfee0) : letter).toUpperCase();
+}
+
+/** 每行一个选项：全部以字母加「. ． 、 : ：」或「(A) （A） A) A）」开头时按前缀取 key（全角与小写字母按大写处理），全部不带前缀时按顺序编号为 A、B、C…；混用或超过 26 行时返回 undefined */
+export function parseOptionLines(lines: string[]): QuestionOption[] | undefined {
+  const prefixed = lines
+    .map((line) => OPTION_LINE.exec(line))
+    .filter((match): match is RegExpExecArray => match !== null);
+  if (prefixed.length === lines.length) {
+    return prefixed.map((match) => ({ key: toOptionKey(match[1]), content: match[2].trim() }));
+  }
+  if (prefixed.length > 0 || lines.length > OPTION_KEY_COUNT) {
+    return undefined;
+  }
+  return lines.map((content, index) => ({ key: String.fromCharCode(65 + index), content }));
 }

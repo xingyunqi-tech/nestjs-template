@@ -61,6 +61,15 @@ export class FileStorageService {
     return { file: await this.write(content, fileName, purpose, mimeType, ownerUserId), reused: false };
   }
 
+  /** 与 storeDeduplicated 相同的校验，只查找可复用的文件，不写入 */
+  async findDeduplicated(content: Buffer, fileName: string, purpose: FilePurpose): Promise<FileType | null> {
+    const mimeType = this.assertStorable(content, fileName, purpose);
+    if (FILE_PURPOSE_RULES[purpose].visibility !== FileVisibility.PUBLIC) {
+      return null;
+    }
+    return this.fileRepository.findReusable(sha256Of(content), FileVisibility.PUBLIC, mimeType);
+  }
+
   async read(file: FileType): Promise<Buffer> {
     if (this.isLocal()) {
       return readFile(localDiskPath(file.path));

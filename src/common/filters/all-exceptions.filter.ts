@@ -10,7 +10,7 @@ import { BusinessException } from '../exceptions/business.exception';
 /**
  * Map HTTP status codes to i18n keys
  */
-const STATUS_TO_I18N_KEY: Record<number, string> = {
+export const STATUS_TO_I18N_KEY: Record<number, string> = {
   [HttpStatus.BAD_REQUEST]: 'badRequest',
   [HttpStatus.UNAUTHORIZED]: 'unauthorized',
   [HttpStatus.FORBIDDEN]: 'forbidden',

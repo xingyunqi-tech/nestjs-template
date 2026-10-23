@@ -1,7 +1,9 @@
 import {
   ConflictException,
   ForbiddenException,
+  HttpException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -13,7 +15,7 @@ import {
   QuestionTransaction,
 } from './infrastructure/persistence/question.repository';
 import { QuestionUsageRepository } from './infrastructure/persistence/question-usage.repository';
-import { Question, QuestionSummary } from './domain/question';
+import { QUESTION_KNOWLEDGE_POINTS_MAX, Question, QuestionSummary } from './domain/question';
 import { QuestionType } from './domain/question-type';
 import { QuestionSource } from './domain/question-source';
 import { QuestionAction, QuestionStatus, QUESTION_TRANSITIONS, publishedCountDelta } from './domain/question-status';
@@ -33,6 +35,13 @@ import { UpdateQuestionDto } from './dto/update-question.dto';
 import { QuestionFilterOptions } from './dto/query-admin-question.dto';
 import { AdminQuestionDto, AdminQuestionVersionDto } from './dto/admin-question.dto';
 import { BatchPublishQuestionsDto, BatchPublishQuestionsResultDto } from './dto/batch-publish-questions.dto';
+import {
+  BatchQuestionFailureDto,
+  BatchQuestionsResultDto,
+  BatchUpdateQuestionsDto,
+  KnowledgePointUpdateMode,
+} from './dto/batch-question-operation.dto';
+import { toBatchFailure } from './question-batch';
 import { toQuestionOperator } from './dto/question-operator.dto';
 import { PublicQuestionUnitDto, toPublicQuestion } from './dto/public-question.dto';
 import { QuestionSolutionDto, toQuestionSolution } from './dto/question-solution.dto';
@@ -173,6 +182,8 @@ function contentTexts(item: FileReferencingContent): string[] {
 
 @Injectable()
 export class QuestionsService {
+  private readonly logger = new Logger(QuestionsService.name);
+
   constructor(
     private readonly questionRepository: QuestionRepository,
     private readonly questionUsageRepository: QuestionUsageRepository,
@@ -240,6 +251,20 @@ export class QuestionsService {
       root,
       questions: root.type === QuestionType.MATERIAL ? children.filter((child) => child.parentId === root.id) : [root],
     }));
+  }
+
+  /** 只读，不加科目锁；键为内容哈希，值为科目内已有题目 id */
+  findIdsByContentHashes(subjectId: Question['subjectId'], contentHashes: string[]): Promise<Map<string, string>> {
+    return this.questionRepository.transaction([], async (tx) => {
+      const found = new Map<string, string>();
+      for (const contentHash of new Set(contentHashes)) {
+        const id = await tx.findIdByContentHash(subjectId, contentHash, []);
+        if (id) {
+          found.set(contentHash, id);
+        }
+      }
+      return found;
+    });
   }
 
   async findUnitsByQuestionIds(questionIds: Question['id'][]): Promise<QuestionUnit[]> {
@@ -642,17 +667,130 @@ export class QuestionsService {
     if (existing.parentId) {
       throw conflict('subQuestionStatusLocked');
     }
-    await this.questionRepository.transaction([existing.subjectId], async (tx) => {
-      const roots = await tx.findForUpdate([id]);
+    await this.transitionRoot(id, existing.subjectId, action, operator, audit);
+    return this.getAdminDetail(id, operator.id);
+  }
+
+  private transitionRoot(
+    rootId: Question['id'],
+    subjectId: Question['subjectId'],
+    action: QuestionAction,
+    operator: QuestionOperator,
+    audit: Omit<TransitionAudit, 'operatorId'>,
+  ): Promise<number> {
+    return this.questionRepository.transaction([subjectId], async (tx) => {
+      const roots = await tx.findForUpdate([rootId]);
       if (roots.length === 0) {
         throw notFound();
       }
       if (action === QuestionAction.PUBLISH || action === QuestionAction.REJECT) {
         this.assertNotSelfReview(roots, operator);
       }
-      await this.transition(tx, roots, action, { ...audit, operatorId: operator.id });
+      return this.transition(tx, roots, action, { ...audit, operatorId: operator.id });
     });
-    return this.getAdminDetail(id, operator.id);
+  }
+
+  batchSubmit(ids: Question['id'][], operator: QuestionOperator): Promise<BatchQuestionsResultDto> {
+    return this.batchTransition(ids, QuestionAction.SUBMIT, operator, {});
+  }
+
+  batchReject(ids: Question['id'][], reason: string, operator: QuestionOperator): Promise<BatchQuestionsResultDto> {
+    return this.batchTransition(ids, QuestionAction.REJECT, operator, { rejectReason: reason });
+  }
+
+  batchOffline(ids: Question['id'][], operator: QuestionOperator): Promise<BatchQuestionsResultDto> {
+    return this.batchTransition(ids, QuestionAction.OFFLINE, operator, {});
+  }
+
+  private batchTransition(
+    ids: Question['id'][],
+    action: QuestionAction,
+    operator: QuestionOperator,
+    audit: Omit<TransitionAudit, 'operatorId'>,
+  ): Promise<BatchQuestionsResultDto> {
+    return this.runBatch(
+      ids,
+      (question) => question.parentId ?? question.id,
+      async (rootId, subjectId) => {
+        await this.transitionRoot(rootId, subjectId, action, operator, audit);
+      },
+    );
+  }
+
+  /** 小题单独删除，与所属材料同批时随材料删除 */
+  batchRemove(ids: Question['id'][]): Promise<BatchQuestionsResultDto> {
+    const requested = new Set(ids);
+    return this.runBatch(
+      ids,
+      (question) => (question.parentId !== null && requested.has(question.parentId) ? question.parentId : question.id),
+      (id, subjectId) => this.removeInTransaction(id, subjectId),
+    );
+  }
+
+  /** 逐题按单题编辑规则更新，小题不随材料归并 */
+  async batchUpdate(dto: BatchUpdateQuestionsDto): Promise<BatchQuestionsResultDto> {
+    const { ids, knowledgePointIds, mode, difficulty, source, isFree } = dto;
+    if ([knowledgePointIds, difficulty, source, isFree].every((value) => value === undefined)) {
+      throw new UnprocessableEntityException({ error: 'batchUpdateFieldsRequired' });
+    }
+    return this.runBatch(
+      ids,
+      (question) => question.id,
+      (id, subjectId) =>
+        this.questionRepository.transaction([subjectId], async (tx) => {
+          const [current] = await tx.findForUpdate([id]);
+          if (!current) {
+            throw notFound();
+          }
+          const changes: UpdateQuestionDto = { difficulty, source, isFree };
+          if (knowledgePointIds !== undefined) {
+            changes.knowledgePointIds =
+              mode === KnowledgePointUpdateMode.APPEND
+                ? [...new Set([...current.knowledgePointIds, ...knowledgePointIds])]
+                : knowledgePointIds;
+            if (changes.knowledgePointIds.length > QUESTION_KNOWLEDGE_POINTS_MAX) {
+              throw unprocessable('knowledgePointIds', 'questionKnowledgePointsTooMany');
+            }
+          }
+          await this.updateInTx(tx, id, changes);
+        }),
+    );
+  }
+
+  /** 按 targetOf 归并后逐个目标独立执行，同一目标的请求 id 共享结果；返回失败项按请求顺序 */
+  private async runBatch(
+    ids: Question['id'][],
+    targetOf: (question: Question) => Question['id'],
+    work: (targetId: Question['id'], subjectId: Question['subjectId']) => Promise<unknown>,
+  ): Promise<BatchQuestionsResultDto> {
+    const found = new Map((await this.findByIds(ids)).map((question) => [question.id, question]));
+    const targets = new Map<Question['id'], { subjectId: Question['subjectId']; ids: Question['id'][] }>();
+    const failures = new Map<Question['id'], BatchQuestionFailureDto>();
+    for (const id of ids) {
+      const question = found.get(id);
+      if (!question) {
+        failures.set(id, toBatchFailure(id, notFound()));
+        continue;
+      }
+      const targetId = targetOf(question);
+      const target = targets.get(targetId) ?? { subjectId: question.subjectId, ids: [] };
+      target.ids.push(id);
+      targets.set(targetId, target);
+    }
+    for (const [targetId, target] of targets) {
+      try {
+        await work(targetId, target.subjectId);
+      } catch (error) {
+        if (!(error instanceof HttpException)) {
+          this.logger.error(`Batch operation failed on question ${targetId}`, error);
+        }
+        target.ids.forEach((id) => failures.set(id, toBatchFailure(id, error)));
+      }
+    }
+    return {
+      succeeded: ids.length - failures.size,
+      failed: ids.flatMap((id) => failures.get(id) ?? []),
+    };
   }
 
   /** 任一题为当前操作人提交待审时整批拒绝 */
@@ -682,7 +820,7 @@ export class QuestionsService {
   /** 只校验待审的题，从下架重新发布不受限 */
   private assertNotSelfReview(roots: Question[], operator: QuestionOperator): void {
     const selfReviewed = roots
-      .filter((root) => root.status === QuestionStatus.REVIEWING && isSelfReview(root.submittedBy, operator))
+      .filter((root) => root.status === QuestionStatus.REVIEWING && isSelfReview(root, operator))
       .map((root) => root.id);
     if (selfReviewed.length > 0) {
       throw selfReviewForbidden(selfReviewed);
@@ -692,7 +830,11 @@ export class QuestionsService {
   /** 仅删除未发布过且未被作答或试卷引用的草稿，材料连同小题一起删除 */
   async remove(id: Question['id']): Promise<void> {
     const existing = await this.findById(id);
-    await this.questionRepository.transaction([existing.subjectId], async (tx) => {
+    await this.removeInTransaction(id, existing.subjectId);
+  }
+
+  private removeInTransaction(id: Question['id'], subjectId: Question['subjectId']): Promise<void> {
+    return this.questionRepository.transaction([subjectId], async (tx) => {
       const [current] = await tx.findForUpdate([id]);
       if (!current) {
         throw notFound();
@@ -824,9 +966,15 @@ export class QuestionsService {
     }
   }
 
-  /** 引用的文件须存在且非私有 */
-  private async assertFileReferences(source: FileReferenceSource): Promise<void> {
-    const references = fileReferences(source);
+  /** 引用的文件须存在且非私有；assumedPublic 中的文件 id 视为可引用 */
+  async assertFileReferences(
+    source: FileReferenceSource,
+    assumedPublic: ReadonlySet<string> = new Set(),
+  ): Promise<void> {
+    const references = fileReferences(source).map(([field, fileIds]): [string, string[]] => [
+      field,
+      fileIds.filter((id) => !assumedPublic.has(id)),
+    ]);
     const ids = [...new Set(references.flatMap(([, fileIds]) => fileIds))];
     if (ids.length === 0) {
       return;

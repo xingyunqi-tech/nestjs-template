@@ -11,7 +11,14 @@ export interface QuestionOperator {
   roleId: number | null;
 }
 
-/** admin 可审核自己提交的题目 */
-export function isSelfReview(submittedBy: number | null, operator: QuestionOperator | null): boolean {
-  return operator !== null && submittedBy === operator.id && operator.roleId !== RoleEnum.admin;
+/** 操作人是题目的创建人或提交人；admin 不受限 */
+export function isSelfReview(
+  question: { createdBy: number | null; submittedBy: number | null },
+  operator: QuestionOperator | null,
+): boolean {
+  return (
+    operator !== null &&
+    operator.roleId !== RoleEnum.admin &&
+    (question.createdBy === operator.id || question.submittedBy === operator.id)
+  );
 }

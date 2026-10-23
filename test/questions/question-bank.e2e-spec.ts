@@ -65,6 +65,7 @@ describe('Question bank', () => {
   let admin: Account;
   let user: Account;
   let reviewer: Account;
+  let editor: Account;
   let examId: string;
   let subjectId: string;
   let branch: string;
@@ -133,6 +134,8 @@ describe('Question bank', () => {
     user = await registerAndLogin(app);
     reviewer = await registerAndLogin(app);
     await setRole(app, reviewer.email, RoleEnum.reviewer);
+    editor = await registerAndLogin(app);
+    await setRole(app, editor.email, RoleEnum.editor);
     admin = await registerAndLogin(app);
     await setRole(app, admin.email, RoleEnum.admin);
 
@@ -173,6 +176,7 @@ describe('Question bank', () => {
       }
       await setRole(app, admin.email, RoleEnum.user);
       await setRole(app, reviewer.email, RoleEnum.user);
+      await setRole(app, editor.email, RoleEnum.user);
     } finally {
       await app?.close();
     }
@@ -328,7 +332,7 @@ describe('Question bank', () => {
     await as(reviewer).post(`/admin/questions/${own.id}/submit`).expect(200);
     await as(admin).post(`/admin/questions/${other.id}/submit`).expect(200);
 
-    const selfReviewForbidden = { code: 403, message: '不能审核自己提交的题目', data: { questionIds: [own.id] } };
+    const selfReviewForbidden = { code: 403, message: '不能审核自己创建或提交的题目', data: { questionIds: [own.id] } };
     const publish = await as(reviewer)
       .post(`/admin/questions/${own.id}/publish`)
       .set('x-custom-lang', 'zh')
@@ -354,6 +358,123 @@ describe('Question bank', () => {
       submittedAt: expect.any(String),
       reviewedAt: expect.any(String),
     });
+  });
+
+  it('should run batch operations question by question', async () => {
+    const zh = (req: request.Test): request.Test => req.set('x-custom-lang', 'zh');
+    const first = await createQuestion(single('批量甲'));
+    const second = await createQuestion(single('批量乙'));
+    const own = await createQuestion(single('批量自审'));
+    const material = await createQuestion({
+      subjectId,
+      type: 'MATERIAL',
+      stem: `批量材料 ${unique}`,
+      material: '资料',
+    });
+    const subA = await createQuestion(single('批量小题一', { parentId: material.id, knowledgePointIds: [leafB] }));
+    const subB = await createQuestion(single('批量小题二', { parentId: material.id, knowledgePointIds: [leafB] }));
+    const missing = '00000000-0000-4000-8000-000000000000';
+
+    await as(user)
+      .post('/admin/questions/batch-submit', { ids: [first.id] })
+      .expect(403);
+    await as(editor)
+      .post('/admin/questions/batch-reject', { ids: [first.id], reason: '原因' })
+      .expect(403);
+    await as(editor)
+      .post('/admin/questions/batch-offline', { ids: [first.id] })
+      .expect(403);
+    await as(editor)
+      .post('/admin/questions/batch-submit', { ids: [first.id, first.id.toUpperCase()] })
+      .expect(422);
+    await as(reviewer)
+      .post('/admin/questions/batch-reject', { ids: [first.id], reason: '  ' })
+      .expect(422);
+
+    await as(reviewer).post(`/admin/questions/${own.id}/submit`).expect(200);
+    const submitted = await as(editor)
+      .post('/admin/questions/batch-submit', { ids: [first.id, second.id, subA.id, material.id, subB.id] })
+      .expect(200);
+    expect(submitted.body.data).toEqual({ succeeded: 5, failed: [] });
+    expect(await detail(material.id)).toMatchObject({
+      status: 'REVIEWING',
+      children: [expect.objectContaining({ status: 'REVIEWING' }), expect.objectContaining({ status: 'REVIEWING' })],
+    });
+
+    const rejected = await zh(
+      as(reviewer).post('/admin/questions/batch-reject', { ids: [second.id, own.id], reason: ' 解析不完整 ' }),
+    ).expect(200);
+    expect(rejected.body.data).toEqual({
+      succeeded: 1,
+      failed: [{ id: own.id, error: 'selfReviewForbidden', message: '不能审核自己创建或提交的题目' }],
+    });
+    expect(await detail(second.id)).toMatchObject({
+      status: 'DRAFT',
+      rejectReason: '解析不完整',
+      reviewer: { name: reviewer.email },
+    });
+    expect(await detail(own.id)).toMatchObject({ status: 'REVIEWING' });
+
+    const resubmitted = await as(editor)
+      .post('/admin/questions/batch-submit', { ids: [second.id, first.id] })
+      .expect(200);
+    expect(resubmitted.body.data).toEqual({
+      succeeded: 1,
+      failed: [{ id: first.id, error: 'invalidStatusTransition', message: expect.any(String) }],
+    });
+    const published = await as(reviewer)
+      .post('/admin/questions/batch-publish', { ids: [first.id, second.id, subA.id] })
+      .expect(200);
+    expect(published.body.data).toEqual({ count: 5 });
+
+    const countBefore = await questionCount(leafB);
+    const offline = await as(reviewer)
+      .post('/admin/questions/batch-offline', { ids: [first.id, subB.id, subA.id] })
+      .expect(200);
+    expect(offline.body.data).toEqual({ succeeded: 3, failed: [] });
+    expect((await detail(material.id)).children?.map((child) => child.status)).toEqual(['OFFLINE', 'OFFLINE']);
+    expect(await questionCount(leafB)).toBe(countBefore - 2);
+
+    const draft = await createQuestion(single('批量删除草稿'));
+    const removed = await zh(
+      as(editor).post('/admin/questions/batch-delete', { ids: [draft.id, first.id, missing] }),
+    ).expect(200);
+    expect(removed.body.data).toEqual({
+      succeeded: 1,
+      failed: [
+        { id: first.id, error: 'onlyDraftDeletable', message: '只能删除草稿状态的内容，已发布过的请下架' },
+        { id: missing, error: 'questionNotFound', message: '题目不存在' },
+      ],
+    });
+    await as(admin).get(`/admin/questions/${draft.id}`).expect(404);
+    await as(admin).get(`/admin/questions/${first.id}`).expect(200);
+
+    await zh(as(editor).patch('/admin/questions/batch-update', { ids: [second.id] }))
+      .expect(422)
+      .expect(({ body }) => expect(body.message).toBe('请至少填写一项要修改的内容'));
+    await as(editor)
+      .patch('/admin/questions/batch-update', { ids: [second.id], knowledgePointIds: [leafB] })
+      .expect(422);
+    const updated = await as(editor)
+      .patch('/admin/questions/batch-update', {
+        ids: [second.id, material.id],
+        knowledgePointIds: [leafB],
+        mode: 'append',
+        difficulty: 4,
+      })
+      .expect(200);
+    expect(updated.body.data).toEqual({
+      succeeded: 1,
+      failed: [{ id: material.id, error: 'materialKnowledgePointsNotAllowed', message: expect.any(String) }],
+    });
+    const edited = await detail(second.id);
+    expect(edited).toMatchObject({ status: 'PUBLISHED', currentVersion: 2, difficulty: 4 });
+    expect([...edited.knowledgePointIds].sort()).toEqual([leafA, leafB].sort());
+    const versions = await as(admin).get(`/admin/questions/${second.id}/versions`).expect(200);
+    expect(versions.body.data.map((v: { version: number; changeType: string }) => [v.version, v.changeType])).toEqual([
+      [2, 'EDIT'],
+      [1, 'PUBLISH'],
+    ]);
   });
 
   it('should list questions with filters', async () => {

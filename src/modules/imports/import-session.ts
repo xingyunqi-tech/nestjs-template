@@ -1,10 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { isUUID, validate } from 'class-validator';
-import { SubjectsService } from '../exams/subjects.service';
-import { KnowledgePointsService } from '../exams/knowledge-points.service';
 import { KnowledgePoint } from '../exams/domain/knowledge-point';
-import { QuestionsService } from '../questions/questions.service';
 import { Question } from '../questions/domain/question';
 import { QuestionType } from '../questions/domain/question-type';
 import { QuestionSource } from '../questions/domain/question-source';
@@ -13,19 +10,24 @@ import { validateQuestionContent } from '../questions/domain/question-content';
 import { CreateQuestionDto } from '../questions/dto/create-question.dto';
 import { UpdateQuestionDto } from '../questions/dto/update-question.dto';
 import { QuestionImportFields, QuestionImportItem, QuestionImportItemError } from '../questions/question-import';
-import { PapersService } from '../papers/papers.service';
-import { CATALOG_PAPER_TYPES, CatalogPaperType, PaperType } from '../papers/domain/paper-type';
+import { CATALOG_PAPER_TYPES, CatalogPaperType } from '../papers/domain/paper-type';
 import { MultiScoringRule } from '../papers/domain/multi-scoring-rule';
 import { CreatePaperDto } from '../papers/dto/create-paper.dto';
 import { PaperQuestionItemDto, SetPaperQuestionsDto } from '../papers/dto/set-paper-questions.dto';
-import { FileStorageService } from '../files/file-storage.service';
 import { FilePurpose } from '../files/domain/file-purpose';
-import { FileType } from '../files/domain/file';
-import { ImportOutcome, ImportProgress } from './domain/import-outcome';
+import {
+  ImportEntity,
+  ImportOutcome,
+  ImportProgress,
+  ImportSummary,
+  emptyImportSummary,
+} from './domain/import-outcome';
 import { ImportRowError } from './domain/import-row-error';
-import { parseAnswerNotation, splitLines } from './domain/answer-notation';
+import { parseAnswerNotation, parseOptionLines, splitLines } from './domain/answer-notation';
 import { ImportPackage } from './package/import-package';
-import { SheetRow } from './package/sheet-row';
+import { ImportSheets, SheetRow } from './package/sheet-row';
+import { ImportSessionDeps, ImportTarget, LiveImportTarget } from './import-target';
+import { DryRunImportTarget } from './dry-run-target';
 import { AssetPurpose, isAllowedAsset } from './package/asset-kind';
 import { assetNameOf, assetNamesIn, replaceAssetLinks } from './package/asset-references';
 import {
@@ -37,32 +39,28 @@ import {
   describeValidationErrors,
 } from './import-errors';
 
-export interface ImportSessionDeps {
-  subjectsService: SubjectsService;
-  knowledgePointsService: KnowledgePointsService;
-  questionsService: QuestionsService;
-  papersService: PapersService;
-  fileStorageService: FileStorageService;
-}
+export type { ImportSessionDeps } from './import-target';
 
 export interface ImportRunOptions {
   publish: boolean;
   operatorId: number | null;
+  /** 只解析与校验，写入在内存中模拟 */
+  dryRun?: boolean;
 }
 
 export type ImportProgressListener = (progress: ImportProgress) => Promise<void>;
 
-type UnitResult = 'written' | 'skipped';
+type UnitResult = 'created' | 'updated' | 'skipped';
 
 const DEFAULT_MATERIAL_STEM = '根据以下材料回答问题。';
-const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
+const OPTION_KEYS = Array.from({ length: 26 }, (_, index) => String.fromCharCode(65 + index));
+const OPTIONS_COLUMN = 'options';
 const QUESTION_TYPES: readonly QuestionType[] = Object.values(QuestionType).filter(
   (type) => type !== QuestionType.MATERIAL,
 );
 const PLACEHOLDER_ID = '00000000-0000-4000-8000-000000000000';
 const TRUE_VALUES = new Set(['是', 'true', '1', 'y', 'yes']);
 const FALSE_VALUES = new Set(['否', 'false', '0', 'n', 'no']);
-const PAPER_TITLE_LOOKUP_LIMIT = 100;
 
 interface AssetRequest {
   row: SheetRow;
@@ -119,6 +117,19 @@ function duplicateIdOf(error: unknown): string | null {
   return response.error === 'duplicateQuestion' && typeof id === 'string' ? id : null;
 }
 
+/** 导入单元数：知识点行、材料行、独立题与找不到材料的小题、试卷行、找不到试卷的试卷题目行 */
+export function countImportUnits(sheets: ImportSheets): number {
+  const materialKeys = new Set(sheets.materials.map((row) => cell(row, 'materialKey')).filter((key) => key));
+  const paperKeys = new Set(sheets.papers.map((row) => cell(row, 'paperKey')));
+  return (
+    sheets.knowledge_points.length +
+    sheets.materials.length +
+    sheets.questions.filter((row) => !materialKeys.has(cell(row, 'materialKey'))).length +
+    sheets.papers.length +
+    sheets.paper_questions.filter((row) => !paperKeys.has(cell(row, 'paperKey'))).length
+  );
+}
+
 async function validated<T extends object>(
   type: new () => T,
   plain: object,
@@ -140,14 +151,23 @@ export class ImportSession {
   private readonly assetFileIds = new Map<string, string>();
   private readonly questionKeys = new Map<string, string | null>();
   private readonly materialKeys = new Map<string, string | null>();
-  private unitUploads: { cacheKey: string; file: FileType }[] = [];
+  private readonly target: ImportTarget;
+  private readonly tally: ImportSummary = emptyImportSummary();
+  private unitUploads: { cacheKey: string; discard: () => Promise<void> }[] = [];
 
   constructor(
     private readonly deps: ImportSessionDeps,
     private readonly pkg: ImportPackage,
     private readonly options: ImportRunOptions,
     private readonly onProgress?: ImportProgressListener,
-  ) {}
+  ) {
+    this.target = options.dryRun ? new DryRunImportTarget(deps, options.operatorId) : new LiveImportTarget(deps);
+  }
+
+  /** 按内容类别统计已处理单元，失败的单元不计入 */
+  get summary(): ImportSummary {
+    return this.tally;
+  }
 
   async run(): Promise<ImportOutcome> {
     const { knowledge_points, materials, questions, papers, paper_questions } = this.pkg.sheets;
@@ -180,20 +200,14 @@ export class ImportSession {
     const paperKeys = new Set(papers.map((row) => cell(row, 'paperKey')));
     const orphanPaperQuestions = paper_questions.filter((row) => !paperKeys.has(cell(row, 'paperKey')));
 
-    this.progress.total =
-      knowledge_points.length +
-      materials.length +
-      standalone.length +
-      orphans.length +
-      papers.length +
-      orphanPaperQuestions.length;
+    this.progress.total = countImportUnits(this.pkg.sheets);
     await this.onProgress?.({ ...this.progress });
 
     for (const row of knowledge_points) {
-      await this.unit(() => this.importKnowledgePoint(row));
+      await this.unit('knowledgePoints', () => this.importKnowledgePoint(row));
     }
     for (const row of materialsWithoutKey) {
-      await this.unit(() => this.reject([[row, 'materialKey', 'importFieldRequired']]));
+      await this.unit('materials', () => this.reject([[row, 'materialKey', 'importFieldRequired']]));
     }
     for (const row of materials) {
       const key = cell(row, 'materialKey');
@@ -205,31 +219,37 @@ export class ImportSession {
         this.materialKeys.set(key, null);
         const rows = unit.row === row ? [row, ...unit.children] : [row];
         rows.forEach((item) => this.markFailedKey(cell(item, 'questionKey')));
-        await this.unit(() => this.reject(rows.map((item) => [item, 'materialKey', 'importDuplicateKey', key])));
+        await this.unit('materials', () =>
+          this.reject(rows.map((item) => [item, 'materialKey', 'importDuplicateKey', key])),
+        );
         continue;
       }
-      await this.unit(() => this.importMaterial(unit, questionKeyCounts));
+      await this.unit('materials', () => this.importMaterial(unit, questionKeyCounts));
     }
     for (const row of orphans) {
       this.markFailedKey(cell(row, 'questionKey'));
-      await this.unit(() => this.reject([[row, 'materialKey', 'importMaterialKeyNotFound', cell(row, 'materialKey')]]));
+      await this.unit('questions', () =>
+        this.reject([[row, 'materialKey', 'importMaterialKeyNotFound', cell(row, 'materialKey')]]),
+      );
     }
     for (const row of standalone) {
-      await this.unit(() => this.importStandalone(row, questionKeyCounts));
+      await this.unit('questions', () => this.importStandalone(row, questionKeyCounts));
     }
     for (const row of papers) {
       const key = cell(row, 'paperKey');
       const items = paper_questions.filter((item) => cell(item, 'paperKey') === key);
       if (!key) {
-        await this.unit(() => this.reject([[row, 'paperKey', 'importFieldRequired']]));
+        await this.unit('papers', () => this.reject([[row, 'paperKey', 'importFieldRequired']]));
       } else if ((paperKeyCounts.get(key) ?? 0) > 1) {
-        await this.unit(() => this.reject([[row, 'paperKey', 'importDuplicateKey', key]]));
+        await this.unit('papers', () => this.reject([[row, 'paperKey', 'importDuplicateKey', key]]));
       } else {
-        await this.unit(() => this.importPaper(row, items));
+        await this.unit('papers', () => this.importPaper(row, items));
       }
     }
     for (const row of orphanPaperQuestions) {
-      await this.unit(() => this.reject([[row, 'paperKey', 'importPaperKeyNotFound', cell(row, 'paperKey')]]));
+      await this.unit('papers', () =>
+        this.reject([[row, 'paperKey', 'importPaperKeyNotFound', cell(row, 'paperKey')]]),
+      );
     }
 
     return { ...this.progress, errors: this.errors };
@@ -241,7 +261,7 @@ export class ImportSession {
     }
   }
 
-  private async unit(work: () => Promise<UnitResult>): Promise<void> {
+  private async unit(entity: ImportEntity, work: () => Promise<UnitResult>): Promise<void> {
     this.unitUploads = [];
     let result: UnitResult | 'failed';
     try {
@@ -253,7 +273,7 @@ export class ImportSession {
       }
       result = 'failed';
     }
-    if (result === 'written') {
+    if (result === 'created' || result === 'updated') {
       this.progress.succeeded++;
     } else {
       await this.discardUnitUploads();
@@ -263,14 +283,17 @@ export class ImportSession {
         this.progress.failed++;
       }
     }
+    if (result !== 'failed') {
+      this.tally[result][entity]++;
+    }
     this.unitUploads = [];
     await this.onProgress?.({ ...this.progress });
   }
 
   private async discardUnitUploads(): Promise<void> {
-    for (const { cacheKey, file } of this.unitUploads) {
+    for (const { cacheKey, discard } of this.unitUploads) {
       this.assetFileIds.delete(cacheKey);
-      await this.deps.fileStorageService.remove(file).catch(() => undefined);
+      await discard().catch(() => undefined);
     }
   }
 
@@ -316,8 +339,7 @@ export class ImportSession {
     }
     this.settle(issues);
     try {
-      const { created } = await this.deps.knowledgePointsService.ensurePath(subjectId!, names);
-      return created ? 'written' : 'skipped';
+      return (await this.target.ensureKnowledgePath(subjectId!, names)) ? 'created' : 'skipped';
     } catch (error) {
       const description = describeException(error);
       if (!description) {
@@ -400,7 +422,7 @@ export class ImportSession {
         this.questionKeys.set(key, result.ids[child.item.ref]);
       }
     }
-    return result.kind === 'existing' ? 'skipped' : 'written';
+    return result.kind === 'existing' ? 'skipped' : id ? 'updated' : 'created';
   }
 
   private async importStandalone(row: SheetRow, questionKeyCounts: Map<string, number>): Promise<UnitResult> {
@@ -415,12 +437,12 @@ export class ImportSession {
     if (key) {
       this.questionKeys.set(key, result.rootId);
     }
-    return result.kind === 'existing' ? 'skipped' : 'written';
+    return result.kind === 'existing' ? 'skipped' : draft!.item.id ? 'updated' : 'created';
   }
 
   private async existingQuestions(rows: SheetRow[]): Promise<Map<string, Question>> {
     const ids = rows.map((row) => cell(row, 'id').toLowerCase()).filter((id) => isUUID(id));
-    const found = ids.length > 0 ? await this.deps.questionsService.findByIds(ids) : [];
+    const found = ids.length > 0 ? await this.target.findQuestions(ids) : [];
     return new Map(found.map((question) => [question.id, question]));
   }
 
@@ -453,10 +475,7 @@ export class ImportSession {
     if (!stem && !id) {
       issues.add(row, 'stem', 'importFieldRequired');
     }
-    const options: QuestionOption[] = OPTION_KEYS.flatMap((optionKey) => {
-      const content = cell(row, `option${optionKey}`);
-      return content ? [{ key: optionKey, content }] : [];
-    });
+    const { options, listed } = this.parseOptions(row, issues);
     const answerText = cell(row, 'answer');
     let answer: QuestionImportFields['answer'] | undefined;
     if (answerText || !id) {
@@ -498,17 +517,39 @@ export class ImportSession {
       item: id
         ? { ref: refOf(row), id, fields }
         : { ref: refOf(row), id: null, fields: fields as QuestionImportFields },
-      assets: this.textAssets(row, {
-        stem,
-        analysis: fields.analysis,
-        ...Object.fromEntries(options.map((option) => [`option${option.key}`, option.content])),
-      }),
+      assets: [
+        ...this.textAssets(row, { stem, analysis: fields.analysis }),
+        ...options.flatMap((option) =>
+          this.textAssets(row, { [listed ? OPTIONS_COLUMN : `option${option.key}`]: option.content }),
+        ),
+      ],
       audioAsset: null,
     };
     if (subjectId && !issues.has(row, 'answer') && !issues.has(row, 'stem')) {
       await this.checkFields(draft, subjectId, !!inherited, issues);
     }
     return draft;
+  }
+
+  /** optionA..optionZ 各占一列，或 options 单列每行一个选项；两种写法不能在同一行混用 */
+  private parseOptions(row: SheetRow, issues: UnitIssues): { options: QuestionOption[]; listed: boolean } {
+    const columns = OPTION_KEYS.flatMap((key) => {
+      const content = cell(row, `option${key}`);
+      return content ? [{ key, content }] : [];
+    });
+    const lines = splitLines(row.values[OPTIONS_COLUMN] ?? '');
+    if (lines.length === 0) {
+      return { options: columns, listed: false };
+    }
+    if (columns.length > 0) {
+      issues.add(row, OPTIONS_COLUMN, 'importOptionColumnsConflict');
+      return { options: [], listed: true };
+    }
+    const options = parseOptionLines(lines);
+    if (!options) {
+      issues.add(row, OPTIONS_COLUMN, 'invalidImportValue');
+    }
+    return { options: options ?? [], listed: true };
   }
 
   /** 与题目服务相同的内容规则与字段长度限制，在上传资源之前检查 */
@@ -568,7 +609,7 @@ export class ImportSession {
     }
 
     try {
-      const result = await this.deps.questionsService.importUnit({
+      const result = await this.target.importQuestionUnit({
         subjectId,
         root: root.item,
         children: children.map((child) => child.item),
@@ -596,7 +637,7 @@ export class ImportSession {
     root: QuestionDraft,
     children: QuestionDraft[],
   ): Promise<WriteResult | null> {
-    const [unit] = await this.deps.questionsService.findUnits([rootId]);
+    const [unit] = await this.target.findQuestionUnits([rootId]);
     if (!unit) {
       return null;
     }
@@ -631,15 +672,10 @@ export class ImportSession {
         continue;
       }
       try {
-        const { file, reused } = await this.deps.fileStorageService.storeDeduplicated(
-          content,
-          request.name,
-          request.purpose,
-          null,
-        );
-        this.assetFileIds.set(cacheKey, file.id);
-        if (!reused) {
-          this.unitUploads.push({ cacheKey, file });
+        const { fileId, discard } = await this.target.storeAsset(content, request.name, request.purpose);
+        this.assetFileIds.set(cacheKey, fileId);
+        if (discard) {
+          this.unitUploads.push({ cacheKey, discard });
         }
       } catch (error) {
         const description = describeException(error);
@@ -707,30 +743,22 @@ export class ImportSession {
     }
     this.settle(issues);
 
-    if (!id && (await this.paperTitleExists(subjectId!, paper.value.title))) {
+    if (!id && (await this.target.paperTitleExists(subjectId!, paper.value.title))) {
       return 'skipped';
     }
     const { subjectId: _subjectId, ...fields } = paper.value;
     try {
-      await this.deps.papersService.importPaper({
+      await this.target.importPaper({
         id,
         subjectId: subjectId!,
         fields,
         questions: questions.value,
         publish: this.options.publish,
       });
-      return 'written';
+      return id ? 'updated' : 'created';
     } catch (error) {
       this.failWith(issues, row, error);
     }
-  }
-
-  private async paperTitleExists(subjectId: string, title: string): Promise<boolean> {
-    const { data } = await this.deps.papersService.findManyWithPaginationAndCount({
-      filterOptions: { subjectId, keyword: title },
-      paginationOptions: { page: 1, limit: PAPER_TITLE_LOOKUP_LIMIT },
-    });
-    return data.some((paper) => paper.title === title && paper.type !== PaperType.GENERATED);
   }
 
   private async paperQuestions(rows: SheetRow[], issues: UnitIssues): Promise<SetPaperQuestionsDto> {
@@ -871,7 +899,7 @@ export class ImportSession {
   }
 
   private async loadKnowledgePaths(subjectId: string): Promise<Map<string, KnowledgePoint>> {
-    const points = await this.deps.knowledgePointsService.findBySubjectId(subjectId);
+    const points = await this.target.findKnowledgePoints(subjectId);
     const byId = new Map(points.map((point) => [point.id, point]));
     const nameOf = (point: KnowledgePoint): string => {
       const parent = point.parentId ? byId.get(point.parentId) : undefined;

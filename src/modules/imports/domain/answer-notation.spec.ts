@@ -1,4 +1,4 @@
-import { parseAnswerNotation, parseFillNotation, splitLines } from './answer-notation';
+import { parseAnswerNotation, parseFillNotation, parseOptionLines, splitLines } from './answer-notation';
 import { QuestionType } from '../../questions/domain/question-type';
 
 describe('answer notation', () => {
@@ -58,5 +58,62 @@ describe('answer notation', () => {
 
   it('should split non-empty trimmed lines', () => {
     expect(splitLines(' a \n\nb')).toEqual(['a', 'b']);
+  });
+
+  describe('parseOptionLines', () => {
+    it('should take keys from A. / A． / A、 prefixes', () => {
+      expect(parseOptionLines(['A. 甲', 'B．乙', 'C、 丙', 'E.戊'])).toEqual([
+        { key: 'A', content: '甲' },
+        { key: 'B', content: '乙' },
+        { key: 'C', content: '丙' },
+        { key: 'E', content: '戊' },
+      ]);
+    });
+
+    it('should number lines without prefixes from A', () => {
+      expect(parseOptionLines(['甲', '乙', '丙'])).toEqual([
+        { key: 'A', content: '甲' },
+        { key: 'B', content: '乙' },
+        { key: 'C', content: '丙' },
+      ]);
+    });
+
+    it('should number up to 26 lines without prefixes', () => {
+      const lines = Array.from({ length: 26 }, (_, index) => `选项${index}`);
+
+      expect(
+        parseOptionLines(lines)
+          ?.map((option) => option.key)
+          .join(''),
+      ).toBe('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+      expect(parseOptionLines([...lines, '多余'])).toBeUndefined();
+    });
+
+    it('should reject prefixed and unprefixed lines mixed together', () => {
+      expect(parseOptionLines(['A. 甲', '乙'])).toBeUndefined();
+    });
+
+    it('should take uppercase keys from lowercase and full-width letter prefixes', () => {
+      expect(parseOptionLines(['a. 甲', 'ｂ．乙', 'Ｃ、丙'])).toEqual([
+        { key: 'A', content: '甲' },
+        { key: 'B', content: '乙' },
+        { key: 'C', content: '丙' },
+      ]);
+    });
+
+    it('should take keys from colon and parenthesis prefixes', () => {
+      expect(parseOptionLines(['A：甲', 'B: 乙', '(C) 丙', '（D）丁', 'E) 戊', 'F）己'])).toEqual([
+        { key: 'A', content: '甲' },
+        { key: 'B', content: '乙' },
+        { key: 'C', content: '丙' },
+        { key: 'D', content: '丁' },
+        { key: 'E', content: '戊' },
+        { key: 'F', content: '己' },
+      ]);
+    });
+
+    it('should reject lines with an unrecognized prefix mixed with prefixed lines', () => {
+      expect(parseOptionLines(['A. 甲', 'B 乙'])).toBeUndefined();
+    });
   });
 });

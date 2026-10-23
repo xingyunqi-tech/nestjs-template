@@ -5,6 +5,7 @@ import { QuestionSource } from './question-source';
 import { QuestionAnswer, QuestionOption } from './question-answer';
 
 export const REJECT_REASON_MAX_LENGTH = 500;
+export const QUESTION_KNOWLEDGE_POINTS_MAX = 10;
 
 export class Question {
   @ApiProperty({ type: String, format: 'uuid' })

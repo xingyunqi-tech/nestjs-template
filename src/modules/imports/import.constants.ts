@@ -16,3 +16,8 @@ export const IMPORT_STALE_TIMEOUTS = {
   runningMs: 30 * 60 * 1000,
   pendingMs: 10 * 60 * 1000,
 } as const;
+
+export const IMPORT_PRECHECK_LIMITS = {
+  maxUnits: 2000,
+  maxErrors: 500,
+} as const;

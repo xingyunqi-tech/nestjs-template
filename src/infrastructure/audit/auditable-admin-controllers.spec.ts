@@ -17,7 +17,10 @@ type ControllerClass = { prototype: object; name: string };
 
 const MODULES_DIR = join(__dirname, '../../modules');
 
-const READ_ONLY_HANDLERS: object[] = [AdminPaperRulesController.prototype.preview];
+const READ_ONLY_HANDLERS: object[] = [
+  AdminPaperRulesController.prototype.preview,
+  AdminImportsController.prototype.precheck,
+];
 
 const UNAUDITED_HANDLERS: object[] = [
   AdminAccountCleanupController.prototype.retrigger,

@@ -1,5 +1,5 @@
 import type { Mocked } from 'vitest';
-import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { HttpStatus, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import ExcelJS from 'exceljs';
@@ -8,7 +8,9 @@ import { ImportJobRepository } from './infrastructure/persistence/import-job.rep
 import { ContentImporter } from './content-importer';
 import { ImportJob } from './domain/import-job';
 import { ImportJobStatus } from './domain/import-job-status';
-import { ImportOutcome } from './domain/import-outcome';
+import { ImportOutcome, emptyImportSummary } from './domain/import-outcome';
+import { ImportRowError } from './domain/import-row-error';
+import { buildErrorReport } from './error-report';
 import { FilesService } from '../files/files.service';
 import { FileStorageService } from '../files/file-storage.service';
 import { FilePurpose } from '../files/domain/file-purpose';
@@ -40,7 +42,7 @@ const file = (overrides: Partial<FileType> = {}): FileType =>
 
 describe('ImportsService', () => {
   let repository: Mocked<ImportJobRepository>;
-  let contentImporter: Mocked<Pick<ContentImporter, 'run'>>;
+  let contentImporter: Mocked<Pick<ContentImporter, 'run' | 'precheck'>>;
   let filesService: Mocked<Pick<FilesService, 'findAccessible' | 'findById'>>;
   let fileStorageService: Mocked<Pick<FileStorageService, 'store' | 'read'>>;
   let alertReporter: Mocked<AlertReporter>;
@@ -56,7 +58,7 @@ describe('ImportsService', () => {
       failStale: vi.fn().mockResolvedValue([]),
       finish: vi.fn((_id, data) => Promise.resolve(job({ ...data }))),
     };
-    contentImporter = { run: vi.fn() };
+    contentImporter = { run: vi.fn(), precheck: vi.fn() };
     filesService = { findAccessible: vi.fn().mockResolvedValue(file()), findById: vi.fn().mockResolvedValue(file()) };
     fileStorageService = {
       store: vi.fn((_content: Buffer, name: string) => Promise.resolve(file({ id: `stored-${name}` }))),
@@ -284,6 +286,150 @@ describe('ImportsService', () => {
       await expect(service.getErrorReport(JOB_ID)).rejects.toBeInstanceOf(NotFoundException);
       repository.findById.mockResolvedValue(null);
       await expect(service.getErrorReport(JOB_ID)).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('precheck', () => {
+    const admin = { id: 3, roleId: RoleEnum.admin };
+    const rowError = (row: number): ImportRowError => ({
+      sheet: 'questions',
+      row,
+      field: '',
+      reason: 'duplicateQuestion',
+    });
+    const jsonPackage = (questions: number): Buffer =>
+      Buffer.from(JSON.stringify({ questions: Array.from({ length: questions }, () => ({ stem: 'x' })) }));
+
+    it('should check an uploaded package without storing it or creating a job', async () => {
+      const summary = emptyImportSummary();
+      summary.created.questions = 1;
+      summary.skipped.materials = 2;
+      contentImporter.precheck.mockResolvedValue({
+        total: 4,
+        succeeded: 1,
+        failed: 1,
+        skipped: 2,
+        errors: [rowError(3)],
+        summary,
+      });
+
+      const result = await service.precheck(
+        { upload: { buffer: jsonPackage(1), originalname: 'content.json' }, publishOnImport: true },
+        admin,
+      );
+
+      expect(result).toEqual({
+        wouldCreate: { knowledgePoints: 0, materials: 0, questions: 1, papers: 0 },
+        wouldUpdate: { knowledgePoints: 0, materials: 0, questions: 0, papers: 0 },
+        wouldSkip: { knowledgePoints: 0, materials: 2, questions: 0, papers: 0 },
+        errors: [{ ...rowError(3), message: '题目已存在' }],
+        truncated: false,
+      });
+      expect(contentImporter.precheck).toHaveBeenCalledWith(expect.objectContaining({ assets: new Map() }), {
+        publish: true,
+        operatorId: 3,
+      });
+      expect(fileStorageService.store).not.toHaveBeenCalled();
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('should read a referenced import file', async () => {
+      contentImporter.precheck.mockResolvedValue({
+        total: 0,
+        succeeded: 0,
+        failed: 0,
+        skipped: 0,
+        errors: [],
+        summary: emptyImportSummary(),
+      });
+
+      await service.precheck({ fileId: 'file-1', publishOnImport: false }, admin);
+
+      expect(filesService.findAccessible).toHaveBeenCalledWith('file-1', 3);
+      expect(fileStorageService.read).toHaveBeenCalledWith(file());
+    });
+
+    it('should return at most 500 errors and mark the result as truncated', async () => {
+      contentImporter.precheck.mockResolvedValue({
+        total: 501,
+        succeeded: 0,
+        failed: 501,
+        skipped: 0,
+        errors: Array.from({ length: 501 }, (_, index) => rowError(index + 2)),
+        summary: emptyImportSummary(),
+      });
+
+      const result = await service.precheck(
+        { upload: { buffer: jsonPackage(1), originalname: 'content.json' }, publishOnImport: false },
+        admin,
+      );
+
+      expect(result.errors).toHaveLength(500);
+      expect(result.errors[499].row).toBe(501);
+      expect(result.truncated).toBe(true);
+    });
+
+    it('should reject packages with more than 2000 units with 413', async () => {
+      const upload = { buffer: jsonPackage(2001), originalname: 'content.json' };
+
+      await expect(service.precheck({ upload, publishOnImport: false }, admin)).rejects.toMatchObject({
+        status: HttpStatus.PAYLOAD_TOO_LARGE,
+        response: { error: 'importPrecheckTooLarge' },
+      });
+      expect(contentImporter.precheck).not.toHaveBeenCalled();
+    });
+
+    it('should reject unreadable packages and non-admin publishing', async () => {
+      const upload = { buffer: Buffer.from('not a package'), originalname: 'a.zip' };
+
+      await expect(service.precheck({ upload, publishOnImport: false }, admin)).rejects.toMatchObject({
+        constructor: UnprocessableEntityException,
+        response: { error: 'importInvalidPackage' },
+      });
+      await expect(
+        service.precheck({ upload, publishOnImport: true }, { id: 3, roleId: RoleEnum.editor }),
+      ).rejects.toMatchObject({ response: { error: 'importPublishForbidden' } });
+    });
+  });
+
+  describe('findErrors', () => {
+    const errors: ImportRowError[] = [
+      { sheet: 'questions', row: 2, field: 'answer', reason: 'duplicateQuestion' },
+      { sheet: 'papers', row: 2, field: '', reason: 'paperFrozen', detail: 'id=p' },
+      { sheet: 'questions', row: 3, field: 'stem', reason: 'importFieldRequired' },
+      { sheet: 'questions', row: 4, field: 'type', reason: 'importFieldRequired' },
+    ];
+
+    beforeEach(async () => {
+      repository.findById.mockResolvedValue(job({ errorReportFileId: 'report' }));
+      filesService.findById.mockResolvedValue(file({ id: 'report', mimeType: XLSX }));
+      fileStorageService.read.mockResolvedValue(await buildErrorReport(errors, (reason) => `说明 ${reason}`));
+    });
+
+    it('should page the rows of the error report with messages', async () => {
+      const page = await service.findErrors(JOB_ID, { page: 1, limit: 2 });
+
+      expect(page).toEqual({
+        total: 4,
+        data: [
+          { ...errors[0], message: '说明 duplicateQuestion' },
+          { ...errors[1], message: '说明 paperFrozen' },
+        ],
+      });
+    });
+
+    it('should filter by sheet before paging', async () => {
+      const page = await service.findErrors(JOB_ID, { sheet: 'questions', page: 2, limit: 2 });
+
+      expect(page).toEqual({ total: 3, data: [{ ...errors[3], message: '说明 importFieldRequired' }] });
+    });
+
+    it('should return an empty list for a job without errors and 404 for unknown jobs', async () => {
+      repository.findById.mockResolvedValue(job({ errorReportFileId: null }));
+      await expect(service.findErrors(JOB_ID, { page: 1, limit: 20 })).resolves.toEqual({ data: [], total: 0 });
+
+      repository.findById.mockResolvedValue(null);
+      await expect(service.findErrors(JOB_ID, { page: 1, limit: 20 })).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

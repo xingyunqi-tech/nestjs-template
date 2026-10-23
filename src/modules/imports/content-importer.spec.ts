@@ -3,6 +3,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ContentImporter } from './content-importer';
 import { ImportPackage } from './package/import-package';
 import { ImportSheetName, SheetRow, emptySheets } from './package/sheet-row';
+import { readJsonSheets } from './package/json-content';
 import { SubjectsService } from '../exams/subjects.service';
 import { KnowledgePointsService } from '../exams/knowledge-points.service';
 import { QuestionsService } from '../questions/questions.service';
@@ -531,5 +532,80 @@ describe('ContentImporter', () => {
       { sheet: 'questions', row: 2, field: 'answer', reason: 'invalidImportValue', detail: 'date' },
     ]);
     expect(questionsService.importUnit).not.toHaveBeenCalled();
+  });
+
+  describe('options', () => {
+    const plain = (overrides: Values): Values => ({
+      ...SUBJECT,
+      type: 'SINGLE',
+      stem: '题干',
+      answer: 'A',
+      ...overrides,
+    });
+    const optionsOf = (call: number) => questionsService.importUnit.mock.calls[call][0].root.fields.options;
+
+    it('should read option columns optionA to optionZ', async () => {
+      const columns = Object.fromEntries(
+        Array.from({ length: 26 }, (_, index) => [`option${String.fromCharCode(65 + index)}`, `选项${index}`]),
+      );
+
+      const outcome = await run(pkg({ questions: [plain({ ...columns, answer: 'Z' })] }));
+
+      expect(outcome.errors).toEqual([]);
+      expect(optionsOf(0)).toHaveLength(26);
+      expect(optionsOf(0)?.[25]).toEqual({ key: 'Z', content: '选项25' });
+    });
+
+    it('should read the options column with or without key prefixes', async () => {
+      const outcome = await run(
+        pkg(
+          {
+            questions: [
+              plain({ options: 'A. 甲\nB．乙\nC、丙' }),
+              plain({ options: '甲\n\n乙\n' }),
+              plain({ options: 'A. ![](assets/chart.png)\nB. 乙' }),
+            ],
+          },
+          { 'chart.png': PNG_BYTES },
+        ),
+      );
+
+      expect(outcome.errors).toEqual([]);
+      expect(optionsOf(0)).toEqual([
+        { key: 'A', content: '甲' },
+        { key: 'B', content: '乙' },
+        { key: 'C', content: '丙' },
+      ]);
+      expect(optionsOf(1)).toEqual([
+        { key: 'A', content: '甲' },
+        { key: 'B', content: '乙' },
+      ]);
+      expect(optionsOf(2)?.[0]).toEqual({ key: 'A', content: '![](file:file-chart.png)' });
+    });
+
+    it('should accept an array of options in JSON content', () => {
+      const sheets = readJsonSheets(Buffer.from(JSON.stringify({ questions: [{ options: ['A. 甲', 'B. 乙'] }] })), 10);
+
+      expect(sheets.questions[0].values.options).toBe('A. 甲\nB. 乙');
+    });
+
+    it('should reject rows that fill both option columns and the options column', async () => {
+      const outcome = await run(
+        pkg({
+          questions: [
+            plain({ optionA: '甲', optionB: '乙', options: 'A. 甲\nB. 乙' }),
+            plain({ options: 'A. 甲\n乙' }),
+            plain({ options: 'A. ![](assets/missing.png)\nB. 乙' }),
+          ],
+        }),
+      );
+
+      expect(outcome.errors).toEqual([
+        { sheet: 'questions', row: 2, field: 'options', reason: 'importOptionColumnsConflict' },
+        { sheet: 'questions', row: 3, field: 'options', reason: 'invalidImportValue' },
+        { sheet: 'questions', row: 4, field: 'options', reason: 'importAssetNotFound', detail: 'missing.png' },
+      ]);
+      expect(questionsService.importUnit).not.toHaveBeenCalled();
+    });
   });
 });

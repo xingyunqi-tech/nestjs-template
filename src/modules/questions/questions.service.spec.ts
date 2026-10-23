@@ -17,6 +17,7 @@ import { QuestionAction, QuestionStatus } from './domain/question-status';
 import { QuestionSource } from './domain/question-source';
 import { QuestionChangeType, QuestionVersion } from './domain/question-version';
 import { CreateQuestionDto } from './dto/create-question.dto';
+import { KnowledgePointUpdateMode } from './dto/batch-question-operation.dto';
 import { QuestionImportItem, QuestionImportItemError } from './question-import';
 import { OperatorProfile, QuestionOperator } from './domain/question-operator';
 import { SubjectsService } from '../exams/subjects.service';
@@ -636,6 +637,18 @@ describe('QuestionsService', () => {
       expect(store.questions.get(id)).toMatchObject({ status: QuestionStatus.REVIEWING, reviewedBy: null });
     });
 
+    it('should forbid a non-admin from publishing a question they created that another operator submitted', async () => {
+      const { id } = await service.create(singleDto(), REVIEWER.id);
+      await act(id, QuestionAction.SUBMIT, EDITOR);
+
+      await expect(act(id, QuestionAction.PUBLISH, REVIEWER)).rejects.toMatchObject({
+        response: { error: 'selfReviewForbidden' },
+      });
+      await expect(act(id, QuestionAction.PUBLISH, { id: 6, roleId: RoleEnum.reviewer })).resolves.toMatchObject({
+        status: QuestionStatus.PUBLISHED,
+      });
+    });
+
     it('should let an admin publish a question they submitted', async () => {
       const { id } = await create(singleDto());
       await act(id, QuestionAction.SUBMIT, ADMIN);
@@ -977,6 +990,255 @@ describe('QuestionsService', () => {
 
       await expect(service.remove(id)).rejects.toMatchObject({ response: { error: 'questionInUse' } });
       expect(usage.isUsed).toHaveBeenCalledWith([id]);
+    });
+  });
+
+  describe('batch operations', () => {
+    const SUBMITTER: QuestionOperator = { id: 5, roleId: RoleEnum.reviewer };
+    const failure = (id: string, error: string) => ({ id, error, message: error });
+    const statusOf = (id: string) => store.questions.get(id)!.status;
+    const createMaterialGroup = async (material = '资料内容') => {
+      const root = await create(materialDto(material));
+      const first = await create(singleDto({ parentId: root.id, stem: '第一题', knowledgePointIds: [] }));
+      const second = await create(singleDto({ parentId: root.id, stem: '第二题', knowledgePointIds: [] }));
+      return { root, first, second };
+    };
+
+    describe('batchSubmit', () => {
+      it('should submit every draft and record the submitter', async () => {
+        const a = await create(singleDto({ stem: '甲题' }));
+        const b = await create(singleDto({ stem: '乙题' }));
+
+        await expect(service.batchSubmit([a.id, b.id], EDITOR)).resolves.toEqual({ succeeded: 2, failed: [] });
+        for (const id of [a.id, b.id]) {
+          expect(store.questions.get(id)).toMatchObject({ status: QuestionStatus.REVIEWING, submittedBy: EDITOR.id });
+        }
+      });
+
+      it('should report failures per id in request order and keep the other questions going', async () => {
+        const reviewing = await create(singleDto({ stem: '审核中' }));
+        const draft = await create(singleDto({ stem: '草稿' }));
+        const emptyMaterial = await create(materialDto());
+        await act(reviewing.id, QuestionAction.SUBMIT);
+
+        await expect(
+          service.batchSubmit(['missing', reviewing.id, draft.id, emptyMaterial.id], EDITOR),
+        ).resolves.toEqual({
+          succeeded: 1,
+          failed: [
+            failure('missing', 'questionNotFound'),
+            failure(reviewing.id, 'invalidStatusTransition'),
+            failure(emptyMaterial.id, 'materialHasNoSubQuestions'),
+          ],
+        });
+        expect(statusOf(draft.id)).toBe(QuestionStatus.REVIEWING);
+      });
+
+      it('should submit the whole material once when given its sub-questions and itself', async () => {
+        const { root, first, second } = await createMaterialGroup();
+
+        await expect(service.batchSubmit([first.id, root.id, second.id], EDITOR)).resolves.toEqual({
+          succeeded: 3,
+          failed: [],
+        });
+        expect([root.id, first.id, second.id].map(statusOf)).toEqual([
+          QuestionStatus.REVIEWING,
+          QuestionStatus.REVIEWING,
+          QuestionStatus.REVIEWING,
+        ]);
+      });
+
+      it('should report the requested sub-question ids when their material fails', async () => {
+        const { root, first, second } = await createMaterialGroup();
+        await act(root.id, QuestionAction.SUBMIT);
+
+        await expect(service.batchSubmit([first.id, second.id], EDITOR)).resolves.toEqual({
+          succeeded: 0,
+          failed: [failure(first.id, 'invalidStatusTransition'), failure(second.id, 'invalidStatusTransition')],
+        });
+      });
+    });
+
+    describe('batchReject', () => {
+      it('should reject with the reason and fail only the questions the operator submitted', async () => {
+        const own = await create(singleDto({ stem: '自己提交' }));
+        const other = await create(singleDto({ stem: '他人提交' }));
+        const { root, first } = await createMaterialGroup();
+        await act(own.id, QuestionAction.SUBMIT, SUBMITTER);
+        await act(other.id, QuestionAction.SUBMIT, EDITOR);
+        await act(root.id, QuestionAction.SUBMIT, EDITOR);
+
+        await expect(service.batchReject([own.id, other.id, first.id], '题干有误', SUBMITTER)).resolves.toEqual({
+          succeeded: 2,
+          failed: [failure(own.id, 'selfReviewForbidden')],
+        });
+        expect(statusOf(own.id)).toBe(QuestionStatus.REVIEWING);
+        for (const id of [other.id, root.id, first.id]) {
+          expect(store.questions.get(id)).toMatchObject({
+            status: QuestionStatus.DRAFT,
+            reviewedBy: SUBMITTER.id,
+            rejectReason: '题干有误',
+          });
+        }
+      });
+
+      it('should let an admin reject questions they submitted', async () => {
+        const { id } = await create(singleDto());
+        await act(id, QuestionAction.SUBMIT, ADMIN);
+
+        await expect(service.batchReject([id], '原因', ADMIN)).resolves.toEqual({ succeeded: 1, failed: [] });
+        expect(statusOf(id)).toBe(QuestionStatus.DRAFT);
+      });
+    });
+
+    describe('batchOffline', () => {
+      it('should take published questions offline without the self review check', async () => {
+        const own = await create(singleDto({ stem: '自己提交' }));
+        const draft = await create(singleDto({ stem: '草稿' }));
+        await act(own.id, QuestionAction.SUBMIT, SUBMITTER);
+        await act(own.id, QuestionAction.PUBLISH, REVIEWER);
+
+        await expect(service.batchOffline([own.id, draft.id], SUBMITTER)).resolves.toEqual({
+          succeeded: 1,
+          failed: [failure(draft.id, 'invalidStatusTransition')],
+        });
+        expect(store.questions.get(own.id)).toMatchObject({ status: QuestionStatus.OFFLINE, reviewedBy: SUBMITTER.id });
+      });
+    });
+
+    describe('batchRemove', () => {
+      it('should delete drafts and fail questions published before or in use', async () => {
+        const draft = await create(singleDto({ stem: '草稿' }));
+        const used = await create(singleDto({ stem: '已作答' }));
+        const published = await create(singleDto({ stem: '已发布' }));
+        await publish(published.id);
+        await act(published.id, QuestionAction.OFFLINE);
+        usage.isUsed.mockImplementation((ids: string[]) => Promise.resolve(ids.includes(used.id)));
+
+        await expect(service.batchRemove([draft.id, used.id, published.id])).resolves.toEqual({
+          succeeded: 1,
+          failed: [failure(used.id, 'questionInUse'), failure(published.id, 'onlyDraftDeletable')],
+        });
+        expect(store.removed).toEqual([draft.id]);
+      });
+
+      it('should delete a sub-question alone unless its material is in the same batch', async () => {
+        const kept = await createMaterialGroup('保留的材料');
+        const removed = await createMaterialGroup('删除的材料');
+
+        await expect(
+          service.batchRemove([kept.first.id, removed.second.id, removed.root.id, removed.first.id]),
+        ).resolves.toEqual({ succeeded: 4, failed: [] });
+        expect(store.removed).toEqual([kept.first.id, removed.root.id, removed.first.id, removed.second.id]);
+        expect(store.questions.has(kept.root.id)).toBe(true);
+      });
+    });
+
+    describe('batchUpdate', () => {
+      it('should require at least one field to update', async () => {
+        const { id } = await create(singleDto());
+
+        const error = await service.batchUpdate({ ids: [id] }).catch((caught: unknown) => caught);
+
+        expect(error).toBeInstanceOf(UnprocessableEntityException);
+        expect(error).toMatchObject({ response: { error: 'batchUpdateFieldsRequired' } });
+      });
+
+      it('should append or replace knowledge points', async () => {
+        const appended = await create(singleDto({ stem: '追加' }));
+        const replaced = await create(singleDto({ stem: '替换' }));
+
+        await service.batchUpdate({
+          ids: [appended.id],
+          knowledgePointIds: ['leaf2', 'leaf1'],
+          mode: KnowledgePointUpdateMode.APPEND,
+        });
+        await service.batchUpdate({
+          ids: [replaced.id],
+          knowledgePointIds: ['leaf2'],
+          mode: KnowledgePointUpdateMode.REPLACE,
+        });
+
+        expect(store.questions.get(appended.id)!.knowledgePointIds).toEqual(['leaf1', 'leaf2']);
+        expect(store.questions.get(replaced.id)!.knowledgePointIds).toEqual(['leaf2']);
+      });
+
+      it('should fail when appending exceeds the knowledge point limit', async () => {
+        const extra = Array.from({ length: 10 }, (_, index) => `extra${index}`);
+        store.points.push(...extra.map((id) => ({ id, subjectId: SUBJECT, isLeaf: true })));
+        const { id } = await create(singleDto());
+
+        await expect(
+          service.batchUpdate({ ids: [id], knowledgePointIds: extra, mode: KnowledgePointUpdateMode.APPEND }),
+        ).resolves.toEqual({ succeeded: 0, failed: [failure(id, 'questionKnowledgePointsTooMany')] });
+      });
+
+      it('should version a published question whose knowledge points change', async () => {
+        const { id } = await create(singleDto());
+        await publish(id);
+
+        await expect(
+          service.batchUpdate({
+            ids: [id],
+            knowledgePointIds: ['leaf2'],
+            mode: KnowledgePointUpdateMode.APPEND,
+            difficulty: 5,
+          }),
+        ).resolves.toEqual({ succeeded: 1, failed: [] });
+
+        expect(store.questions.get(id)).toMatchObject({ currentVersion: 2, difficulty: 5 });
+        expect(
+          store.versions.map((version) => [version.version, version.changeType, version.knowledgePointIds]),
+        ).toEqual([
+          [1, QuestionChangeType.PUBLISH, ['leaf1']],
+          [2, QuestionChangeType.EDIT, ['leaf1', 'leaf2']],
+        ]);
+        expect(store.deltas.slice(1)).toEqual([
+          { knowledgePointId: 'leaf1', delta: -1 },
+          { knowledgePointId: 'leaf1', delta: 1 },
+          { knowledgePointId: 'leaf2', delta: 1 },
+        ]);
+      });
+
+      it('should apply the single-question edit rules to each question', async () => {
+        const { root, first } = await createMaterialGroup();
+        const reviewing = await create(singleDto({ stem: '审核中' }));
+        await act(reviewing.id, QuestionAction.SUBMIT);
+
+        await expect(
+          service.batchUpdate({
+            ids: [root.id, first.id, reviewing.id],
+            knowledgePointIds: ['leaf1'],
+            mode: KnowledgePointUpdateMode.REPLACE,
+            source: QuestionSource.PUBLIC,
+          }),
+        ).resolves.toEqual({
+          succeeded: 1,
+          failed: [failure(root.id, 'materialKnowledgePointsNotAllowed'), failure(reviewing.id, 'questionUnderReview')],
+        });
+        expect(store.questions.get(first.id)).toMatchObject({
+          knowledgePointIds: ['leaf1'],
+          source: QuestionSource.PUBLIC,
+        });
+        expect(store.questions.get(root.id)!.source).toBe(QuestionSource.ORIGINAL);
+      });
+
+      it('should let sub-questions follow the material for isFree', async () => {
+        const { root, first, second } = await createMaterialGroup();
+
+        await expect(service.batchUpdate({ ids: [first.id], isFree: false })).resolves.toEqual({
+          succeeded: 1,
+          failed: [],
+        });
+        expect(store.questions.get(first.id)!.isFree).toBe(true);
+
+        await service.batchUpdate({ ids: [root.id], isFree: false });
+        expect([root.id, first.id, second.id].map((id) => store.questions.get(id)!.isFree)).toEqual([
+          false,
+          false,
+          false,
+        ]);
+      });
     });
   });
 

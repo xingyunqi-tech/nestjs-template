@@ -27,10 +27,28 @@ describe('AdminQuestionsController permissions', () => {
   it('should let a review-only role read questions but not edit them', async () => {
     const canActivate = guardFor([Permission.CONTENT_REVIEW]);
 
-    for (const handler of ['findAll', 'findOne', 'publish', 'reject', 'offline', 'batchPublish'] as const) {
+    for (const handler of [
+      'findAll',
+      'findOne',
+      'publish',
+      'reject',
+      'offline',
+      'batchPublish',
+      'batchReject',
+      'batchOffline',
+    ] as const) {
       await expect(canActivate(handler)).resolves.toBe(true);
     }
-    for (const handler of ['create', 'update', 'remove', 'submit', 'findVersions'] as const) {
+    for (const handler of [
+      'create',
+      'update',
+      'remove',
+      'submit',
+      'findVersions',
+      'batchSubmit',
+      'batchRemove',
+      'batchUpdate',
+    ] as const) {
       await expect(canActivate(handler)).rejects.toBeInstanceOf(ForbiddenException);
     }
   });
@@ -38,10 +56,21 @@ describe('AdminQuestionsController permissions', () => {
   it('should let a manage-only role edit but not review', async () => {
     const canActivate = guardFor([Permission.CONTENT_MANAGE]);
 
-    for (const handler of ['findAll', 'findOne', 'create', 'update', 'remove', 'submit', 'findVersions'] as const) {
+    for (const handler of [
+      'findAll',
+      'findOne',
+      'create',
+      'update',
+      'remove',
+      'submit',
+      'findVersions',
+      'batchSubmit',
+      'batchRemove',
+      'batchUpdate',
+    ] as const) {
       await expect(canActivate(handler)).resolves.toBe(true);
     }
-    for (const handler of ['publish', 'reject', 'offline', 'batchPublish'] as const) {
+    for (const handler of ['publish', 'reject', 'offline', 'batchPublish', 'batchReject', 'batchOffline'] as const) {
       await expect(canActivate(handler)).rejects.toBeInstanceOf(ForbiddenException);
     }
   });
@@ -50,7 +79,21 @@ describe('AdminQuestionsController permissions', () => {
 describe('AdminQuestionsController operators', () => {
   const request = { user: { id: 5, role: { id: RoleEnum.reviewer } } } as unknown as RequestWithUser;
   const operator = { id: 5, roleId: RoleEnum.reviewer };
-  let service: { [K in 'create' | 'changeStatus' | 'reject' | 'batchPublish']: ReturnType<typeof vi.fn> };
+  const batchResult = { succeeded: 1, failed: [] };
+  let service: {
+    [
+      K in
+        | 'create'
+        | 'changeStatus'
+        | 'reject'
+        | 'batchPublish'
+        | 'batchSubmit'
+        | 'batchReject'
+        | 'batchOffline'
+        | 'batchRemove'
+        | 'batchUpdate'
+    ]: ReturnType<typeof vi.fn>;
+  };
   let controller: AdminQuestionsController;
 
   beforeEach(() => {
@@ -59,6 +102,11 @@ describe('AdminQuestionsController operators', () => {
       changeStatus: vi.fn().mockResolvedValue({}),
       reject: vi.fn().mockResolvedValue({}),
       batchPublish: vi.fn().mockResolvedValue({ count: 1 }),
+      batchSubmit: vi.fn().mockResolvedValue(batchResult),
+      batchReject: vi.fn().mockResolvedValue(batchResult),
+      batchOffline: vi.fn().mockResolvedValue(batchResult),
+      batchRemove: vi.fn().mockResolvedValue(batchResult),
+      batchUpdate: vi.fn().mockResolvedValue(batchResult),
     };
     controller = new AdminQuestionsController(service as unknown as QuestionsService);
   });
@@ -81,6 +129,21 @@ describe('AdminQuestionsController operators', () => {
       ['q1', QuestionAction.OFFLINE, operator],
     ]);
     expect(service.batchPublish).toHaveBeenCalledWith({ ids: ['q1'] }, operator);
+  });
+
+  it('should pass the ids, reason and operator to batch operations', async () => {
+    await expect(controller.batchSubmit({ ids: ['q1'] }, request)).resolves.toBe(batchResult);
+    await controller.batchReject({ ids: ['q1'], reason: '答案有误' }, request);
+    await controller.batchOffline({ ids: ['q1'] }, request);
+    await controller.batchRemove({ ids: ['q1'] });
+    const update = { ids: ['q1'], difficulty: 2 };
+    await controller.batchUpdate(update);
+
+    expect(service.batchSubmit).toHaveBeenCalledWith(['q1'], operator);
+    expect(service.batchReject).toHaveBeenCalledWith(['q1'], '答案有误', operator);
+    expect(service.batchOffline).toHaveBeenCalledWith(['q1'], operator);
+    expect(service.batchRemove).toHaveBeenCalledWith(['q1']);
+    expect(service.batchUpdate).toHaveBeenCalledWith(update);
   });
 
   it('should create questions as the requesting user', async () => {
@@ -111,5 +174,32 @@ describe('AdminQuestionsController audit', () => {
     for (const [handler, action] of Object.entries(actions) as [Handler, AuditAction][]) {
       expect(auditOf(handler)).toMatchObject({ action, entityType: 'Question', includeBody: true });
     }
+  });
+
+  it('should audit batch operations with only the count, ids and reject reason', () => {
+    const ids = ['q1', 'q2'];
+    const actions = {
+      batchSubmit: AuditAction.SUBMIT,
+      batchReject: AuditAction.REJECT,
+      batchOffline: AuditAction.OFFLINE,
+      batchRemove: AuditAction.DELETE,
+      batchUpdate: AuditAction.UPDATE,
+    } as const;
+    for (const [handler, action] of Object.entries(actions) as [Handler, AuditAction][]) {
+      expect(auditOf(handler)).toMatchObject({ action, entityType: 'Question' });
+    }
+
+    expect(auditOf('batchSubmit')!.summarizeBody!({ ids }, {})).toEqual({ count: 2, ids });
+    expect(auditOf('batchOffline')!.summarizeBody!({ ids }, {})).toEqual({ count: 2, ids });
+    expect(auditOf('batchRemove')!.summarizeBody!({ ids }, {})).toEqual({ count: 2, ids });
+    expect(auditOf('batchUpdate')!.summarizeBody!({ ids, difficulty: 2, knowledgePointIds: ['k1'] }, {})).toEqual({
+      count: 2,
+      ids,
+    });
+    expect(auditOf('batchReject')!.summarizeBody!({ ids, reason: '答案有误' }, {})).toEqual({
+      count: 2,
+      ids,
+      reason: '答案有误',
+    });
   });
 });

@@ -1,5 +1,7 @@
 import {
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,16 +13,20 @@ import { I18nService } from 'nestjs-i18n';
 import { ImportJobRepository } from './infrastructure/persistence/import-job.repository';
 import { ImportJob } from './domain/import-job';
 import { ImportJobStatus } from './domain/import-job-status';
-import { ImportProgress } from './domain/import-outcome';
+import { ImportProgress, ImportSummary } from './domain/import-outcome';
 import { ImportRowError } from './domain/import-row-error';
 import { ContentImporter } from './content-importer';
-import { buildErrorReport, ERROR_REPORT_FILE_NAME } from './error-report';
+import { countImportUnits } from './import-session';
+import { ImportPackage } from './package/import-package';
+import { ImportSheetName } from './package/sheet-row';
+import { buildErrorReport, DescribedImportRowError, ERROR_REPORT_FILE_NAME, parseErrorReport } from './error-report';
 import { readImportPackage } from './package/import-package';
 import { ImportPackageError } from './package/import-package-error';
 import {
   IMPORT_FAILED_ALERT,
   IMPORT_INTERRUPTED_REASON,
   IMPORT_PACKAGE_LIMITS,
+  IMPORT_PRECHECK_LIMITS,
   IMPORT_PROGRESS_INTERVAL,
   IMPORT_STALE_TIMEOUTS,
 } from './import.constants';
@@ -28,6 +34,7 @@ import { FilesService } from '../files/files.service';
 import { FileStorageService } from '../files/file-storage.service';
 import { FilePurpose } from '../files/domain/file-purpose';
 import { FILE_PURPOSE_RULES } from '../files/file-purposes';
+import { FileType } from '../files/domain/file';
 import { RoleEnum } from '../../common/enums/roles/roles.enum';
 import { AllConfigType } from '../../config/config.type';
 import { IPaginationOptions } from '../../common/types/pagination-options';
@@ -53,6 +60,20 @@ export interface ImportErrorReport {
   fileName: string;
   mimeType: string;
   content: Buffer;
+}
+
+export interface ImportPrecheckResult {
+  wouldCreate: ImportSummary['created'];
+  wouldUpdate: ImportSummary['updated'];
+  wouldSkip: ImportSummary['skipped'];
+  errors: DescribedImportRowError[];
+  truncated: boolean;
+}
+
+export interface ImportErrorQuery {
+  sheet?: ImportSheetName;
+  page: number;
+  limit: number;
 }
 
 const IMPORT_MIME_TYPES = new Set(Object.values(FILE_PURPOSE_RULES[FilePurpose.IMPORT].mimeTypes));
@@ -90,14 +111,8 @@ export class ImportsService {
           requester.id,
         )
       ).id;
-    } else if (input.fileId) {
-      const file = await this.filesService.findAccessible(input.fileId, requester.id);
-      if (!file.mimeType || !IMPORT_MIME_TYPES.has(file.mimeType)) {
-        throw new UnprocessableEntityException({ errors: { fileId: 'cantUploadFileType' } });
-      }
-      fileId = file.id;
     } else {
-      throw new UnprocessableEntityException({ errors: { file: 'selectFile' } });
+      fileId = (await this.findImportFile(input.fileId, requester)).id;
     }
 
     return this.importJobRepository.create({
@@ -105,6 +120,39 @@ export class ImportsService {
       publishOnImport: input.publishOnImport,
       createdBy: requester.id,
     });
+  }
+
+  /** 同步完整解析与校验导入包，不保存导入包、不上传素材、不写入题库、不建任务 */
+  async precheck(input: CreateImportInput, requester: ImportRequester): Promise<ImportPrecheckResult> {
+    if (input.publishOnImport && requester.roleId !== RoleEnum.admin) {
+      throw new ForbiddenException({ error: 'importPublishForbidden' });
+    }
+    const content = input.upload
+      ? input.upload.buffer
+      : await this.fileStorageService.read(await this.findImportFile(input.fileId, requester));
+    let pkg: ImportPackage;
+    try {
+      pkg = await this.readPackage(content);
+    } catch (error) {
+      if (error instanceof ImportPackageError) {
+        throw new UnprocessableEntityException({ error: error.reason });
+      }
+      throw error;
+    }
+    if (countImportUnits(pkg.sheets) > IMPORT_PRECHECK_LIMITS.maxUnits) {
+      throw new HttpException({ error: 'importPrecheckTooLarge' }, HttpStatus.PAYLOAD_TOO_LARGE);
+    }
+    const outcome = await this.contentImporter.precheck(pkg, {
+      publish: input.publishOnImport,
+      operatorId: requester.id,
+    });
+    return {
+      wouldCreate: outcome.summary.created,
+      wouldUpdate: outcome.summary.updated,
+      wouldSkip: outcome.summary.skipped,
+      errors: outcome.errors.slice(0, IMPORT_PRECHECK_LIMITS.maxErrors).map((error) => this.withMessage(error)),
+      truncated: outcome.errors.length > IMPORT_PRECHECK_LIMITS.maxErrors,
+    };
   }
 
   /** 命令行导入：保存为系统私有文件并建立任务，由调用方直接执行 */
@@ -141,6 +189,19 @@ export class ImportsService {
     };
   }
 
+  /** 读取错误行报告；没有错误的任务返回空列表 */
+  async findErrors(
+    id: ImportJob['id'],
+    query: ImportErrorQuery,
+  ): Promise<{ data: DescribedImportRowError[]; total: number }> {
+    const job = await this.findById(id);
+    const file = job.errorReportFileId ? await this.filesService.findById(job.errorReportFileId) : null;
+    const errors = file ? await parseErrorReport(await this.fileStorageService.read(file)) : [];
+    const matched = query.sheet ? errors.filter((error) => error.sheet === query.sheet) : errors;
+    const start = (query.page - 1) * query.limit;
+    return { data: matched.slice(start, start + query.limit), total: matched.length };
+  }
+
   /** 执行待处理的任务；任务已被其他执行者领取时返回 null */
   async execute(id: ImportJob['id']): Promise<ImportExecution | null> {
     const job = await this.importJobRepository.findById(id);
@@ -153,11 +214,7 @@ export class ImportsService {
       if (!file) {
         throw new ImportPackageError('fileNotFound');
       }
-      const maxSizes = this.configService.getOrThrow('file.maxSizes', { infer: true });
-      const pkg = await readImportPackage(await this.fileStorageService.read(file), {
-        ...IMPORT_PACKAGE_LIMITS,
-        maxEntryBytes: Math.max(maxSizes[FilePurpose.IMPORT], maxSizes[FilePurpose.IMAGE], maxSizes[FilePurpose.AUDIO]),
-      });
+      const pkg = await this.readPackage(await this.fileStorageService.read(file));
       let reported = 0;
       const outcome = await this.contentImporter.run(
         pkg,
@@ -227,6 +284,29 @@ export class ImportsService {
   describe(reason: string): string {
     const translated = this.i18n?.t(`common.${reason}`, { lang: REPORT_LANGUAGE, defaultValue: '' });
     return typeof translated === 'string' && translated && translated !== `common.${reason}` ? translated : reason;
+  }
+
+  private async findImportFile(fileId: string | undefined, requester: ImportRequester): Promise<FileType> {
+    if (!fileId) {
+      throw new UnprocessableEntityException({ errors: { file: 'selectFile' } });
+    }
+    const file = await this.filesService.findAccessible(fileId, requester.id);
+    if (!file.mimeType || !IMPORT_MIME_TYPES.has(file.mimeType)) {
+      throw new UnprocessableEntityException({ errors: { fileId: 'cantUploadFileType' } });
+    }
+    return file;
+  }
+
+  private readPackage(content: Buffer): Promise<ImportPackage> {
+    const maxSizes = this.configService.getOrThrow('file.maxSizes', { infer: true });
+    return readImportPackage(content, {
+      ...IMPORT_PACKAGE_LIMITS,
+      maxEntryBytes: Math.max(maxSizes[FilePurpose.IMPORT], maxSizes[FilePurpose.IMAGE], maxSizes[FilePurpose.AUDIO]),
+    });
+  }
+
+  private withMessage(error: ImportRowError): DescribedImportRowError {
+    return { ...error, message: this.describe(error.reason) };
   }
 
   private async raiseFailure(id: ImportJob['id'], reason: string): Promise<void> {

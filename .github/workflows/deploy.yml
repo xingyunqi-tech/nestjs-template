@@ -103,6 +103,7 @@ jobs:
     needs: build-and-push
     if: inputs.deploy
     permissions:
+      contents: read
       packages: read
     concurrency:
       group: deploy-production
@@ -115,24 +116,19 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Check deploy secrets
+        env:
+          ALIYUN_HOST: ${{ secrets.ALIYUN_HOST }}
+          ALIYUN_USER: ${{ secrets.ALIYUN_USER }}
+          ALIYUN_SSH_KEY: ${{ secrets.ALIYUN_SSH_KEY }}
+          ALIYUN_DEPLOY_PATH: ${{ secrets.ALIYUN_DEPLOY_PATH }}
         run: |
           has_error=0
-          if [[ -z "${{ secrets.ALIYUN_HOST }}" ]]; then
-            echo "::error::缺少 ALIYUN_HOST secret"
-            has_error=1
-          fi
-          if [[ -z "${{ secrets.ALIYUN_USER }}" ]]; then
-            echo "::error::缺少 ALIYUN_USER secret"
-            has_error=1
-          fi
-          if [[ -z "${{ secrets.ALIYUN_SSH_KEY }}" ]]; then
-            echo "::error::缺少 ALIYUN_SSH_KEY secret"
-            has_error=1
-          fi
-          if [[ -z "${{ secrets.ALIYUN_DEPLOY_PATH }}" ]]; then
-            echo "::error::缺少 ALIYUN_DEPLOY_PATH secret"
-            has_error=1
-          fi
+          for name in ALIYUN_HOST ALIYUN_USER ALIYUN_SSH_KEY ALIYUN_DEPLOY_PATH; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::缺少 ${name} secret"
+              has_error=1
+            fi
+          done
           if [[ $has_error -eq 1 ]]; then
             echo "请在 Settings -> Secrets and variables -> Actions 中配置以上 secrets"
             exit 1
@@ -187,7 +183,7 @@ jobs:
               sleep 10
             done
 
-            if [ $retry -eq $max_retries ]; then
+            if ! docker image inspect "${IMAGE_FULL_NAME}" >/dev/null 2>&1; then
               echo "Failed to pull image after $max_retries attempts"
               exit 1
             fi

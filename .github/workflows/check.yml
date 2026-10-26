@@ -157,6 +157,7 @@ jobs:
     name: Migrations
     needs: setup
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17.6-alpine
@@ -202,6 +203,7 @@ jobs:
   e2e:
     name: E2E (PostgreSQL)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [lint, type-check, test, build, migrations]
 
     steps:

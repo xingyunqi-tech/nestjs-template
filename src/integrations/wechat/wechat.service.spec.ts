@@ -50,6 +50,32 @@ describe('WechatService', () => {
     return JSON.parse((fetchMock.mock.calls[call][1] as RequestInit).body as string) as Record<string, unknown>;
   }
 
+  describe('miniGameLogin', () => {
+    it('should exchange the code with the mini game app id', async () => {
+      const { service, config } = createService();
+      config['wechat.miniGameAppId'] = 'wx-game';
+      config['wechat.miniGameAppSecret'] = 'game-secret';
+      fetchMock.mockResolvedValue(jsonResponse({ openid: 'game-openid', session_key: 'key' }));
+
+      await expect(service.miniGameLogin('code')).resolves.toEqual({
+        openId: 'game-openid',
+        unionId: undefined,
+        sessionKey: 'key',
+      });
+      const url = new URL(fetchMock.mock.calls[0][0] as string);
+      expect(url.searchParams.get('appid')).toBe('wx-game');
+      expect(url.searchParams.get('secret')).toBe('game-secret');
+      expect(url.searchParams.get('js_code')).toBe('code');
+    });
+
+    it('should reject when the mini game credentials are missing', async () => {
+      const { service } = createService();
+
+      await expect(service.miniGameLogin('code')).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getMiniAppAccessToken', () => {
     it('should fetch a stable token and reuse it from cache', async () => {
       const { service } = createService();

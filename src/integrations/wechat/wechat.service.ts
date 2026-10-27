@@ -187,11 +187,32 @@ export class WechatService {
    * 并通过 wechatFetch 避免将完整 URL 写入日志。生产环境应确保反向代理不记录请求参数。
    */
   async miniAppLogin(code: string): Promise<WechatUserInfo> {
-    const appId = this.configService.get('wechat.miniAppId', { infer: true });
-    const appSecret = this.configService.get('wechat.miniAppSecret', { infer: true });
+    return this.code2Session(
+      this.configService.get('wechat.miniAppId', { infer: true }),
+      this.configService.get('wechat.miniAppSecret', { infer: true }),
+      code,
+      'WeChat Mini App',
+    );
+  }
 
+  /** 微信小游戏登录，使用小游戏自己的 AppID */
+  async miniGameLogin(code: string): Promise<WechatUserInfo> {
+    return this.code2Session(
+      this.configService.get('wechat.miniGameAppId', { infer: true }),
+      this.configService.get('wechat.miniGameAppSecret', { infer: true }),
+      code,
+      'WeChat Mini Game',
+    );
+  }
+
+  private async code2Session(
+    appId: string | undefined,
+    appSecret: string | undefined,
+    code: string,
+    label: string,
+  ): Promise<WechatUserInfo> {
     if (!appId || !appSecret) {
-      this.logger.error('WeChat Mini App credentials not configured');
+      this.logger.error(`${label} credentials not configured`);
       throw new UnprocessableEntityException({
         status: HttpStatus.UNPROCESSABLE_ENTITY,
         errors: { wechat: 'notConfigured' },
@@ -207,18 +228,18 @@ export class WechatService {
     const url = `https://api.weixin.qq.com/sns/jscode2session?${params}`;
 
     try {
-      const response = await this.wechatFetch(url, 'WeChat Mini App login');
+      const response = await this.wechatFetch(url, `${label} login`);
       const data = (await response.json()) as WechatMiniLoginResult;
 
       if (data.errcode) {
-        this.logger.error(`WeChat Mini App login failed: ${data.errcode} - ${data.errmsg}`);
+        this.logger.error(`${label} login failed: ${data.errcode} - ${data.errmsg}`);
         throw new UnprocessableEntityException({
           status: HttpStatus.UNPROCESSABLE_ENTITY,
           errors: { code: 'invalidCode', wechatError: data.errmsg },
         });
       }
 
-      this.logger.log(`WeChat Mini App login successful for openid: ${data.openid}`);
+      this.logger.log(`${label} login successful for openid: ${data.openid}`);
 
       return {
         openId: data.openid,
@@ -229,7 +250,7 @@ export class WechatService {
       if (error instanceof UnprocessableEntityException) {
         throw error;
       }
-      this.logger.error('WeChat Mini App login request failed', error);
+      this.logger.error(`${label} login request failed`, error);
       throw new UnprocessableEntityException({
         status: HttpStatus.UNPROCESSABLE_ENTITY,
         errors: { wechat: 'requestFailed' },

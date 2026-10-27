@@ -13,6 +13,7 @@ import { AlipayConfig } from '../integrations/alipay/config/alipay-config.type';
 import { LlmConfig } from '../integrations/llm/config/llm-config.type';
 import { AliyunGreenConfig } from '../integrations/aliyun-green/config/aliyun-green-config.type';
 import { AiConfig } from '../modules/ai/config/ai-config.type';
+import { GameAuthConfig } from '../modules/game-auth/config/game-auth-config.type';
 
 export type AllConfigType = {
   app: AppConfig;
@@ -30,4 +31,5 @@ export type AllConfigType = {
   llm: LlmConfig;
   aliyunGreen: AliyunGreenConfig;
   ai: AiConfig;
+  gameAuth: GameAuthConfig;
 };

@@ -10,6 +10,9 @@ export type WechatConfig = {
   // 微信小程序
   miniAppId: string;
   miniAppSecret: string;
+  // 微信小游戏
+  miniGameAppId: string;
+  miniGameAppSecret: string;
   // 订阅消息跳转的小程序版本
   miniProgramState: WechatMiniProgramState;
   // 订阅消息模板，按场景配置

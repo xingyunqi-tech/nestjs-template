@@ -17,6 +17,7 @@ import alipayConfig from './integrations/alipay/config/alipay.config';
 import llmConfig from './integrations/llm/config/llm.config';
 import aliyunGreenConfig from './integrations/aliyun-green/config/aliyun-green.config';
 import aiConfig from './modules/ai/config/ai.config';
+import gameAuthConfig from './modules/game-auth/config/game-auth.config';
 import path from 'path';
 import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -72,6 +73,7 @@ import { AccountCleanupModule } from './modules/account-cleanup/account-cleanup.
 import { AccountCleanupQueueModule } from './infrastructure/queue/account-cleanup-queue/account-cleanup-queue.module';
 import { AiModule } from './modules/ai/ai.module';
 import { AppProfileModule } from './modules/app-profile/app-profile.module';
+import { GameAuthModule } from './modules/game-auth/game-auth.module';
 
 const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
   useClass: TypeOrmConfigService,
@@ -98,6 +100,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
         llmConfig,
         aliyunGreenConfig,
         aiConfig,
+        gameAuthConfig,
       ],
       envFilePath: ['.env'],
     }),
@@ -229,6 +232,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
     AccountCleanupModule,
     AiModule,
     AppProfileModule,
+    GameAuthModule,
     ConditionalModule.registerWhen(ImportQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(MockSubmitQueueModule, isRedisEnabled),
     ConditionalModule.registerWhen(StudyStatsQueueModule, isRedisEnabled),

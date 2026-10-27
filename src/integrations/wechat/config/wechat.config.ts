@@ -12,6 +12,14 @@ class EnvironmentVariablesValidator {
   @IsOptional()
   WECHAT_MINI_APP_SECRET: string;
 
+  @IsString()
+  @IsOptional()
+  WECHAT_MINI_GAME_APP_ID: string;
+
+  @IsString()
+  @IsOptional()
+  WECHAT_MINI_GAME_APP_SECRET: string;
+
   @IsIn(['developer', 'trial', 'formal'])
   @IsOptional()
   WECHAT_MINI_PROGRAM_STATE: string;
@@ -75,6 +83,8 @@ export default registerAs<WechatConfig>('wechat', () => {
   return {
     miniAppId: process.env.WECHAT_MINI_APP_ID ?? '',
     miniAppSecret: process.env.WECHAT_MINI_APP_SECRET ?? '',
+    miniGameAppId: process.env.WECHAT_MINI_GAME_APP_ID ?? '',
+    miniGameAppSecret: process.env.WECHAT_MINI_GAME_APP_SECRET ?? '',
     miniProgramState: (process.env.WECHAT_MINI_PROGRAM_STATE as WechatMiniProgramState | undefined) ?? 'formal',
     subscribeTemplates: {
       orderPaid: {

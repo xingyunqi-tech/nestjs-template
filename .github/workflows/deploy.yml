@@ -10,7 +10,7 @@
 #     - <PREFIX>_PORT: SSH 端口 (默认 22)
 #     - <PREFIX>_USER: SSH 用户名
 #     - <PREFIX>_SSH_KEY: SSH 私钥 (完整内容)
-#     - <PREFIX>_DEPLOY_PATH: 部署目标路径
+#     - <PREFIX>_PATH: 部署目标路径
 #     - TENCENT_TCR_PASSWORD: TCR 个人版登录密码（两个目标共用）
 #
 #   在 Settings -> Secrets and variables -> Actions -> Variables 中添加:
@@ -176,11 +176,11 @@ jobs:
           SSH_HOST: ${{ secrets[format('{0}_HOST', matrix.key)] }}
           SSH_USER: ${{ secrets[format('{0}_USER', matrix.key)] }}
           SSH_KEY: ${{ secrets[format('{0}_SSH_KEY', matrix.key)] }}
-          DEPLOY_PATH: ${{ secrets[format('{0}_DEPLOY_PATH', matrix.key)] }}
+          DEPLOY_PATH: ${{ secrets[format('{0}_PATH', matrix.key)] }}
           REGISTRY_TOKEN: ${{ secrets.TENCENT_TCR_PASSWORD }}
         run: |
           has_error=0
-          for pair in HOST:SSH_HOST USER:SSH_USER SSH_KEY:SSH_KEY DEPLOY_PATH:DEPLOY_PATH; do
+          for pair in HOST:SSH_HOST USER:SSH_USER SSH_KEY:SSH_KEY PATH:DEPLOY_PATH; do
             if [[ -z "${!pair#*:}" ]]; then
               echo "::error::缺少 ${PREFIX}_${pair%%:*} secret"
               has_error=1
@@ -204,13 +204,13 @@ jobs:
           username: ${{ secrets[format('{0}_USER', matrix.key)] }}
           key: ${{ secrets[format('{0}_SSH_KEY', matrix.key)] }}
           source: 'docker/docker-compose.ecs.yaml,deploy/manage.sh'
-          target: ${{ secrets[format('{0}_DEPLOY_PATH', matrix.key)] }}
+          target: ${{ secrets[format('{0}_PATH', matrix.key)] }}
           strip_components: 0
 
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1.2.5
         env:
-          DEPLOY_PATH: ${{ secrets[format('{0}_DEPLOY_PATH', matrix.key)] }}
+          DEPLOY_PATH: ${{ secrets[format('{0}_PATH', matrix.key)] }}
           REGISTRY: ${{ vars.TENCENT_TCR_REGISTRY }}
           REGISTRY_USERNAME: ${{ vars.TENCENT_TCR_USERNAME }}
           REGISTRY_TOKEN: ${{ secrets.TENCENT_TCR_PASSWORD }}

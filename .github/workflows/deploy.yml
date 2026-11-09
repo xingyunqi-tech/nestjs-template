@@ -181,7 +181,8 @@ jobs:
         run: |
           has_error=0
           for pair in HOST:SSH_HOST USER:SSH_USER SSH_KEY:SSH_KEY PATH:DEPLOY_PATH; do
-            if [[ -z "${!pair#*:}" ]]; then
+            var="${pair#*:}"
+            if [[ -z "${!var}" ]]; then
               echo "::error::缺少 ${PREFIX}_${pair%%:*} secret"
               has_error=1
             fi

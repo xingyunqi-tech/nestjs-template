@@ -19,7 +19,7 @@
 #     - TENCENT_TCR_USERNAME: 腾讯云账号 UIN
 #   TCR 中的镜像仓库为 <命名空间>/nestjs-template，首次推送时自动创建
 #
-#   部署 job 使用的 Environments: 阿里云为 production，腾讯云为 tencent-production
+#   部署 job 使用的 Environments: aliyun-production / tencent-production
 #   构建与部署成功后调用 cleanup-registry.yml 清理 GHCR / TCR 旧镜像（配置见该文件）
 
 name: Deploy
@@ -42,6 +42,9 @@ on:
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
+
+permissions:
+  contents: read
 
 env:
   GHCR_REGISTRY: ghcr.io
@@ -75,10 +78,12 @@ jobs:
         env:
           SOURCE_BRANCH: ${{ github.ref_name }}
         run: |
-          echo "git_hash=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-          echo "branch=${SOURCE_BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "branch_tag=${SOURCE_BRANCH//\//-}" >> "$GITHUB_OUTPUT"
+          {
+            echo "git_hash=$(git rev-parse --short HEAD)"
+            echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "branch=${SOURCE_BRANCH}"
+            echo "branch_tag=${SOURCE_BRANCH//\//-}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Normalize image name
         id: repo
@@ -154,12 +159,10 @@ jobs:
     needs: build-and-push
     if: inputs.deploy
     timeout-minutes: 40
-    permissions:
-      contents: read
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.target == 'all' && '[{"key":"ALIYUN","name":"阿里云 ECS","environment":"production"},{"key":"TENCENT","name":"腾讯云 CVM","environment":"tencent-production"}]' || inputs.target == 'tencent' && '[{"key":"TENCENT","name":"腾讯云 CVM","environment":"tencent-production"}]' || '[{"key":"ALIYUN","name":"阿里云 ECS","environment":"production"}]') }}
+        include: ${{ fromJSON(inputs.target == 'all' && '[{"key":"ALIYUN","name":"阿里云 ECS","environment":"aliyun-production"},{"key":"TENCENT","name":"腾讯云 CVM","environment":"tencent-production"}]' || inputs.target == 'tencent' && '[{"key":"TENCENT","name":"腾讯云 CVM","environment":"tencent-production"}]' || '[{"key":"ALIYUN","name":"阿里云 ECS","environment":"aliyun-production"}]') }}
     concurrency:
       group: deploy-${{ matrix.environment }}
       cancel-in-progress: false
@@ -301,6 +304,7 @@ jobs:
     name: Notify
     needs: [build-and-push, deploy, cleanup]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: always()
 
     steps:

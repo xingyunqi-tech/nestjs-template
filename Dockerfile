@@ -9,7 +9,7 @@
 # ============================================================
 # Stage 1: Base - Install dependencies
 # ============================================================
-FROM node:22.21.1-alpine AS base
+FROM node:24.21.0-alpine AS base
 
 RUN apk add --no-cache bash
 RUN corepack enable && corepack prepare pnpm@11.23.0 --activate
@@ -53,7 +53,7 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 # ============================================================
 # Stage 5: Production - Final minimal image
 # ============================================================
-FROM node:22.21.1-alpine AS production
+FROM node:24.21.0-alpine AS production
 
 ENV NODE_ENV=production
 ENV ENV_MODE=prod

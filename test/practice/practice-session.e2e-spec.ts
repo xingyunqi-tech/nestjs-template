@@ -436,7 +436,7 @@ describe('Practice sessions', () => {
 
     it('should reject answers that do not match the question', async () => {
       await answer(sessionId, [{ questionId: singles[3], answer: { keys: ['Z'] } }])
-        .set('x-custom-lang', 'zh')
+        .set('Accept-Language', 'zh')
         .expect(422)
         .expect(({ body }) => expect(body.data.answers).toContain('作答与题目不符'));
       await answer(sessionId, [{ questionId: fillId, answer: { blanks: ['ABC'] } }]).expect(422);

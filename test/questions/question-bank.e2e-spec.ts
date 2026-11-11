@@ -335,17 +335,17 @@ describe('Question bank', () => {
     const selfReviewForbidden = { code: 403, message: '不能审核自己创建或提交的题目', data: { questionIds: [own.id] } };
     const publish = await as(reviewer)
       .post(`/admin/questions/${own.id}/publish`)
-      .set('x-custom-lang', 'zh')
+      .set('Accept-Language', 'zh')
       .expect(403);
     expect(publish.body).toEqual(selfReviewForbidden);
     const reject = await as(reviewer)
       .post(`/admin/questions/${own.id}/reject`, { reason: '自审' })
-      .set('x-custom-lang', 'zh')
+      .set('Accept-Language', 'zh')
       .expect(403);
     expect(reject.body).toEqual(selfReviewForbidden);
     const batch = await as(reviewer)
       .post('/admin/questions/batch-publish', { ids: [own.id, other.id] })
-      .set('x-custom-lang', 'zh')
+      .set('Accept-Language', 'zh')
       .expect(403);
     expect(batch.body).toEqual(selfReviewForbidden);
 
@@ -361,7 +361,7 @@ describe('Question bank', () => {
   });
 
   it('should run batch operations question by question', async () => {
-    const zh = (req: request.Test): request.Test => req.set('x-custom-lang', 'zh');
+    const zh = (req: request.Test): request.Test => req.set('Accept-Language', 'zh');
     const first = await createQuestion(single('批量甲'));
     const second = await createQuestion(single('批量乙'));
     const own = await createQuestion(single('批量自审'));

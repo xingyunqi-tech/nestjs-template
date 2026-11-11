@@ -243,7 +243,7 @@ describe('Paper catalog', () => {
     await as(admin).post(`/admin/papers/${paper.id}/publish`).expect(200);
     await as(admin)
       .put(`/admin/papers/${paper.id}/questions`, { sections, questions: [] })
-      .set('x-custom-lang', 'zh')
+      .set('Accept-Language', 'zh')
       .expect(409)
       .expect(({ body: response }) => expect(response.message).toContain('复制为新试卷'));
     await as(admin).patch(`/admin/papers/${paper.id}`, { multiScoringRule: 'PARTIAL' }).expect(409);
@@ -281,7 +281,7 @@ describe('Paper catalog', () => {
 
     await as(admin)
       .delete(`/admin/questions/${draftQuestionId}`)
-      .set('x-custom-lang', 'zh')
+      .set('Accept-Language', 'zh')
       .expect(409)
       .expect(({ body }) => expect(body.message).toContain('被试卷引用'));
 
@@ -385,7 +385,7 @@ describe('Paper catalog', () => {
     expect(listed.body.data.total).toBe(1);
     await as(admin)
       .delete(`/admin/paper-rules/${ruleId}`)
-      .set('x-custom-lang', 'zh')
+      .set('Accept-Language', 'zh')
       .expect(409)
       .expect(({ body }) => expect(body.message).toBe('只能删除草稿状态的内容，已发布过的请下架'));
     await as(admin).get(`/admin/paper-rules/${ruleId}`).expect(200);
@@ -558,7 +558,7 @@ describe('Paper catalog', () => {
     expect(checked.body.data.results).toEqual([{ questionId: singles[3], isCorrect: true }]);
 
     await checkTrial({ date: '2000-01-01', answers: [{ questionId: singles[3], answer: { keys: ['B'] } }] })
-      .set('x-custom-lang', 'zh')
+      .set('Accept-Language', 'zh')
       .expect(422)
       .expect(({ body }) => expect(body.data).toEqual({ date: '只能按今天或昨天的题组判分' }));
     await checkTrial({ answers: [{ questionId: singles[3], answer: { keys: ['B'] } }] }).expect(422);

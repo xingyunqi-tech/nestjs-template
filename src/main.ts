@@ -46,11 +46,7 @@ async function bootstrap(): Promise<void> {
       origin: allowedOrigins,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: [
-        'Content-Type',
-        'Authorization',
-        configService.getOrThrow('app.headerLanguage', { infer: true }),
-      ],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language'],
     });
   } else {
     // Development: allow all origins for easier testing
@@ -117,7 +113,7 @@ async function bootstrap(): Promise<void> {
       .addGlobalParameters({
         in: 'header',
         required: false,
-        name: configService.getOrThrow('app.headerLanguage', { infer: true }),
+        name: 'Accept-Language',
         schema: {
           example: 'en',
         },

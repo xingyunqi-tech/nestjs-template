@@ -13,7 +13,7 @@
 
 ## How to use translations on frontend
 
-1. Add header `x-custom-lang` to the request with the language you want to use.
+1. Add header `Accept-Language` to the request with the language you want to use (e.g. `zh`, `en`, `zh-CN,zh;q=0.9`).
 
 ## How to use translations in code
 

@@ -313,7 +313,7 @@ describe('Import precheck and error details', () => {
 
     const { body } = await as(admin)
       .upload('/admin/imports/precheck')
-      .set('x-custom-lang', 'zh')
+      .set('Accept-Language', 'zh')
       .attach('file', Buffer.from(JSON.stringify({ knowledge_points: rows })), 'content.json')
       .expect(413);
 

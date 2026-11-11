@@ -22,7 +22,7 @@ import path from 'path';
 import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { dataSourceFactory } from './infrastructure/database/data-source.factory';
-import { HeaderResolver, I18nModule } from 'nestjs-i18n';
+import { AcceptLanguageResolver, I18nModule } from 'nestjs-i18n';
 import { TypeOrmConfigService } from './infrastructure/database/typeorm-config.service';
 import { MailModule } from './integrations/mail/mail.module';
 import { HomeModule } from './modules/home/home.module';
@@ -172,19 +172,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
           watch: configService.get('app.nodeEnv', { infer: true }) !== 'production',
         },
       }),
-      resolvers: [
-        {
-          use: HeaderResolver,
-          useFactory: (configService: ConfigService<AllConfigType>) => {
-            return [
-              configService.get('app.headerLanguage', {
-                infer: true,
-              }),
-            ];
-          },
-          inject: [ConfigService],
-        },
-      ],
+      resolvers: [AcceptLanguageResolver],
       imports: [ConfigModule],
       inject: [ConfigService],
     }),

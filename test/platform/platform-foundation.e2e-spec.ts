@@ -326,7 +326,7 @@ describe('Platform foundation', () => {
 
   describe('business error keys', () => {
     it('should return the error key in data with the mapped HTTP status', async () => {
-      const { body } = await api(app).get('/api/v1/e2e-probe/taken-over').set('x-custom-lang', 'zh').expect(409);
+      const { body } = await api(app).get('/api/v1/e2e-probe/taken-over').set('Accept-Language', 'zh').expect(409);
       expect(body).toEqual({ code: 409, message: '考试已在其他设备继续', data: { errorKey: 'sessionTakenOver' } });
     });
   });

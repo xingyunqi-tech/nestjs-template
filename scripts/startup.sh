@@ -43,7 +43,7 @@ fi
 # Run migrations
 echo "Running database migrations..."
 if [ "$ENV_MODE" = "prod" ]; then
-  npm run migration:run:prod
+  node ./node_modules/typeorm/cli.js --dataSource=dist/infrastructure/database/data-source.js migration:run
 else
   pnpm migration:run
 fi
@@ -51,7 +51,7 @@ fi
 # Clear cached role permissions so permission migrations take effect immediately
 echo "Clearing permission cache..."
 if [ "$ENV_MODE" = "prod" ]; then
-  npm run permissions:clear-cache:prod
+  node ./dist/core/permissions/clear-permission-cache.js
 else
   pnpm permissions:clear-cache
 fi
@@ -62,7 +62,7 @@ fi
 if [ "$ENV_MODE" = "prod" ]; then
   if [ "$RUN_SEEDS" = "true" ]; then
     echo "Running seed data in production (RUN_SEEDS=true)..."
-    npm run seed:run:prod
+    node ./dist/infrastructure/database/seeds/relational/run-seed.js
   else
     echo "Skipping seed data in production mode (set RUN_SEEDS=true to enable)"
   fi

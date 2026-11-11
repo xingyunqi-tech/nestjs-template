@@ -58,7 +58,9 @@ FROM node:24.22.2-alpine AS production
 ENV NODE_ENV=production
 ENV ENV_MODE=prod
 
-RUN apk add --no-cache bash
+RUN apk add --no-cache bash \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 
 WORKDIR /app
 

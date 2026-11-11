@@ -1,5 +1,6 @@
 import type { Mocked } from 'vitest';
 import { Queue } from 'bullmq';
+import { ModuleRef } from '@nestjs/core';
 import { ACCOUNT_CLEANUP_JOB_ATTEMPTS, AccountCleanupProducer } from './account-cleanup.producer';
 import { ACCOUNT_CLEANUP_FAILED_ALERT } from './account-cleanup-alert';
 import {
@@ -19,8 +20,8 @@ describe('AccountCleanupProducer', () => {
 
   const create = (withQueue = true): AccountCleanupProducer =>
     new AccountCleanupProducer(
+      { get: () => alertReporter } as unknown as ModuleRef,
       withQueue ? (queue as unknown as Queue<AccountCleanupJobData>) : undefined,
-      alertReporter,
     );
 
   beforeEach(() => {

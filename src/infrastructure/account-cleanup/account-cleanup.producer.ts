@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { InjectQueue } from '@nestjs/bullmq';
 import { JobsOptions, Queue } from 'bullmq';
 import {
@@ -30,8 +31,8 @@ export class AccountCleanupProducer {
   private inProcessRunner?: InProcessCleanupRunner;
 
   constructor(
+    private readonly moduleRef: ModuleRef,
     @Optional() @InjectQueue(ACCOUNT_CLEANUP_QUEUE) private readonly queue?: Queue<AccountCleanupJobData>,
-    @Optional() private readonly alertReporter?: AlertReporter,
   ) {}
 
   get queueEnabled(): boolean {
@@ -56,7 +57,16 @@ export class AccountCleanupProducer {
     try {
       await this.add(this.queue, userId);
     } catch (error) {
-      await raiseAccountCleanupFailure(this.alertReporter, this.logger, userId, error);
+      await raiseAccountCleanupFailure(this.alertReporter(), this.logger, userId, error);
+    }
+  }
+
+  /** 告警实现依赖 UsersService，构造时注入会与 UsersService 形成依赖环，因此用到时再取 */
+  private alertReporter(): AlertReporter | undefined {
+    try {
+      return this.moduleRef.get(AlertReporter, { strict: false });
+    } catch {
+      return undefined;
     }
   }
 

@@ -38,24 +38,30 @@ make -C docker clean    # 清理容器和数据卷
 
 ### Check 工作流（`.github/workflows/check.yml`）
 
-触发条件：PR 到 master/release/\*、push 到 master/release/\*
+触发条件：PR 或 push 到 main/master/release/\*、手动触发
 
 ```
-1. Lint        → ESLint 代码检查
-2. Type Check  → TypeScript 类型检查
-3. Build       → 应用编译
-4. Test        → 单元测试 + 覆盖率
-5. E2E         → 端到端测试
-6. Docker      → Docker 镜像构建验证
+1. Lint           → ESLint + Prettier + markdownlint + cspell
+2. Type Check     → TypeScript 类型检查
+3. Test           → 单元测试 + 覆盖率门槛（vitest.config.mts thresholds）
+4. Build          → 应用编译
+5. Migrations     → 空库执行全部迁移后检查实体与库结构一致
+6. Workflow Lint  → actionlint + zizmor（.github/zizmor.yml）
+7. Security       → pnpm audit（生产依赖 high 及以上）+ gitleaks（本次提交范围）
+8. Image Scan     → 构建生产镜像 + Trivy（HIGH / CRITICAL 且有修复版本）
+9. E2E            → 1–7 通过后用 docker compose 跑端到端测试
 ```
+
+依赖更新由 Renovate 管理（`.github/renovate.json5`）：Node 限 24.x、TypeScript 限 6.x，Postgres / Redis 大版本不自动升级。
 
 ### Deploy 工作流（`.github/workflows/deploy.yml`）
 
-触发条件：Check 成功 + master/release/\* 分支 / tag push / 手动触发
+触发条件：仅手动触发（选择是否部署及目标 aliyun / tencent / all）
 
 ```
-1. Build & Push → 构建 Docker 镜像 → 推送到 GHCR/Docker Hub
-2. Deploy       → SSH 到阿里云 ECS → 拉取镜像 → 重启服务
+1. Build & Push → 构建 Docker 镜像 → 推送到 GHCR（部署时同时推送腾讯云 TCR）
+2. Deploy       → SSH 到阿里云 ECS / 腾讯云 CVM → 从 TCR 拉取镜像 → 重启服务 → 健康检查
+3. Cleanup      → 调用 cleanup-registry.yml 清理旧镜像
 ```
 
 ## 环境变量管理

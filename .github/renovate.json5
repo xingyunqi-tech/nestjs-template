@@ -1,0 +1,93 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['config:recommended', 'helpers:pinGitHubActionDigests', ':semanticCommitTypeAll(chore)'],
+  timezone: 'Asia/Shanghai',
+  schedule: ['before 9am on monday'],
+  prConcurrentLimit: 5,
+  labels: ['dependencies'],
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ['before 9am on monday'],
+  },
+  packageRules: [
+    {
+      description: 'Node 保持 24.x',
+      matchPackageNames: ['node', '@types/node'],
+      allowedVersions: '<25',
+    },
+    {
+      description: 'TypeScript 保持 6.x',
+      matchPackageNames: ['typescript'],
+      allowedVersions: '<7',
+    },
+    {
+      description: 'keyv 跟随 cache-manager 的依赖范围',
+      matchPackageNames: ['keyv', '@keyv/redis'],
+      allowedVersions: '<6',
+    },
+    {
+      description: 'exceljs 以 require 方式加载 uuid，保持 CJS 可用的 11.x',
+      matchPackageNames: ['uuid'],
+      allowedVersions: '<12',
+    },
+    {
+      matchPackageNames: ['pnpm'],
+      groupName: 'pnpm',
+    },
+    {
+      description: 'Postgres / Redis 大版本需要迁移数据，只接收同大版本更新',
+      matchDatasources: ['docker'],
+      matchPackageNames: ['postgres', 'redis'],
+      matchUpdateTypes: ['major'],
+      enabled: false,
+    },
+    {
+      matchPackageNames: ['@nestjs/**'],
+      groupName: 'nestjs',
+    },
+    {
+      matchPackageNames: ['@aws-sdk/**'],
+      groupName: 'aws-sdk',
+    },
+    {
+      matchPackageNames: [
+        'eslint',
+        'typescript-eslint',
+        'eslint-*',
+        '@eslint/**',
+        'prettier',
+        'cspell',
+        'markdownlint-cli2',
+      ],
+      groupName: 'lint tooling',
+    },
+    {
+      matchPackageNames: ['vitest', '@vitest/**', 'unplugin-swc', '@swc/**', 'supertest'],
+      groupName: 'test tooling',
+    },
+    {
+      matchManagers: ['github-actions', 'custom.regex'],
+      groupName: 'github actions',
+    },
+    {
+      matchDepTypes: ['devDependencies'],
+      matchUpdateTypes: ['minor', 'patch'],
+      automerge: true,
+    },
+  ],
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/^\\.github/workflows/.+\\.ya?ml$/'],
+      matchStrings: ['_IMAGE: (?<depName>[^:\\s]+):(?<currentValue>[^\\s]+)'],
+      datasourceTemplate: 'docker',
+    },
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)Dockerfile$/'],
+      matchStrings: ['corepack prepare pnpm@(?<currentValue>\\d+\\.\\d+\\.\\d+)'],
+      depNameTemplate: 'pnpm',
+      datasourceTemplate: 'npm',
+    },
+  ],
+}

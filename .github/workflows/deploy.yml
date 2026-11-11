@@ -68,10 +68,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Generate build info
         id: info
@@ -96,7 +98,7 @@ jobs:
           TCR_NAMESPACE: ${{ vars.TENCENT_TCR_NAMESPACE }}
 
       - name: Login to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
@@ -121,7 +123,7 @@ jobs:
 
       - name: Login to TCR
         if: inputs.deploy
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ vars.TENCENT_TCR_REGISTRY }}
           username: ${{ vars.TENCENT_TCR_USERNAME }}
@@ -129,7 +131,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
             ${{ steps.repo.outputs.image_name }}
@@ -141,7 +143,7 @@ jobs:
             type=raw,value=latest,enable=${{ steps.info.outputs.branch == 'master' }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: true
@@ -171,7 +173,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Check deploy secrets
         env:
@@ -201,7 +205,7 @@ jobs:
           echo "Secrets 配置检查通过"
 
       - name: Sync deploy files to server
-        uses: appleboy/scp-action@v1.0.0
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
           host: ${{ secrets[format('{0}_HOST', matrix.key)] }}
           port: ${{ secrets[format('{0}_PORT', matrix.key)] || 22 }}
@@ -212,7 +216,7 @@ jobs:
           strip_components: 0
 
       - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           DEPLOY_PATH: ${{ secrets[format('{0}_PATH', matrix.key)] }}
           REGISTRY: ${{ vars.TENCENT_TCR_REGISTRY }}
@@ -297,7 +301,9 @@ jobs:
     permissions:
       contents: read
       packages: write
-    secrets: inherit
+    secrets:
+      TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+      TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
 
   # ==================== 部署结果通知 ====================
   notify:
@@ -309,21 +315,28 @@ jobs:
 
     steps:
       - name: Deployment summary
+        env:
+          BUILD_RESULT: ${{ needs.build-and-push.result }}
+          DEPLOY_TARGET: ${{ inputs.target }}
+          DEPLOY_RESULT: ${{ needs.deploy.result || 'skipped' }}
+          CLEANUP_RESULT: ${{ needs.cleanup.result || 'skipped' }}
+          GIT_HASH: ${{ needs.build-and-push.outputs.git_hash }}
+          BUILD_TIME: ${{ needs.build-and-push.outputs.build_time }}
         run: |
           {
             echo "# 部署结果"
             echo ""
             echo "| 阶段 | 状态 |"
             echo "|------|------|"
-            echo "| 构建推送 | ${{ needs.build-and-push.result }} |"
-            echo "| 部署（${{ inputs.target }}） | ${{ needs.deploy.result || 'skipped' }} |"
-            echo "| 镜像清理 | ${{ needs.cleanup.result || 'skipped' }} |"
+            echo "| 构建推送 | ${BUILD_RESULT} |"
+            echo "| 部署（${DEPLOY_TARGET}） | ${DEPLOY_RESULT} |"
+            echo "| 镜像清理 | ${CLEANUP_RESULT} |"
             echo ""
-            echo "**Git Hash**: \`${{ needs.build-and-push.outputs.git_hash }}\`"
-            echo "**构建时间**: ${{ needs.build-and-push.outputs.build_time }}"
+            echo "**Git Hash**: \`${GIT_HASH}\`"
+            echo "**构建时间**: ${BUILD_TIME}"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "${{ needs.deploy.result }}" == "failure" ]]; then
+          if [[ "${DEPLOY_RESULT}" == "failure" ]]; then
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "> 部署失败，请检查日志排查问题" >> "$GITHUB_STEP_SUMMARY"
           fi

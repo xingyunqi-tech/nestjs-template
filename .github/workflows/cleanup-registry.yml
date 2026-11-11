@@ -28,6 +28,11 @@ on:
         default: false
         type: boolean
   workflow_call:
+    secrets:
+      TENCENTCLOUD_SECRET_ID:
+        required: false
+      TENCENTCLOUD_SECRET_KEY:
+        required: false
 
 concurrency:
   group: registry-cleanup
@@ -48,7 +53,7 @@ jobs:
       packages: write
     steps:
       - name: Delete old images
-        uses: dataaxiom/ghcr-cleanup-action@v1.2.2
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           packages: ${{ env.IMAGE_BASENAME }}

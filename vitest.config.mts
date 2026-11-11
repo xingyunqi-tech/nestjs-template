@@ -30,6 +30,12 @@ export default defineConfig({
         'src/**/*.mock.ts',
         'src/**/*.stub.ts',
       ],
+      thresholds: {
+        statements: 54,
+        branches: 59,
+        functions: 52,
+        lines: 54,
+      },
       reportsDirectory: './coverage',
       reporter: ['text', 'text-summary', 'lcov', 'html'],
     },

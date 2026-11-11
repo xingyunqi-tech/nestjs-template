@@ -164,6 +164,6 @@ pnpm test:debug       # 调试模式
 
 ## 测试覆盖率
 
-- **目标**: 60% 以上
+- **门槛**: `vitest.config.mts` 的 `coverage.thresholds`，`pnpm test:cov` 低于门槛即失败（CI 的 Test job 执行该命令）
 - **重点覆盖**: Service 层业务逻辑、Guard/Interceptor、工具函数
 - **可选覆盖**: Controller（薄层，E2E 测试覆盖）、Entity/Mapper（简单映射）

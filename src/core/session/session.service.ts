@@ -10,6 +10,9 @@ import { NullableType } from '../../common/types/nullable.type';
 /** 刷新令牌轮换后，旧 hash 视为并发或重试请求而非盗用的时长 */
 const ROTATED_HASH_GRACE_MS = 60_000;
 
+/** 同一会话两次写入 lastActiveAt 的最小间隔 */
+const LAST_ACTIVE_MIN_INTERVAL_MS = 5 * 60_000;
+
 /** JwtStrategy 缓存会话校验结果使用的键 */
 export function sessionAuthCacheKey(id: Session['id']): string {
   return `jwt:session:${id}`;
@@ -49,6 +52,29 @@ export class SessionService {
     const session = await this.sessionRepository.create(data);
     this.logger.debug(`Session created: ${session.id} for user: ${data.user.id}`);
     return session;
+  }
+
+  findActiveByUserId(userId: User['id']): Promise<Session[]> {
+    return this.sessionRepository.findActiveByUserId(userId);
+  }
+
+  /** 记录会话活跃时间；写入失败只记日志，不影响请求 */
+  async touch(id: Session['id']): Promise<void> {
+    const now = new Date();
+    try {
+      await this.sessionRepository.touch(id, now, new Date(now.getTime() - LAST_ACTIVE_MIN_INTERVAL_MS));
+    } catch (error) {
+      this.logger.warn(`Failed to update lastActiveAt of session ${id}: ${String(error)}`);
+    }
+  }
+
+  /** 删除属于该用户的会话并清除令牌校验缓存，返回是否删除 */
+  async revokeForUser(id: Session['id'], userId: User['id']): Promise<boolean> {
+    const deleted = await this.sessionRepository.deleteByIdForUser(id, userId);
+    if (deleted) {
+      await this.forgetSessions([id]);
+    }
+    return deleted;
   }
 
   /** 仅当当前 hash 等于 currentHash 时轮换，成功后在宽限期内记住旧 hash */

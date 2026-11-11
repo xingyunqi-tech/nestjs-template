@@ -220,5 +220,6 @@
   "consentVersionNotCurrent": "协议版本已更新，请重新查看后同意",
   "userNotDeleted": "用户未注销",
   "selfReviewForbidden": "不能审核自己创建或提交的题目",
-  "rejectReasonLength": "驳回原因须为 1–500 个字"
+  "rejectReasonLength": "驳回原因须为 1–500 个字",
+  "sessionNotFound": "会话不存在"
 }

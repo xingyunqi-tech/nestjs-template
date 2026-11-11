@@ -159,9 +159,19 @@ https://github.com/brocoders/nestjs-boilerplate/assets/6001723/f6fdcc89-5ec6-472
 
 ### Support login for multiple devices / Sessions
 
-Boilerplate supports login for multiple devices with a Refresh Token flow. This is possible due to `sessions`. When a user logs in, a new session is created and stored in the database. The session record contains `sessionId (id)`, `userId`, and `hash`.
+Boilerplate supports login for multiple devices with a Refresh Token flow. This is possible due to `sessions`. When a user logs in, a new session is created and stored in the database. The session record contains `sessionId (id)`, `userId`, `hash`, and the client `userAgent`, `ip` and `lastActiveAt` (refreshed at most every 5 minutes while the session is in use).
 
 On each `POST /api/v1/auth/refresh` request we check `hash` from the database with `hash` from the Refresh Token. If they are equal, we return new `token`, `tokenExpires`, and `refreshToken`. Then we update `hash` in the database to disallow the use of the previous Refresh Token.
+
+Users manage their own sessions with:
+
+```text
+GET    /api/v1/auth/sessions               # list sessions, `current: true` marks the one making the request
+DELETE /api/v1/auth/sessions/:id           # sign out one device, including the current one (404 if the session is not the user's)
+POST   /api/v1/auth/sessions/revoke-others # sign out every other device
+```
+
+Revoking a session also clears its access token cache entry, so later requests with its tokens get `401`.
 
 ## Logout
 

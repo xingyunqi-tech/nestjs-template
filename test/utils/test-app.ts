@@ -13,6 +13,7 @@ import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.fil
 import { ResolvePromisesInterceptor } from '../../src/common/serializer.interceptor';
 import { ResponseInterceptor } from '../../src/common/interceptors/response.interceptor';
 import { TypeOrmConfigService } from '../../src/infrastructure/database/typeorm-config.service';
+import { requestContextMiddleware } from '../../src/common/request-context';
 
 /** 进程内启动完整应用，配置与 main.ts 一致 */
 export async function createTestApp(controllers: Type[] = []): Promise<NestExpressApplication> {
@@ -33,6 +34,7 @@ export async function createTestApp(controllers: Type[] = []): Promise<NestExpre
     .compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: ['error'] });
   app.set('trust proxy', true);
+  app.use(requestContextMiddleware);
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
   app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost)));
   app.setGlobalPrefix('api', { exclude: ['/', 'metrics'] });

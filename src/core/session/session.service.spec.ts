@@ -5,7 +5,10 @@ import { SessionRepository } from './infrastructure/persistence/session.reposito
 
 describe('SessionService', () => {
   let repository: Mocked<
-    Pick<SessionRepository, 'rotateHash' | 'deleteById' | 'deleteByUserId' | 'deleteByUserIdWithExclude'>
+    Pick<
+      SessionRepository,
+      'rotateHash' | 'deleteById' | 'deleteByUserId' | 'deleteByUserIdWithExclude' | 'touch' | 'deleteByIdForUser'
+    >
   >;
   let cache: Map<string, unknown>;
   let service: SessionService;
@@ -16,6 +19,8 @@ describe('SessionService', () => {
       deleteById: vi.fn(),
       deleteByUserId: vi.fn(),
       deleteByUserIdWithExclude: vi.fn(),
+      touch: vi.fn(),
+      deleteByIdForUser: vi.fn(),
     };
     cache = new Map();
     const cacheManager = {
@@ -92,5 +97,45 @@ describe('SessionService', () => {
 
     expect(repository.deleteByUserId).toHaveBeenCalledWith({ userId: 1 });
     expect(cache.size).toBe(0);
+  });
+
+  it('should record activity only when the last record is older than five minutes', async () => {
+    vi.useFakeTimers({ now: new Date('2026-11-10T12:00:00Z') });
+    try {
+      await service.touch(10);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(repository.touch).toHaveBeenCalledWith(
+      10,
+      new Date('2026-11-10T12:00:00Z'),
+      new Date('2026-11-10T11:55:00Z'),
+    );
+  });
+
+  it('should not fail the request when recording activity fails', async () => {
+    repository.touch.mockRejectedValue(new Error('db down'));
+
+    await expect(service.touch(10)).resolves.toBeUndefined();
+  });
+
+  it('should clear the token validation cache when the user revokes an own session', async () => {
+    repository.deleteByIdForUser.mockResolvedValue(true);
+    cache.set(sessionAuthCacheKey(10), { statusId: 1 });
+
+    await expect(service.revokeForUser(10, 1)).resolves.toBe(true);
+
+    expect(repository.deleteByIdForUser).toHaveBeenCalledWith(10, 1);
+    expect(cache.has(sessionAuthCacheKey(10))).toBe(false);
+  });
+
+  it('should keep the cache when the session does not belong to the user', async () => {
+    repository.deleteByIdForUser.mockResolvedValue(false);
+    cache.set(sessionAuthCacheKey(10), { statusId: 1 });
+
+    await expect(service.revokeForUser(10, 2)).resolves.toBe(false);
+
+    expect(cache.has(sessionAuthCacheKey(10))).toBe(true);
   });
 });

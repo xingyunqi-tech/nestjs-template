@@ -161,6 +161,47 @@ describe('Auth Module', () => {
         .expect(401);
     });
 
+    it('should echo a well-formed X-Request-Id and generate one when absent', async () => {
+      await request(app).get('/api/health').set('X-Request-Id', 'e2e-req-1').expect('X-Request-Id', 'e2e-req-1');
+
+      const { headers } = await request(app).get('/api/health').expect(200);
+      expect(headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it('should list, revoke and revoke other sessions: /api/v1/auth/sessions', async () => {
+      const login = (userAgent: string): Promise<string> =>
+        request(app)
+          .post('/api/v1/auth/email/login')
+          .set('User-Agent', userAgent)
+          .send({ email: newUserEmail, password: newUserPassword })
+          .then(({ body }) => body.data.token);
+      const tokenA = await login('E2E-Device-A');
+      const tokenB = await login('E2E-Device-B');
+      const tokenC = await login('E2E-Device-C');
+
+      await request(app).get('/api/v1/auth/me').auth(tokenB, { type: 'bearer' }).expect(200);
+      await request(app).get('/api/v1/auth/me').auth(tokenC, { type: 'bearer' }).expect(200);
+
+      const listed = await request(app).get('/api/v1/auth/sessions').auth(tokenA, { type: 'bearer' }).expect(200);
+      const sessions = listed.body.data as { id: number; userAgent: string | null; current: boolean }[];
+      const current = sessions.filter((session) => session.current);
+      expect(current).toHaveLength(1);
+      expect(current[0].userAgent).toBe('E2E-Device-A');
+      const sessionB = sessions.find((session) => session.userAgent === 'E2E-Device-B');
+      expect(sessionB).toBeDefined();
+
+      await request(app).delete(`/api/v1/auth/sessions/${sessionB!.id}`).auth(tokenA, { type: 'bearer' }).expect(200);
+      await request(app).get('/api/v1/auth/me').auth(tokenB, { type: 'bearer' }).expect(401);
+      await request(app).delete(`/api/v1/auth/sessions/${sessionB!.id}`).auth(tokenA, { type: 'bearer' }).expect(404);
+
+      await request(app).post('/api/v1/auth/sessions/revoke-others').auth(tokenA, { type: 'bearer' }).expect(200);
+      await request(app).get('/api/v1/auth/me').auth(tokenC, { type: 'bearer' }).expect(401);
+
+      const remaining = await request(app).get('/api/v1/auth/sessions').auth(tokenA, { type: 'bearer' }).expect(200);
+      expect(remaining.body.data).toHaveLength(1);
+      expect(remaining.body.data[0].current).toBe(true);
+    });
+
     it('should update profile successfully: /api/v1/auth/me (PUT)', async () => {
       const newUserNewName = Date.now();
       const newUserNewPassword = md5('NewSecret00');

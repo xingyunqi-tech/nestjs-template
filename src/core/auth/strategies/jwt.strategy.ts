@@ -68,6 +68,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('User is not active');
     }
 
+    await this.sessionService.touch(session.id);
+
     // 写入缓存
     await this.cacheManager.set(
       cacheKey,

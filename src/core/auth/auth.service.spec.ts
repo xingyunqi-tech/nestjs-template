@@ -1,5 +1,5 @@
 import type { Mocked } from 'vitest';
-import { UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { SessionService } from '../session/session.service';
@@ -16,6 +16,9 @@ import { SmsCodeType, SmsService } from '../../integrations/sms/sms.service';
 import { hashPassword } from '../../common/utils/crypto.utils';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import type { NextFunction, Request, Response } from 'express';
+import { requestContextMiddleware } from '../../common/request-context';
+import { JwtPayloadType } from './strategies/types/jwt-payload.type';
 
 describe('AuthService', () => {
   describe('refreshToken', () => {
@@ -534,6 +537,88 @@ describe('AuthService', () => {
 
       await expect(service.validatePhoneLogin({ phone: '13800000000', password: MD5 })).rejects.toBeInstanceOf(
         UnprocessableEntityException,
+      );
+    });
+  });
+
+  describe('sessions', () => {
+    let sessionService: Mocked<
+      Pick<SessionService, 'create' | 'findActiveByUserId' | 'revokeForUser' | 'deleteByUserIdWithExclude'>
+    >;
+    let service: AuthService;
+    const me = { id: 1, sessionId: 10, role: { id: 2 } } as JwtPayloadType;
+
+    beforeEach(async () => {
+      sessionService = {
+        create: vi.fn().mockResolvedValue({ id: 10 }),
+        findActiveByUserId: vi.fn(),
+        revokeForUser: vi.fn(),
+        deleteByUserIdWithExclude: vi.fn(),
+      };
+      const tokenService = {
+        generateSessionHash: vi.fn().mockReturnValue('H'),
+        getTokensData: vi.fn().mockResolvedValue({ token: 't', refreshToken: 'r', tokenExpires: 1 }),
+      };
+      const moduleRef = await Test.createTestingModule({ providers: [AuthService] })
+        .useMocker((token) => {
+          if (token === SessionService) return sessionService;
+          if (token === TokenService) return tokenService;
+          return {};
+        })
+        .compile();
+      service = moduleRef.get(AuthService);
+    });
+
+    it('should list the sessions of the user and mark the current one', async () => {
+      const createdAt = new Date('2026-11-01T00:00:00Z');
+      sessionService.findActiveByUserId.mockResolvedValue([
+        { id: 10, userAgent: 'UA-A', ip: '10.0.0.1', createdAt, lastActiveAt: createdAt },
+        { id: 11, createdAt },
+      ] as never);
+
+      await expect(service.listSessions(me)).resolves.toEqual([
+        { id: 10, userAgent: 'UA-A', ip: '10.0.0.1', createdAt, lastActiveAt: createdAt, current: true },
+        { id: 11, userAgent: null, ip: null, createdAt, lastActiveAt: null, current: false },
+      ]);
+      expect(sessionService.findActiveByUserId).toHaveBeenCalledWith(1);
+    });
+
+    it('should respond 404 when revoking a session that is not the user own', async () => {
+      sessionService.revokeForUser.mockResolvedValue(false);
+
+      await expect(service.revokeSession(me, 99)).rejects.toBeInstanceOf(NotFoundException);
+      expect(sessionService.revokeForUser).toHaveBeenCalledWith(99, 1);
+    });
+
+    it('should revoke every other session of the user', async () => {
+      await service.revokeOtherSessions(me);
+
+      expect(sessionService.deleteByUserIdWithExclude).toHaveBeenCalledWith({ userId: 1, excludeSessionId: 10 });
+    });
+
+    it('should record the client user agent and ip on a new session', async () => {
+      const req = {
+        headers: {},
+        ip: '203.0.113.7',
+        get: (name: string) => (name === 'user-agent' ? 'UA/1.0' : undefined),
+      } as unknown as Request;
+      const user = { id: 1, role: { id: 2 } } as User;
+      let login: Promise<unknown> = Promise.resolve();
+      const next: NextFunction = () => {
+        login = service['createSessionAndTokens'](user);
+      };
+
+      requestContextMiddleware(req, { setHeader: vi.fn() } as unknown as Response, next);
+      await login;
+
+      expect(sessionService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user,
+          hash: 'H',
+          userAgent: 'UA/1.0',
+          ip: '203.0.113.7',
+          lastActiveAt: expect.any(Date),
+        }),
       );
     });
   });

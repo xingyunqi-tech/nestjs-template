@@ -36,8 +36,37 @@ export class SessionRelationalRepository implements SessionRepository {
   async rotateHash(id: Session['id'], currentHash: string, nextHash: string): Promise<boolean> {
     const result = await this.sessionRepository.update(
       { id: Number(id), hash: currentHash, deletedAt: IsNull() },
-      { hash: nextHash },
+      { hash: nextHash, lastActiveAt: new Date() },
     );
+    return (result.affected ?? 0) > 0;
+  }
+
+  async findActiveByUserId(userId: User['id']): Promise<Session[]> {
+    const entities = await this.sessionRepository.find({
+      where: { user: { id: Number(userId) } },
+      order: { lastActiveAt: { direction: 'DESC', nulls: 'LAST' }, id: 'DESC' },
+    });
+    return entities.map((entity) => SessionMapper.toDomain(entity));
+  }
+
+  async touch(id: Session['id'], at: Date, staleBefore: Date): Promise<void> {
+    await this.sessionRepository
+      .createQueryBuilder()
+      .update()
+      .set({ lastActiveAt: at })
+      .where('id = :id', { id: Number(id) })
+      .andWhere('("lastActiveAt" IS NULL OR "lastActiveAt" < :staleBefore)', { staleBefore })
+      .execute();
+  }
+
+  async deleteByIdForUser(id: Session['id'], userId: User['id']): Promise<boolean> {
+    const result = await this.sessionRepository
+      .createQueryBuilder()
+      .softDelete()
+      .where('id = :id', { id: Number(id) })
+      .andWhere('"userId" = :userId', { userId: Number(userId) })
+      .andWhere('"deletedAt" IS NULL')
+      .execute();
     return (result.affected ?? 0) > 0;
   }
 

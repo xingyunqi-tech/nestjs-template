@@ -15,9 +15,19 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { MetricsMiddleware } from './infrastructure/metrics/metrics.middleware';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { applyRequestBodyContent } from './common/swagger/api-request-body-content';
+import { requestContextMiddleware } from './common/request-context';
 
 /** 容纳协议正文等富文本配置（HTML 约 200KB） */
 const JSON_BODY_LIMIT = '256kb';
+
+/** 允许浏览器跨域读取的响应头 */
+const CORS_EXPOSED_HEADERS = [
+  'X-Request-Id',
+  'Retry-After',
+  'X-RateLimit-Limit',
+  'X-RateLimit-Remaining',
+  'X-RateLimit-Reset',
+];
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -35,6 +45,8 @@ async function bootstrap(): Promise<void> {
     app.set('trust proxy', trustProxy);
   }
 
+  app.use(requestContextMiddleware);
+
   // CORS configuration
   const frontendDomain = configService.get('app.frontendDomain', { infer: true });
   const nodeEnv = configService.get('app.nodeEnv', { infer: true });
@@ -47,12 +59,14 @@ async function bootstrap(): Promise<void> {
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language'],
+      exposedHeaders: CORS_EXPOSED_HEADERS,
     });
   } else {
     // Development: allow all origins for easier testing
     app.enableCors({
       origin: true,
       credentials: true,
+      exposedHeaders: CORS_EXPOSED_HEADERS,
     });
   }
 

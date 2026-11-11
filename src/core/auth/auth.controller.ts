@@ -9,6 +9,7 @@ import {
   UseGuards,
   Put,
   Delete,
+  Param,
   SerializeOptions,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -37,6 +38,8 @@ import { AuthWechatLoginDto } from './dto/auth-wechat-login.dto';
 import { AuthWechatPhoneLoginDto } from './dto/auth-wechat-phone-login.dto';
 import { AuthAlipayLoginDto } from './dto/auth-alipay-login.dto';
 import { AuthPhoneResetPasswordDto } from './dto/auth-phone-reset-password.dto';
+import { SessionResponseDto } from './dto/session-response.dto';
+import { ParseIdPipe } from '../../common/pipes/parse-id.pipe';
 
 @ApiTags('Auth')
 @Controller({
@@ -128,6 +131,36 @@ export class AuthController {
       sessionId: request.user.sessionId,
       hash: request.user.hash,
     });
+  }
+
+  @ApiBearerAuth()
+  @Get('sessions')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ operationId: 'getMySessions', summary: '当前用户的登录设备' })
+  @ApiOkResponse({ type: SessionResponseDto, isArray: true })
+  @HttpCode(HttpStatus.OK)
+  public getSessions(@Request() request: RequestWithUser): Promise<SessionResponseDto[]> {
+    return this.service.listSessions(request.user);
+  }
+
+  @ApiBearerAuth()
+  @Delete('sessions/:id')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ operationId: 'revokeMySession', summary: '下线指定设备' })
+  @ApiOkResponse({ description: '已下线' })
+  @HttpCode(HttpStatus.OK)
+  public revokeSession(@Request() request: RequestWithUser, @Param('id', ParseIdPipe) id: number): Promise<void> {
+    return this.service.revokeSession(request.user, id);
+  }
+
+  @ApiBearerAuth()
+  @Post('sessions/revoke-others')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ operationId: 'revokeOtherSessions', summary: '下线其他设备' })
+  @ApiOkResponse({ description: '已下线' })
+  @HttpCode(HttpStatus.OK)
+  public revokeOtherSessions(@Request() request: RequestWithUser): Promise<void> {
+    return this.service.revokeOtherSessions(request.user);
   }
 
   @ApiBearerAuth()

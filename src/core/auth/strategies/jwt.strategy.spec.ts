@@ -10,7 +10,7 @@ import { JwtPayloadType } from './types/jwt-payload.type';
 function createStrategy(
   session: unknown,
   roleId: number | null = 2,
-): { strategy: JwtStrategy; cache: Map<string, unknown> } {
+): { strategy: JwtStrategy; cache: Map<string, unknown>; touch: ReturnType<typeof vi.fn> } {
   const cache = new Map<string, unknown>();
   const cacheManager = {
     get: async (key: string) => cache.get(key),
@@ -24,9 +24,10 @@ function createStrategy(
       role: roleId === null ? null : { id: roleId },
     }),
   } as unknown as UsersService;
-  const sessionService = { findById: async () => session } as unknown as SessionService;
+  const touch = vi.fn();
+  const sessionService = { findById: async () => session, touch } as unknown as SessionService;
 
-  return { strategy: new JwtStrategy(configService, usersService, sessionService, cacheManager), cache };
+  return { strategy: new JwtStrategy(configService, usersService, sessionService, cacheManager), cache, touch };
 }
 
 const payload = { id: 1, sessionId: 10, role: { id: 1 } } as JwtPayloadType;
@@ -53,6 +54,23 @@ describe('JwtStrategy', () => {
     cache.set('jwt:session:10', { statusId: StatusEnum.active, roleId: 3 });
 
     await expect(strategy.validate(payload)).resolves.toMatchObject({ role: { id: 3 } });
+  });
+
+  it('should record session activity when validating against the database', async () => {
+    const { strategy, touch } = createStrategy({ id: 10, user: { id: 1 } });
+
+    await strategy.validate(payload);
+
+    expect(touch).toHaveBeenCalledWith(10);
+  });
+
+  it('should not record session activity when the cached validation is used', async () => {
+    const { strategy, cache, touch } = createStrategy({ id: 10, user: { id: 1 } });
+    cache.set('jwt:session:10', { statusId: StatusEnum.active, roleId: 2 });
+
+    await strategy.validate(payload);
+
+    expect(touch).not.toHaveBeenCalled();
   });
 
   it('should reject the token when its session has been deleted', async () => {

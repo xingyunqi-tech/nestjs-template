@@ -27,6 +27,15 @@ export class SessionEntity extends EntityRelationalHelper {
   @Column()
   hash: string;
 
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  userAgent: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  ip: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastActiveAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

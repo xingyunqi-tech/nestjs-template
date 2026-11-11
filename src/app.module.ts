@@ -29,7 +29,7 @@ import { HomeModule } from './modules/home/home.module';
 import { AllConfigType } from './config/config.type';
 import { SessionModule } from './core/session/session.module';
 import { LoggerModule } from 'nestjs-pino';
-import { randomUUID } from 'crypto';
+import { resolveRequestId } from './common/request-context';
 import { CacheModule } from './infrastructure/cache/cache.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { HealthModule } from './infrastructure/health/health.module';
@@ -127,7 +127,7 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
                 }
               : undefined,
             autoLogging: true,
-            genReqId: (req) => (req.headers['x-request-id'] as string) || randomUUID(),
+            genReqId: (req) => resolveRequestId(req),
             redact: {
               paths: [
                 'req.headers.authorization',

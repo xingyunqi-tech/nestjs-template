@@ -220,5 +220,6 @@
   "consentVersionNotCurrent": "The agreement version is outdated, please review and agree again",
   "userNotDeleted": "User has not been deleted",
   "selfReviewForbidden": "You cannot review questions you created or submitted",
-  "rejectReasonLength": "The rejection reason must be 1 to 500 characters"
+  "rejectReasonLength": "The rejection reason must be 1 to 500 characters",
+  "sessionNotFound": "Session not found"
 }

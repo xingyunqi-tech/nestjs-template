@@ -43,6 +43,11 @@ import { CredentialRepository } from './infrastructure/persistence/credential.re
 import { isUniqueViolationOf } from '../../common/utils/exceptions.util';
 import { NotificationsService } from '../../modules/notifications/notifications.service';
 import { verifySmsCode, validateUserStatusForAuth } from './helpers/auth-validation.helper';
+import { SessionResponseDto } from './dto/session-response.dto';
+import { currentRequestContext } from '../../common/request-context';
+
+/** 与 session.userAgent 列长度一致 */
+const USER_AGENT_MAX_LENGTH = 512;
 
 /** 密码哈希的指纹，写入重置密码令牌，密码变更后令牌失效 */
 function passwordFingerprint(password?: string | null): string {
@@ -733,6 +738,37 @@ export class AuthService {
     await verifySmsCode(this.smsService, user.phone, credentials.smsCode, SmsCodeType.VERIFY_IDENTITY, this.logger);
   }
 
+  async listSessions(userJwtPayload: JwtPayloadType): Promise<SessionResponseDto[]> {
+    const sessions = await this.sessionService.findActiveByUserId(userJwtPayload.id);
+    return sessions.map((session) => ({
+      id: session.id,
+      userAgent: session.userAgent ?? null,
+      ip: session.ip ?? null,
+      createdAt: session.createdAt,
+      lastActiveAt: session.lastActiveAt ?? null,
+      current: String(session.id) === String(userJwtPayload.sessionId),
+    }));
+  }
+
+  async revokeSession(userJwtPayload: JwtPayloadType, sessionId: number): Promise<void> {
+    const revoked = await this.sessionService.revokeForUser(sessionId, userJwtPayload.id);
+    if (!revoked) {
+      throw new NotFoundException({
+        status: HttpStatus.NOT_FOUND,
+        error: 'sessionNotFound',
+      });
+    }
+    this.logger.log(`Session ${sessionId} revoked by user ${userJwtPayload.id}`);
+  }
+
+  async revokeOtherSessions(userJwtPayload: JwtPayloadType): Promise<void> {
+    await this.sessionService.deleteByUserIdWithExclude({
+      userId: userJwtPayload.id,
+      excludeSessionId: userJwtPayload.sessionId,
+    });
+    this.logger.log(`Other sessions revoked by user ${userJwtPayload.id}`);
+  }
+
   /**
    * 用户登出
    * @param data - 包含会话ID的数据
@@ -1244,9 +1280,13 @@ export class AuthService {
   private async createSessionAndTokens(user: User): Promise<LoginResponseDto> {
     const hash = this.tokenService.generateSessionHash();
 
+    const client = currentRequestContext();
     const session = await this.sessionService.create({
       user,
       hash,
+      userAgent: client?.userAgent?.slice(0, USER_AGENT_MAX_LENGTH) ?? null,
+      ip: client?.ip ?? null,
+      lastActiveAt: new Date(),
     });
 
     const { token, refreshToken, tokenExpires } = await this.tokenService.getTokensData({

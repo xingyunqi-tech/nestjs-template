@@ -221,10 +221,17 @@ Don't forget to create `indexes` on the Foreign Keys (FK) columns (if needed), b
 Set the optimal number of [max connections](https://node-postgres.com/apis/pool) to database for your application in `/.env`:
 
 ```txt
-DATABASE_MAX_CONNECTIONS=100
+DATABASE_MAX_CONNECTIONS=80
+DATABASE_CONNECTION_TIMEOUT_MS=10000
 ```
 
-You can think of this parameter as how many concurrent database connections your application can handle.
+| Variable                         | Default | Description                                                                                                    |
+| -------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_MAX_CONNECTIONS`       | `80`    | Max size of the API connection pool                                                                            |
+| `DATABASE_CONNECTION_TIMEOUT_MS` | `10000` | Timeout for acquiring a connection from the pool, including establishing a new one; must be a positive integer |
+
+You can think of `DATABASE_MAX_CONNECTIONS` as how many concurrent database connections your application can handle.
+The API pool plus the connections of every other process (migrations, seeds, scripts, other API instances) must not exceed PostgreSQL `max_connections` (default `100`).
 
 ## Switch PostgreSQL to MySQL
 

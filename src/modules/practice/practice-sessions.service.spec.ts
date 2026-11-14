@@ -47,7 +47,7 @@ describe('PracticeSessionsService', () => {
       | 'findOngoing'
     >
   >;
-  let picker: Mocked<Pick<QuestionPickerService, 'pick'>>;
+  let picker: Mocked<Pick<QuestionPickerService, 'pick' | 'pickDaily'>>;
   let visibility: Mocked<Pick<AnswerVisibilityService, 'evaluate'>>;
   let subjectsService: Mocked<Pick<SubjectsService, 'getPublishedSubject'>>;
   let knowledgePointsService: Mocked<Pick<KnowledgePointsService, 'findById'>>;
@@ -68,10 +68,7 @@ describe('PracticeSessionsService', () => {
     repository = {
       create: vi.fn((data) => Promise.resolve(sessionOf({ ...data }))),
       findDaily: vi.fn().mockResolvedValue(null),
-      createDaily: vi.fn(async (_key, build: () => Promise<object | null>) => {
-        const data = await build();
-        return data && sessionOf({ ...data });
-      }) as never,
+      createDaily: vi.fn((_key, data) => Promise.resolve(sessionOf({ ...data }))),
       findById: vi.fn(() => Promise.resolve(session)),
       findRecords: vi.fn().mockResolvedValue([]),
       closeInProgress: vi.fn().mockResolvedValue(true),
@@ -80,6 +77,12 @@ describe('PracticeSessionsService', () => {
     };
     picker = {
       pick: vi.fn().mockResolvedValue({ questionIds: ['a'], questionVersions: { a: 1 }, insufficient: true }),
+      pickDaily: vi.fn().mockResolvedValue({
+        questionIds: ['a'],
+        questionVersions: { a: 1 },
+        insufficient: false,
+        dailySetQuestionIds: ['a'],
+      }),
     };
     visibility = {
       evaluate: vi.fn((_userId, items: unknown[]) =>
@@ -131,30 +134,97 @@ describe('PracticeSessionsService', () => {
       expect(result.serverNow).toBeInstanceOf(Date);
     });
 
-    it('should create the daily session from the daily set under the lock', async () => {
+    it('should draw outside the lock and create the daily session from the expected daily set', async () => {
+      picker.pickDaily.mockResolvedValue({
+        questionIds: ['a'],
+        questionVersions: { a: 1 },
+        insufficient: false,
+        dailySetQuestionIds: ['a', 'x'],
+      });
       const result = await service.create(USER, dto({ mode: PracticeMode.DAILY }));
       const key = { userId: USER, subjectId: SUBJECT, dailyDate: businessDate() };
       expect(repository.findDaily).toHaveBeenCalledWith(key);
-      expect(repository.createDaily).toHaveBeenCalledWith(key, expect.any(Function));
-      expect(picker.pick).toHaveBeenCalledWith(
-        expect.objectContaining({ mode: PracticeMode.DAILY, dailyDate: key.dailyDate }),
+      expect(picker.pickDaily).toHaveBeenCalledWith(SUBJECT, key.dailyDate);
+      expect(repository.createDaily).toHaveBeenCalledWith(
+        key,
+        expect.objectContaining({ mode: PracticeMode.DAILY, dailyDate: key.dailyDate, questionIds: ['a'] }),
+        ['a', 'x'],
+      );
+      expect(picker.pickDaily.mock.invocationCallOrder[0]).toBeLessThan(
+        repository.createDaily.mock.invocationCallOrder[0],
       );
       expect(result).toMatchObject({ mode: PracticeMode.DAILY, dailyDate: key.dailyDate, insufficient: false });
       expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('should draw again when the daily set changes before the session is created', async () => {
+      picker.pickDaily
+        .mockResolvedValueOnce({
+          questionIds: ['a'],
+          questionVersions: { a: 1 },
+          insufficient: false,
+          dailySetQuestionIds: ['a'],
+        })
+        .mockResolvedValueOnce({
+          questionIds: ['b'],
+          questionVersions: { b: 1 },
+          insufficient: false,
+          dailySetQuestionIds: ['b'],
+        });
+      repository.createDaily.mockResolvedValueOnce(null);
+
+      const result = await service.create(USER, dto({ mode: PracticeMode.DAILY }));
+
+      expect(picker.pickDaily).toHaveBeenCalledTimes(2);
+      expect(repository.createDaily).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ questionIds: ['b'] }),
+        ['b'],
+      );
+      expect(result.card).toEqual([expect.objectContaining({ questionId: 'b' })]);
+    });
+
+    it('should return the daily session created by another request while retrying', async () => {
+      repository.createDaily.mockResolvedValueOnce(null);
+      repository.findDaily
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(sessionOf({ id: 'other', mode: PracticeMode.DAILY }));
+
+      const result = await service.create(USER, dto({ mode: PracticeMode.DAILY }));
+
+      expect(result.id).toBe('other');
+      expect(repository.createDaily).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reject with a conflict when the daily set keeps changing', async () => {
+      repository.createDaily.mockResolvedValue(null);
+
+      await expect(service.create(USER, dto({ mode: PracticeMode.DAILY }))).rejects.toMatchObject({
+        status: 409,
+        response: { error: 'dailySetChanged' },
+      });
+      expect(repository.createDaily).toHaveBeenCalledTimes(3);
+      expect(picker.pickDaily).toHaveBeenCalledTimes(3);
     });
 
     it('should return the existing daily session without drawing', async () => {
       repository.findDaily.mockResolvedValue(sessionOf({ id: 'daily', mode: PracticeMode.DAILY }));
       const result = await service.create(USER, dto({ mode: PracticeMode.DAILY }));
       expect(result.id).toBe('daily');
-      expect(picker.pick).not.toHaveBeenCalled();
+      expect(picker.pickDaily).not.toHaveBeenCalled();
       expect(repository.createDaily).not.toHaveBeenCalled();
     });
 
     it('should reject the daily session when the daily set is empty', async () => {
-      picker.pick.mockResolvedValue({ questionIds: [], questionVersions: {}, insufficient: false });
+      picker.pickDaily.mockResolvedValue({
+        questionIds: [],
+        questionVersions: {},
+        insufficient: false,
+        dailySetQuestionIds: [],
+      });
       const error = await service.create(USER, dto({ mode: PracticeMode.DAILY })).catch((caught: unknown) => caught);
       expect((error as BusinessException).errorKey).toBe('noQuestionsAvailable');
+      expect(repository.createDaily).not.toHaveBeenCalled();
     });
 
     it('should reject when no question can be drawn', async () => {

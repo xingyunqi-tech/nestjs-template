@@ -9,14 +9,12 @@ export interface DailySessionProgress {
 
 /** 每日一练题组被用户会话使用的情况 */
 export abstract class DailySetUsageRepository {
-  abstract hasSessions(subjectId: DailyQuestionSet['subjectId'], date: DailyQuestionSet['date']): Promise<boolean>;
-
-  /** 持有科目与日期的锁执行 work，与创建每日一练会话互斥 */
-  abstract runLocked<T>(
+  /** 持有科目与日期的锁：尚无用户会话时以 questionIds 覆盖题组并返回，已有会话时返回 null */
+  abstract replaceIfUnused(
     subjectId: DailyQuestionSet['subjectId'],
     date: DailyQuestionSet['date'],
-    work: () => Promise<T>,
-  ): Promise<T>;
+    questionIds: string[],
+  ): Promise<DailyQuestionSet | null>;
 
   abstract findSessionProgress(
     userId: number,

@@ -26,7 +26,10 @@ import { PracticeSession, PracticeSessionStatus, SubmitType } from '../../../../
 import { AnswerRecord } from '../../../../domain/answer-record';
 import { SessionAnswerContext } from '../../../../domain/answer-visibility';
 import { NullableType } from '../../../../../../common/types/nullable.type';
-import { lockDailyQuestionSet } from '../../../../../../infrastructure/database/utils/daily-question-set-lock';
+import {
+  findDailyQuestionSetIds,
+  lockDailyQuestionSet,
+} from '../../../../../../infrastructure/database/utils/daily-question-set-lock';
 import { IPaginationOptions } from '../../../../../../common/types/pagination-options';
 
 const DEADLOCK_DETECTED = '40P01';
@@ -39,6 +42,10 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 function hasErrorCode(error: unknown, code: string): boolean {
   return error instanceof QueryFailedError && (error.driverError as { code?: string })?.code === code;
+}
+
+function sameIds(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
 function isDeadlock(error: unknown): boolean {
@@ -303,7 +310,8 @@ export class PracticeSessionRelationalRepository implements PracticeSessionRepos
 
   createDaily(
     key: DailySessionKey,
-    build: () => Promise<CreatePracticeSessionData | null>,
+    data: CreatePracticeSessionData,
+    dailySetQuestionIds: string[],
   ): Promise<NullableType<PracticeSession>> {
     return this.sessionRepository.manager.transaction(async (manager) => {
       await lockDailyQuestionSet(manager, key.subjectId, key.dailyDate);
@@ -311,8 +319,8 @@ export class PracticeSessionRelationalRepository implements PracticeSessionRepos
       if (existing) {
         return PracticeSessionMapper.toDomain(existing);
       }
-      const data = await build();
-      if (!data) {
+      const current = await findDailyQuestionSetIds(manager, key.subjectId, key.dailyDate);
+      if (!current || !sameIds(current, dailySetQuestionIds)) {
         return null;
       }
       const saved = await manager.save(

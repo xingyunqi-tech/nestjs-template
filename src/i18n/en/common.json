@@ -160,6 +160,7 @@
   "invalidDateRange": "Invalid date range",
   "dailySetDateInPast": "Daily sets of past dates cannot be regenerated",
   "dailySetInUse": "The daily set is already in use and cannot be regenerated",
+  "dailySetChanged": "The daily set has just been regenerated, please try again",
   "paperSectionTypeConflict": "Items in the same section must share a question type",
   "paperQuestionLimitExceeded": "The paper has too many questions",
   "invalidTrialDate": "Only today's or yesterday's trial can be checked",

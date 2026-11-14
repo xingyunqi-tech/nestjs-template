@@ -12,7 +12,8 @@ export const CACHE_TTL_MS = 60 * 1000; // 60 seconds
  */
 export const DATABASE_CONSTANTS = {
   DEFAULT_PORT: 5432,
-  MAX_CONNECTIONS: 100,
+  MAX_CONNECTIONS: 80,
+  CONNECTION_TIMEOUT_MS: 10_000,
   SLOW_QUERY_THRESHOLD_MS: 1000, // 1 second
 } as const;
 

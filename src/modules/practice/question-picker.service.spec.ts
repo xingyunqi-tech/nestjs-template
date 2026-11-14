@@ -171,7 +171,12 @@ describe('QuestionPickerService', () => {
     const result = await service.pick(request({ mode: PracticeMode.DAILY, dailyDate: '2026-10-17', count: 1 }));
 
     expect(dailyService.ensure).toHaveBeenCalledWith(SUBJECT, '2026-10-17');
-    expect(result).toEqual({ questionIds: ['a'], questionVersions: { a: 1 }, insufficient: false });
+    expect(result).toEqual({
+      questionIds: ['a'],
+      questionVersions: { a: 1 },
+      insufficient: false,
+      dailySetQuestionIds: ['a', 'b'],
+    });
   });
 
   it('should return no daily questions when the set cannot be generated', async () => {
@@ -179,6 +184,7 @@ describe('QuestionPickerService', () => {
       questionIds: [],
       questionVersions: {},
       insufficient: false,
+      dailySetQuestionIds: [],
     });
   });
 

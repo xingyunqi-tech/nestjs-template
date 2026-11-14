@@ -30,17 +30,6 @@ export class DailyQuestionSetRelationalRepository implements DailyQuestionSetRep
     return (await this.findOne(subjectId, date))!;
   }
 
-  async upsert(subjectId: string, date: string, questionIds: string[]): Promise<DailyQuestionSet> {
-    await this.dailyQuestionSetRepository
-      .createQueryBuilder()
-      .insert()
-      .into(DailyQuestionSetEntity)
-      .values({ subjectId, date, questionIds })
-      .orUpdate(['questionIds', 'updatedAt'], ['subjectId', 'date'])
-      .execute();
-    return (await this.findOne(subjectId, date))!;
-  }
-
   async findRange(subjectId: string, from: string, to: string): Promise<DailyQuestionSet[]> {
     const entities = await this.dailyQuestionSetRepository.find({
       where: { subjectId, date: Between(from, to) },

@@ -58,12 +58,10 @@ describe('DailyQuestionSetsService', () => {
     repository = {
       findOne: vi.fn().mockResolvedValue(null),
       insertIfAbsent: vi.fn((subjectId, date, questionIds) => Promise.resolve(set(questionIds, date))),
-      upsert: vi.fn((subjectId, date, questionIds) => Promise.resolve(set(questionIds, date))),
       findRange: vi.fn().mockResolvedValue([]),
     };
     usage = {
-      hasSessions: vi.fn().mockResolvedValue(false),
-      runLocked: vi.fn((_subjectId, _date, work: () => Promise<unknown>) => work()) as never,
+      replaceIfUnused: vi.fn((subjectId, date, questionIds) => Promise.resolve(set(questionIds, date))),
       findInProgressMockQuestionIds: vi.fn().mockResolvedValue([]),
       findSessionProgress: vi.fn().mockResolvedValue(null),
     };
@@ -244,9 +242,7 @@ describe('DailyQuestionSetsService', () => {
       const today = businessDate();
 
       await expect(service.regenerate(SUBJECT, today)).resolves.toMatchObject({ date: today });
-      expect(usage.runLocked).toHaveBeenCalledWith(SUBJECT, today, expect.any(Function));
-      expect(usage.hasSessions).toHaveBeenCalledWith(SUBJECT, today);
-      expect(repository.upsert).toHaveBeenCalledWith(SUBJECT, today, ['q1', 'c1', 'c2', 'q2']);
+      expect(usage.replaceIfUnused).toHaveBeenCalledWith(SUBJECT, today, ['q1', 'c1', 'c2', 'q2']);
     });
 
     it('should reject past dates and invalid dates', async () => {
@@ -259,12 +255,11 @@ describe('DailyQuestionSetsService', () => {
     });
 
     it('should reject sets already used by sessions', async () => {
-      usage.hasSessions.mockResolvedValue(true);
+      usage.replaceIfUnused.mockResolvedValue(null);
 
       await expect(service.regenerate(SUBJECT, businessDate())).rejects.toMatchObject({
         response: { error: 'dailySetInUse' },
       });
-      expect(repository.upsert).not.toHaveBeenCalled();
     });
 
     it('should reject when no questions are available', async () => {

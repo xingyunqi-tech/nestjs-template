@@ -44,6 +44,11 @@ class EnvironmentVariablesValidator {
   @IsOptional()
   DATABASE_MAX_CONNECTIONS: number;
 
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  DATABASE_CONNECTION_TIMEOUT_MS: number;
+
   @IsBoolean()
   @IsOptional()
   DATABASE_SSL_ENABLED: boolean;
@@ -80,6 +85,9 @@ export default registerAs<DatabaseConfig>('database', () => {
     maxConnections: process.env.DATABASE_MAX_CONNECTIONS
       ? parseInt(process.env.DATABASE_MAX_CONNECTIONS, 10)
       : DATABASE_CONSTANTS.MAX_CONNECTIONS,
+    connectionTimeoutMs: process.env.DATABASE_CONNECTION_TIMEOUT_MS
+      ? parseInt(process.env.DATABASE_CONNECTION_TIMEOUT_MS, 10)
+      : DATABASE_CONSTANTS.CONNECTION_TIMEOUT_MS,
     sslEnabled: process.env.DATABASE_SSL_ENABLED === 'true',
     rejectUnauthorized: process.env.DATABASE_REJECT_UNAUTHORIZED !== 'false',
     ca: process.env.DATABASE_CA,

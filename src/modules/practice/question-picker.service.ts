@@ -28,6 +28,11 @@ export interface PickResult {
   insufficient: boolean;
 }
 
+export interface DailyPickResult extends PickResult {
+  /** 选题所依据的题组题目，题组不存在时为空数组 */
+  dailySetQuestionIds: string[];
+}
+
 const SMART_WEAK_RATIO = 0.6;
 const SMART_WRONG_RATIO = 0.2;
 
@@ -75,7 +80,7 @@ export class QuestionPickerService {
   async pick(request: PickRequest): Promise<PickResult> {
     switch (request.mode) {
       case PracticeMode.DAILY:
-        return this.pickDaily(request);
+        return this.pickDaily(request.subjectId, request.dailyDate!);
       case PracticeMode.WRONG:
         return this.pickWrong(request);
       case PracticeMode.SMART:
@@ -169,13 +174,14 @@ export class QuestionPickerService {
     return toResult(await this.findAvailableUnits(request.userId, ids), false);
   }
 
-  private async pickDaily(request: PickRequest): Promise<PickResult> {
-    const set = await this.dailyQuestionSetsService.ensure(request.subjectId, request.dailyDate!);
+  /** 当日题组中已发布的题目 */
+  async pickDaily(subjectId: string, dailyDate: string): Promise<DailyPickResult> {
+    const set = await this.dailyQuestionSetsService.ensure(subjectId, dailyDate);
     if (!set) {
-      return toResult([], false);
+      return { ...toResult([], false), dailySetQuestionIds: [] };
     }
     const units = await this.questionsService.findUnitsByQuestionIds(set.questionIds);
-    return toResult(this.onlyPublished(units), false);
+    return { ...toResult(this.onlyPublished(units), false), dailySetQuestionIds: set.questionIds };
   }
 
   /** 按传入顺序归组，剔除下架题与进行中模考的题目 */

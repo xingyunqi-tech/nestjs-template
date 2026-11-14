@@ -263,18 +263,18 @@ jobs:
             export IMAGE_FULL_NAME
 
             echo "Restarting services..."
-            docker compose -f docker/docker-compose.ecs.yaml up -d --remove-orphans
+            docker compose --env-file .env -f docker/docker-compose.ecs.yaml up -d --remove-orphans
 
             # 等待服务启动并检查健康状态
             echo "Waiting for API to be healthy..."
             for i in $(seq 1 30); do
-              if docker compose -f docker/docker-compose.ecs.yaml exec -T api wget -q --spider http://localhost:3000/api/v1/health/ready 2>/dev/null; then
+              if docker compose --env-file .env -f docker/docker-compose.ecs.yaml exec -T api wget -q --spider http://localhost:3000/api/v1/health/ready 2>/dev/null; then
                 echo "API is healthy!"
                 break
               fi
               if [ $i -eq 30 ]; then
                 echo "API health check failed after 30 attempts"
-                docker compose -f docker/docker-compose.ecs.yaml logs api --tail=50
+                docker compose --env-file .env -f docker/docker-compose.ecs.yaml logs api --tail=50
                 exit 1
               fi
               echo "  Attempt $i/30..."

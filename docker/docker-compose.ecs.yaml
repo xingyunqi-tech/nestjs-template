@@ -9,6 +9,9 @@
 # 手动操作:
 #   ./deploy/manage.sh start|stop|restart|logs|status|health
 
+# 项目名对应服务器上已有的卷（docker_postgres-data 等）
+name: docker
+
 services:
   api:
     # CI/CD 通过 IMAGE_FULL_NAME 环境变量传入实际镜像地址

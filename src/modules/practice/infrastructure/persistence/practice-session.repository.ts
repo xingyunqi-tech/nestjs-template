@@ -137,10 +137,11 @@ export abstract class PracticeSessionRepository {
 
   abstract findDaily(key: DailySessionKey): Promise<NullableType<PracticeSession>>;
 
-  /** 持有科目与日期的锁：已有会话时直接返回，否则以 build 的结果创建；build 返回 null 时不创建 */
+  /** 持有科目与日期的锁：已有会话时直接返回，题组题目与 dailySetQuestionIds 一致时以 data 创建，否则返回 null */
   abstract createDaily(
     key: DailySessionKey,
-    build: () => Promise<CreatePracticeSessionData | null>,
+    data: CreatePracticeSessionData,
+    dailySetQuestionIds: string[],
   ): Promise<NullableType<PracticeSession>>;
 
   abstract findById(id: PracticeSession['id']): Promise<NullableType<PracticeSession>>;

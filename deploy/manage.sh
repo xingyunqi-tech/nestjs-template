@@ -15,6 +15,7 @@ NC='\033[0m'
 # 配置变量
 CONTAINER_NAME="nestjs-api"
 COMPOSE_FILE="docker/docker-compose.ecs.yaml"
+ENV_FILE=".env"
 HEALTH_URL="http://localhost:3000/api/v1/health/ready"
 HEALTH_TIMEOUT=30
 
@@ -49,6 +50,16 @@ get_project_root() {
     fi
 }
 
+# 检查部署目录根的 .env
+check_env_file() {
+    local project_root
+    project_root=$(get_project_root)
+    if [ ! -f "${project_root}/${ENV_FILE}" ]; then
+        log_error "${project_root}/${ENV_FILE} not found. Copy docker/.env.ecs.example to it first."
+        exit 1
+    fi
+}
+
 # 检查容器是否运行
 container_running() {
     docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"
@@ -72,12 +83,12 @@ start_services() {
 
     log_info "Starting services..."
     cd "$project_root"
-    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --remove-orphans
 
     # 等待健康检查
     log_info "Waiting for API to be healthy..."
     for i in $(seq 1 "$HEALTH_TIMEOUT"); do
-        if docker compose -f "$COMPOSE_FILE" exec -T api wget -q --spider "$HEALTH_URL" 2>/dev/null; then
+        if docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T api wget -q --spider "$HEALTH_URL" 2>/dev/null; then
             log_info "API is healthy!"
             show_status
             return 0
@@ -103,7 +114,7 @@ stop_services() {
 
     log_info "Stopping services..."
     cd "$project_root"
-    docker compose -f "$COMPOSE_FILE" stop
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" stop
     log_info "Services stopped"
 }
 
@@ -114,7 +125,7 @@ restart_services() {
 
     log_info "Restarting services..."
     cd "$project_root"
-    docker compose -f "$COMPOSE_FILE" restart
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" restart
 
     sleep 3
 
@@ -135,7 +146,7 @@ remove_services() {
 
     log_info "Removing services and volumes..."
     cd "$project_root"
-    docker compose -f "$COMPOSE_FILE" down -v --remove-orphans
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" down -v --remove-orphans
     log_info "Services removed"
 }
 
@@ -146,7 +157,7 @@ show_status() {
 
     log_blue "Service Status:"
     cd "$project_root"
-    docker compose -f "$COMPOSE_FILE" ps
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
 }
 
 # 显示日志
@@ -156,7 +167,7 @@ show_logs() {
 
     log_info "Showing logs (press Ctrl+C to exit)..."
     cd "$project_root"
-    docker compose -f "$COMPOSE_FILE" logs -f
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" logs -f
 }
 
 # 显示最近日志（失败排查用）
@@ -166,7 +177,7 @@ show_logs_tail() {
 
     log_blue "Recent API logs:"
     cd "$project_root"
-    docker compose -f "$COMPOSE_FILE" logs api --tail=30
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" logs api --tail=30
 }
 
 # 健康检查
@@ -235,6 +246,7 @@ ${GREEN}Examples:${NC}
 ${GREEN}Configuration:${NC}
   Container:    $CONTAINER_NAME
   Compose file: $COMPOSE_FILE
+  Env file:     $ENV_FILE
   Health URL:   $HEALTH_URL
 
 EOF
@@ -245,6 +257,12 @@ main() {
     check_docker
 
     local command="${1:-help}"
+
+    case "$command" in
+        start|stop|restart|remove|rm|status|ps|logs)
+            check_env_file
+            ;;
+    esac
 
     case "$command" in
         start)

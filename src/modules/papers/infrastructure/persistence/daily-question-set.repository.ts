@@ -10,8 +10,6 @@ export abstract class DailyQuestionSetRepository {
   /** 已存在时保留原题组并返回 */
   abstract insertIfAbsent(subjectId: SubjectId, date: SetDate, questionIds: string[]): Promise<DailyQuestionSet>;
 
-  abstract upsert(subjectId: SubjectId, date: SetDate, questionIds: string[]): Promise<DailyQuestionSet>;
-
   /** 闭区间，按日期升序 */
   abstract findRange(subjectId: SubjectId, from: SetDate, to: SetDate): Promise<DailyQuestionSet[]>;
 }

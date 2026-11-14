@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import {
   CreatePracticeSessionData,
+  DailySessionKey,
   PracticeSessionRepository,
 } from './infrastructure/persistence/practice-session.repository';
 import { PickResult, QuestionPickerService } from './question-picker.service';
@@ -35,6 +36,7 @@ import { BusinessException } from '../../common/exceptions/business.exception';
 import { IPaginationOptions } from '../../common/types/pagination-options';
 
 const ONGOING_LIMIT = 20;
+const DAILY_CREATE_ATTEMPTS = 3;
 
 function unprocessable(field: string, error: string): UnprocessableEntityException {
   return new UnprocessableEntityException({ errors: { [field]: error } });
@@ -102,31 +104,35 @@ export class PracticeSessionsService {
     return detail;
   }
 
-  /** 已有当日会话时直接返回；创建与重新生成题组按科目与日期互斥 */
+  /** 已有当日会话时直接返回；选题后建会话时题组已被重新生成则重新选题 */
   private async enterDaily(userId: number, subjectId: string): Promise<CreatePracticeSessionResultDto> {
-    const key = { userId, subjectId, dailyDate: businessDate() };
-    const session =
-      (await this.practiceSessionRepository.findDaily(key)) ??
-      (await this.practiceSessionRepository.createDaily(key, async () => {
-        const picked = await this.questionPickerService.pick({
-          userId,
-          subjectId,
-          mode: PracticeMode.DAILY,
-          scope: {},
-          count: 0,
-          dailyDate: key.dailyDate,
-        });
-        return picked.questionIds.length === 0
-          ? null
-          : this.sessionData(userId, subjectId, PracticeMode.DAILY, {}, key.dailyDate, picked);
-      }));
-    if (!session) {
-      throw new BusinessException('noQuestionsAvailable');
-    }
+    const session = await this.findOrCreateDaily({ userId, subjectId, dailyDate: businessDate() });
     const detail = await this.toDetail(userId, session, new CreatePracticeSessionResultDto());
     detail.insufficient = false;
     detail.isActiveDevice = true;
     return detail;
+  }
+
+  private async findOrCreateDaily(key: DailySessionKey): Promise<PracticeSession> {
+    for (let attempt = 0; attempt < DAILY_CREATE_ATTEMPTS; attempt += 1) {
+      const existing = await this.practiceSessionRepository.findDaily(key);
+      if (existing) {
+        return existing;
+      }
+      const picked = await this.questionPickerService.pickDaily(key.subjectId, key.dailyDate);
+      if (picked.questionIds.length === 0) {
+        throw new BusinessException('noQuestionsAvailable');
+      }
+      const created = await this.practiceSessionRepository.createDaily(
+        key,
+        this.sessionData(key.userId, key.subjectId, PracticeMode.DAILY, {}, key.dailyDate, picked),
+        picked.dailySetQuestionIds,
+      );
+      if (created) {
+        return created;
+      }
+    }
+    throw new ConflictException({ error: 'dailySetChanged' });
   }
 
   private sessionData(

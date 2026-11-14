@@ -160,6 +160,7 @@
   "invalidDateRange": "日期区间无效",
   "dailySetDateInPast": "不能重新生成过去日期的题组",
   "dailySetInUse": "当日题组已有用户作答，不能重新生成",
+  "dailySetChanged": "当日题组刚被重新生成，请重试",
   "paperSectionTypeConflict": "同名分区的题型必须一致",
   "paperQuestionLimitExceeded": "试卷题量超出上限",
   "invalidTrialDate": "只能按今天或昨天的题组判分",

@@ -2,24 +2,35 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { DailySessionProgress, DailySetUsageRepository } from '../../daily-set-usage.repository';
+import { DailyQuestionSetEntity } from '../entities/daily-question-set.entity';
+import { DailyQuestionSetMapper } from '../mappers/daily-question-set.mapper';
+import { DailyQuestionSet } from '../../../../domain/daily-question-set';
 import { lockDailyQuestionSet } from '../../../../../../infrastructure/database/utils/daily-question-set-lock';
 
 @Injectable()
 export class DailySetUsageRelationalRepository implements DailySetUsageRepository {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
-  async hasSessions(subjectId: string, date: string): Promise<boolean> {
-    const rows: unknown[] = await this.dataSource.query(
-      `SELECT 1 FROM "practice_session" WHERE "mode" = 'DAILY' AND "subjectId" = $1 AND "dailyDate" = $2 LIMIT 1`,
-      [subjectId, date],
-    );
-    return rows.length > 0;
-  }
-
-  runLocked<T>(subjectId: string, date: string, work: () => Promise<T>): Promise<T> {
+  replaceIfUnused(subjectId: string, date: string, questionIds: string[]): Promise<DailyQuestionSet | null> {
     return this.dataSource.transaction(async (manager) => {
       await lockDailyQuestionSet(manager, subjectId, date);
-      return work();
+      const sessions: unknown[] = await manager.query(
+        `SELECT 1 FROM "practice_session" WHERE "mode" = 'DAILY' AND "subjectId" = $1 AND "dailyDate" = $2 LIMIT 1`,
+        [subjectId, date],
+      );
+      if (sessions.length > 0) {
+        return null;
+      }
+      await manager
+        .createQueryBuilder()
+        .insert()
+        .into(DailyQuestionSetEntity)
+        .values({ subjectId, date, questionIds })
+        .orUpdate(['questionIds', 'updatedAt'], ['subjectId', 'date'])
+        .execute();
+      return DailyQuestionSetMapper.toDomain(
+        await manager.findOneByOrFail(DailyQuestionSetEntity, { subjectId, date }),
+      );
     });
   }
 

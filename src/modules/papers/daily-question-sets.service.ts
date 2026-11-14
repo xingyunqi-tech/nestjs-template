@@ -189,12 +189,11 @@ export class DailyQuestionSetsService {
     if (questionIds.length === 0) {
       throw new BusinessException('noQuestionsAvailable');
     }
-    return this.dailySetUsageRepository.runLocked(subjectId, date, async () => {
-      if (await this.dailySetUsageRepository.hasSessions(subjectId, date)) {
-        throw new ConflictException({ error: 'dailySetInUse' });
-      }
-      return this.dailyQuestionSetRepository.upsert(subjectId, date, questionIds);
-    });
+    const set = await this.dailySetUsageRepository.replaceIfUnused(subjectId, date, questionIds);
+    if (!set) {
+      throw new ConflictException({ error: 'dailySetInUse' });
+    }
+    return set;
   }
 
   private async today(subjectId: string): Promise<{ date: string; set: DailyQuestionSet | null }> {

@@ -6,3 +6,16 @@ export async function lockDailyQuestionSet(manager: EntityManager, subjectId: st
     `${subjectId}:${date}`,
   ]);
 }
+
+/** 题组不存在时返回 null */
+export async function findDailyQuestionSetIds(
+  manager: EntityManager,
+  subjectId: string,
+  date: string,
+): Promise<string[] | null> {
+  const [row]: { questionIds: string[] }[] = await manager.query(
+    `SELECT "questionIds"::text[] AS "questionIds" FROM "daily_question_set" WHERE "subjectId" = $1 AND "date" = $2`,
+    [subjectId, date],
+  );
+  return row ? row.questionIds : null;
+}
